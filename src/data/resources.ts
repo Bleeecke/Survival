@@ -1,0 +1,95 @@
+export interface ResourceTypeDef {
+  id: string;
+  name: string;
+  spriteIndex: number;
+  gatherTime: number;
+  maxStack: number;
+  regenerates: boolean;
+  regenerationTime?: number;
+}
+
+export const RESOURCE_TYPES: Record<string, ResourceTypeDef> = {
+  // ── Core materials ────────────────────────────────────────────────
+  wood: {
+    id: 'wood', name: 'Holz', spriteIndex: 5,
+    gatherTime: 1200, maxStack: 99, regenerates: true, regenerationTime: 120_000,
+  },
+  stone: {
+    id: 'stone', name: 'Stein', spriteIndex: 6,
+    gatherTime: 2000, maxStack: 50, regenerates: true, regenerationTime: 180_000,
+  },
+  water: {
+    id: 'water', name: 'Wasser', spriteIndex: 7,
+    gatherTime: 500, maxStack: 50, regenerates: true, regenerationTime: 10_000,
+  },
+  food: {
+    id: 'food', name: 'Beeren', spriteIndex: 8,
+    gatherTime: 800, maxStack: 30, regenerates: true, regenerationTime: 150_000,
+  },
+  sticks: {
+    id: 'sticks', name: 'Äste', spriteIndex: 9,
+    gatherTime: 500, maxStack: 99, regenerates: true, regenerationTime: 60_000,
+  },
+  pebbles: {
+    id: 'pebbles', name: 'Kieselsteine', spriteIndex: 10,
+    gatherTime: 400, maxStack: 99, regenerates: true, regenerationTime: 120_000,
+  },
+  spring: {
+    id: 'spring', name: 'Quelle', spriteIndex: 11,
+    gatherTime: 800, maxStack: 1, regenerates: false, regenerationTime: 0,
+  },
+  palm_tree: {
+    id: 'palm_tree', name: 'Palme', spriteIndex: 23,
+    gatherTime: 800, maxStack: 1, regenerates: true, regenerationTime: 150_000,
+  },
+  fish: {
+    id: 'fish', name: 'Fisch', spriteIndex: 12,
+    gatherTime: 1500, maxStack: 20, regenerates: true, regenerationTime: 300_000,
+  },
+  iron_ore: {
+    id: 'iron_ore', name: 'Eisenerz', spriteIndex: 13,
+    gatherTime: 3000, maxStack: 30, regenerates: true, regenerationTime: 600_000,
+  },
+
+  // ── Beach resources ───────────────────────────────────────────────
+  flint: {
+    id: 'flint', name: 'Feuerstein', spriteIndex: 14,
+    gatherTime: 600, maxStack: 50, regenerates: true, regenerationTime: 120_000,
+  },
+  driftwood: {
+    id: 'driftwood', name: 'Treibholz', spriteIndex: 15,
+    gatherTime: 700, maxStack: 40, regenerates: true, regenerationTime: 180_000,
+  },
+  shells: {
+    id: 'shells', name: 'Muscheln', spriteIndex: 16,
+    gatherTime: 300, maxStack: 60, regenerates: true, regenerationTime: 90_000,
+  },
+  palm_leaf: {
+    id: 'palm_leaf', name: 'Palmenblatt', spriteIndex: 17,
+    gatherTime: 500, maxStack: 50, regenerates: true, regenerationTime: 120_000,
+  },
+
+  // ── Meadow & tall grass ───────────────────────────────────────────
+  herbs: {
+    id: 'herbs', name: 'Kräuter', spriteIndex: 18,
+    gatherTime: 600, maxStack: 30, regenerates: true, regenerationTime: 120_000,
+  },
+  fiber: {
+    id: 'fiber', name: 'Fasern', spriteIndex: 19,
+    gatherTime: 500, maxStack: 60, regenerates: true, regenerationTime: 90_000,
+  },
+
+  // ── Forest & jungle ───────────────────────────────────────────────
+  mushroom: {
+    id: 'mushroom', name: 'Pilze', spriteIndex: 20,
+    gatherTime: 700, maxStack: 20, regenerates: true, regenerationTime: 150_000,
+  },
+  exotic_fruit: {
+    id: 'exotic_fruit', name: 'Exotische Frucht', spriteIndex: 21,
+    gatherTime: 900, maxStack: 15, regenerates: true, regenerationTime: 200_000,
+  },
+  vine: {
+    id: 'vine', name: 'Lianen', spriteIndex: 22,
+    gatherTime: 600, maxStack: 40, regenerates: true, regenerationTime: 90_000,
+  },
+};
