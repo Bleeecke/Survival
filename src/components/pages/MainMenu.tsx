@@ -1,11 +1,13 @@
+import { useState } from 'react';
 import { useGameStore } from '../../store/gameStore';
 import { usePlayerStore } from '../../store/playerStore';
 import { useWorldStore } from '../../store/worldStore';
 import { useTutorialStore } from '../../store/tutorialStore';
 import { WorldGenerator } from '../../services/phaser/WorldGenerator';
-import { WORLD_CONFIG } from '../../data/worldConfig';
+import OptionsModal from './OptionsModal';
 
 export default function MainMenu() {
+  const [showOptions, setShowOptions] = useState(false);
   const setPhase        = useGameStore(s => s.setPhase);
   const resetGame       = useGameStore(s => s.reset);
   const initPlayer      = usePlayerStore(s => s.initPlayer);
@@ -64,12 +66,20 @@ export default function MainMenu() {
           >
             Continue
           </button>
+          <button
+            onClick={() => setShowOptions(true)}
+            className="w-56 py-3 bg-slate-700 hover:bg-slate-600 text-slate-300 font-bold rounded-xl transition-colors text-lg"
+          >
+            ⚙️ Optionen
+          </button>
         </div>
 
         {!hasSave && (
           <p className="text-slate-600 text-sm mt-4">No save found</p>
         )}
       </div>
+
+      {showOptions && <OptionsModal onClose={() => setShowOptions(false)} />}
     </div>
   );
 }

@@ -32,12 +32,10 @@ export class GameManager {
 
   // Fog of war - local state, not persisted
   private exploredTiles: boolean[][] = [];
-  private lastFogTileX = -1;
-  private lastFogTileY = -1;
-  private lastFogSightRadius = -1;
   private lastTileViewTx = -1;
   private lastTileViewTy = -1;
   private cachedWorld: any = null;
+  private lowHungerTicks = 0;
 
   private keyPressed = { space: false, e: false, f: false };
   private keys: any = null;
@@ -72,8 +70,7 @@ export class GameManager {
       width: Math.floor(window.innerWidth * 0.75),
       height: window.innerHeight,
       backgroundColor: '#0a0a14',
-      disableVisibilityChange: true, // we handle this ourselves
-      physics: { default: 'arcade', arcade: { gravity: { y: 0 }, debug: false } },
+      physics: { default: 'arcade', arcade: { gravity: { x: 0, y: 0 }, debug: false } },
       scene: {
         preload: () => {},
         create: () => this.onCreate(),
@@ -145,8 +142,7 @@ export class GameManager {
       if (state.world) {
         this.syncResources(state.world);
         this.syncStructures(state.world);
-        // Campfire fuel changed → fog light radius may change, force redraw
-        this.lastFogSightRadius = -1;
+        // Campfire fuel changed → fog needs redraw (handled by updateFog each frame)
       }
     });
 
@@ -245,36 +241,6 @@ export class GameManager {
     }
   }
 
-  private renderTileBlending(g: Phaser.GameObjects.Graphics, world: any) {
-    const W = world.width, H = world.height;
-    for (let ty = 0; ty < H; ty++) {
-      for (let tx = 0; tx < W; tx++) {
-        const here = world.tileMap[ty][tx].type;
-        const x = tx * TS, y = ty * TS;
-
-        if (tx + 1 < W) {
-          const right = world.tileMap[ty][tx + 1].type;
-          if (right !== here) {
-            const col = this.biomeBlendColor(right);
-            if (col !== null) {
-              g.fillStyle(col, 0.30);
-              g.fillRect(x + TS - 5, y, 5, TS);
-            }
-          }
-        }
-        if (ty + 1 < H) {
-          const below = world.tileMap[ty + 1][tx].type;
-          if (below !== here) {
-            const col = this.biomeBlendColor(below);
-            if (col !== null) {
-              g.fillStyle(col, 0.30);
-              g.fillRect(x, y + TS - 5, TS, 5);
-            }
-          }
-        }
-      }
-    }
-  }
 
   private drawTile(g: Phaser.GameObjects.Graphics, type: string, tx: number, ty: number) {
     const x = tx * TS;
@@ -430,7 +396,7 @@ export class GameManager {
 
   // ── Resource & structure y-sorted objects ─────────────────────────
 
-  private objectDepth(tx: number, ty: number) {
+  private objectDepth(_tx: number, ty: number) {
     return ty * 1000 + 2;
   }
 
@@ -713,6 +679,38 @@ export class GameManager {
         g.fillStyle(0x1e7a14, 0.7);
         g.fillCircle(cx - 2, base - 2, 2);
         g.fillCircle(cx + 3, base - 9, 2);
+        break;
+      }
+      case 'resin_tree': {
+        // Dark-barked tree with amber resin drips
+        g.fillStyle(0x000000, 0.15);
+        g.fillEllipse(cx, base + 2, 22, 5);
+        // Trunk — dark reddish-brown
+        g.fillStyle(0x4a2a10);
+        g.fillRect(cx - 4, base - 18, 8, 18);
+        // Resin drips — amber streaks on trunk
+        g.fillStyle(0xd4820a, 0.9);
+        g.fillRect(cx - 2, base - 14, 3, 6);
+        g.fillStyle(0xf0a020, 0.7);
+        g.fillRect(cx + 1, base - 10, 2, 4);
+        // Canopy — darker green than normal tree
+        g.fillStyle(0x1e5010);
+        g.fillCircle(cx, base - 22, 9);
+        g.fillStyle(0x285c18, 0.8);
+        g.fillCircle(cx - 4, base - 18, 6);
+        g.fillCircle(cx + 4, base - 20, 6);
+        break;
+      }
+      case 'coconut_shell': {
+        // Half coconut shell on the ground
+        g.fillStyle(0x000000, 0.12);
+        g.fillEllipse(cx, base + 1, 14, 4);
+        g.fillStyle(0x5c3a18);
+        g.fillEllipse(cx, base - 3, 12, 8);
+        g.fillStyle(0x7a4e20, 0.7);
+        g.fillEllipse(cx - 1, base - 4, 8, 5);
+        g.fillStyle(0xc8a870, 0.5);
+        g.fillEllipse(cx, base - 2, 6, 3);
         break;
       }
     }
@@ -1296,39 +1294,41 @@ export class GameManager {
     const health  = player.stats.health  ?? 100;
     const fatigue = player.stats.fatigue ?? 0;
 
-    // ── Hunger: 0→100 over 2 game days (20 real min = 120 000 ticks)
-    const newHunger = Math.min(100, hunger + 0.0083);
+    // ── Hunger: two-phase drain
+    //    Phase 1 (hunger 0→67): empties in 1 game day (~6000 ticks at 100ms)
+    //    Phase 2 (hunger 67→100): empties over the next game day
+    const HUNGER_FAST = 67 / 6000;   // 0→67 in one day
+    const HUNGER_SLOW = 33 / 6000;   // 67→100 in one day
+    const hungerRate = hunger < 67 ? HUNGER_FAST : HUNGER_SLOW;
+    const newHunger = Math.min(100, hunger + hungerRate);
 
-    // ── Thirst: 0→100 over ~1.5 game days (15 real min = 90 000 ticks)
-    const newThirst = Math.min(100, thirst + 0.0111);
+    // ── Thirst: 0→100 over ~1.5 game days (9000 ticks)
+    const newThirst = Math.min(100, thirst + 100 / 9000);
 
-    // ── Fatigue: 0→100 over ~3 game days (30 real min = 180 000 ticks)
-    // 18 game-hours = 4500 ticks (à 100ms game-time) → fatigue per tick = 100/4500
-    const newFatigue = Math.min(100, fatigue + 100 / 4500);
+    // ── Fatigue: 0→100 over ~3 game days (18000 ticks)
+    const newFatigue = Math.min(100, fatigue + 100 / 18000);
 
-    // ── Stamina regen — blocked/reduced by fatigue
-    //    Müde (fatigue>60): kein Regen; Erschöpft (fatigue>80): Ausdauer sinkt
-    let staminaDelta = 0;
-    if (newFatigue > 80) {
-      staminaDelta = -0.05; // Erschöpft: Ausdauer sinkt langsam
-    } else if (newFatigue > 60) {
-      staminaDelta = 0; // Müde: kein Regen
-    } else if (newHunger < 31 && newThirst < 26) {
-      staminaDelta = 0.18;  // Gut erholt + satt + hydriert
-    } else if (newHunger < 56 && newThirst < 51) {
-      staminaDelta = 0.06;
-    } else if (newHunger < 76 && newThirst < 71) {
-      staminaDelta = 0.01;
-    }
-    const newStamina = Math.min(100, Math.max(0, stamina + staminaDelta));
+    // ── Stamina: always regens, multiplier reduced by fatigue and hunger
+    //    Base regen: 0.10/tick (100→0 in ~1000 ticks = ~1.7 real min)
+    //    Fatigue multiplier: 1.0 → 0.1 as fatigue goes 0→100
+    //    Hunger multiplier: 1.0 → 0.2 as hunger goes 0→100
+    const fatigueMult = Math.max(0.1, 1 - newFatigue / 100 * 0.9);
+    const hungerMult  = Math.max(0.2, 1 - newHunger  / 100 * 0.8);
+    const staminaRegen = 0.10 * fatigueMult * hungerMult;
+    const newStamina = Math.min(100, Math.max(0, stamina + staminaRegen));
 
-    // ── Health drain from severe hunger/thirst/fatigue
+    // ── Low-hunger timer: track ticks where hunger > 67
+    this.lowHungerTicks = newHunger > 67 ? (this.lowHungerTicks + 1) : 0;
+    // 30 real minutes (18000 ticks) of sustained low hunger → health damage
+    const lowHungerDamage = this.lowHungerTicks > 18000;
+
+    // ── Health drain from empty hunger, thirst, fatigue
     let healthDrain = 0;
-    if (newHunger > 90) healthDrain += 0.013;
-    else if (newHunger > 75) healthDrain += 0.004;
+    if (newHunger >= 100) healthDrain += 0.020;          // hunger bar empty
+    else if (lowHungerDamage) healthDrain += 0.006;      // prolonged low hunger
     if (newThirst > 90) healthDrain += 0.016;
     else if (newThirst > 70) healthDrain += 0.005;
-    if (newFatigue > 90) healthDrain += 0.010; // Erschöpft schadet Health
+    if (newFatigue > 90) healthDrain += 0.010;
     const newHealth = Math.max(0, health - healthDrain);
 
     updateStats({ health: newHealth, hunger: newHunger, thirst: newThirst, stamina: newStamina, fatigue: newFatigue });
@@ -1405,8 +1405,8 @@ export class GameManager {
     // Tool bonus: only equipped hand slots count (Option B)
     const eq = freshPlayer.equipment ?? { leftHand: null, rightHand: null };
     const handIds = [eq.leftHand?.resourceId, eq.rightHand?.resourceId].filter(Boolean) as string[];
-    const hasFlintKnife = handIds.includes('flint_knife');
-    const hasAxe        = handIds.includes('stone_axe');
+    const hasFlintKnife  = handIds.includes('flint_knife');
+    const hasAxe         = handIds.includes('stone_axe');
     const hasImpAxe     = handIds.includes('improved_axe');
     const hasIronAxe    = handIds.includes('iron_axe');
     const hasPickaxe    = handIds.includes('stone_pickaxe');
@@ -1443,6 +1443,8 @@ export class GameManager {
         case 'wood':         return anyAxe   ? { stamina: 5,  time: T * 15 } : { stamina: 10, time: T * 40 };
         case 'stone':        return anyPick  ? { stamina: 6,  time: T * 20 } : { stamina: 12, time: T * 50 };
         case 'iron_ore':     return anyPick  ? { stamina: 8,  time: T * 30 } : { stamina: 15, time: T * 80 };
+        case 'resin_tree':   return anyAxe   ? { stamina: 6,  time: T * 20 } : { stamina: 12, time: T * 50 };
+        case 'coconut_shell': return { stamina: 2, time: T * 3 };
         default:             return { stamina: 3, time: T * 5 };
       }
     })();
@@ -1465,11 +1467,24 @@ export class GameManager {
       this.spawnFloatingText('Benötigt Spitzhacke ⛏️', player.x, player.y, '#f97316');
       return;
     }
+    if (resource.type === 'resin_tree') {
+      const inv = usePlayerStore.getState().player.inventory.items;
+      const hasShell = inv.some(i => i.resourceId === 'coconut_shell' && i.quantity > 0);
+      if (!anyAxe) {
+        this.spawnFloatingText('Benötigt Axt 🪓', player.x, player.y, '#f97316');
+        return;
+      }
+      if (!hasShell) {
+        this.spawnFloatingText('Benötigt Kokosschale 🥥', player.x, player.y, '#f97316');
+        return;
+      }
+    }
 
     // Determine what item to give
-    const giveType = action === 'sticks'           ? 'sticks'
-                   : resource.type === 'spring'    ? 'water'
-                   : resource.type === 'palm_tree' ? 'palm_leaf'
+    const giveType = action === 'sticks'              ? 'sticks'
+                   : resource.type === 'spring'       ? 'water'
+                   : resource.type === 'palm_tree'    ? 'palm_leaf'
+                   : resource.type === 'resin_tree'   ? 'tree_resin'
                    : resource.type;
 
     // Always 1 per click
@@ -1481,6 +1496,10 @@ export class GameManager {
       if (resource.type === 'palm_tree' && anyKnife) {
         addToInventory('fiber', 1);
       }
+      // Resin collection: consume one coconut shell
+      if (resource.type === 'resin_tree') {
+        usePlayerStore.getState().removeResource('coconut_shell', 1);
+      }
       useGameStore.getState().tickTime(timeCost);
       useGameStore.getState().addScore(10);
       usePlayerStore.getState().updateStats({
@@ -1488,9 +1507,11 @@ export class GameManager {
       });
       const label = resource.type === 'palm_tree'
         ? `+${amount} Palmenblatt${anyKnife ? ' +1 Faser' : ''}`
-        : action === 'sticks'
-          ? `+${amount} Äste 🌿`
-          : `+${amount} ${giveType}`;
+        : resource.type === 'resin_tree'
+          ? `+${amount} Baumharz 🫙`
+          : action === 'sticks'
+            ? `+${amount} Äste 🌿`
+            : `+${amount} ${giveType}`;
       this.spawnFloatingText(label, player.x, player.y);
     }
   }

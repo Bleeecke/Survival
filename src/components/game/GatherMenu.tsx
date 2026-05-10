@@ -25,7 +25,7 @@ const TOOL_REQUIRED: Record<string, string> = {
   vine:     'Messer',
 };
 
-function hasToolFor(type: string, inv: ReturnType<typeof usePlayerStore.getState>['player']['inventory'], eq: ReturnType<typeof usePlayerStore.getState>['player']['equipment']): boolean {
+function hasToolFor(type: string, _inv: ReturnType<typeof usePlayerStore.getState>['player']['inventory'], eq: ReturnType<typeof usePlayerStore.getState>['player']['equipment']): boolean {
   const inHand = (id: string) => eq?.leftHand?.resourceId === id || eq?.rightHand?.resourceId === id;
   const anyAxe   = inHand('iron_axe')   || inHand('improved_axe')   || inHand('stone_axe');
   const anyPick  = inHand('iron_pickaxe') || inHand('improved_pickaxe') || inHand('stone_pickaxe');

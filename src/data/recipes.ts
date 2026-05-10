@@ -7,15 +7,15 @@ export const RECIPES: Recipe[] = [
   // ════════════════════════════════════════════════════
 
   {
-    id: 'flint_lighter',
-    name: 'Feuerstein-Zünder',
-    description: 'Zwei Feuersteine aneinanderreiben – erzeugt Funken zum Feuermachen',
-    icon: '🪨',
-    category: 'tool',
+    id: 'campfire_t0',
+    name: 'Lagerfeuer',
+    description: 'Wärmt in der Nacht und kocht Nahrung',
+    icon: '🔥',
+    category: 'utility',
     tier: 0,
-    inputs: [{ resourceId: 'flint', quantity: 2 }, { resourceId: 'sticks', quantity: 1 }],
-    outputs: [{ resourceId: 'flint_lighter', quantity: 1 }],
-    craftingTime: 1500,
+    inputs: [{ resourceId: 'sticks', quantity: 5 }, { resourceId: 'pebbles', quantity: 3 }],
+    outputs: [{ resourceId: 'campfire', quantity: 1 }],
+    craftingTime: 3000,
   },
   {
     id: 'flint_knife',
@@ -45,17 +45,6 @@ export const RECIPES: Recipe[] = [
   // ════════════════════════════════════════════════════
 
   {
-    id: 'campfire',
-    name: 'Lagerfeuer',
-    description: 'Wärmt in der Nacht und kocht Nahrung',
-    icon: '🔥',
-    category: 'utility',
-    tier: 1,
-    inputs: [{ resourceId: 'sticks', quantity: 5 }, { resourceId: 'pebbles', quantity: 3 }],
-    outputs: [{ resourceId: 'campfire', quantity: 1 }],
-    craftingTime: 3000,
-  },
-  {
     id: 'water_container',
     name: 'Wassercontainer',
     description: 'Kokosnussschale + Palmenblatt – sammelt Regenwasser oder füllt an der Quelle',
@@ -65,6 +54,33 @@ export const RECIPES: Recipe[] = [
     inputs: [{ resourceId: 'shells', quantity: 2 }, { resourceId: 'palm_leaf', quantity: 3 }],
     outputs: [{ resourceId: 'water_container', quantity: 1 }],
     craftingTime: 2000,
+  },
+  {
+    id: 'coconut_shell',
+    name: 'Kokosschale',
+    description: 'Aus einer Kokosnuss hergestellt – als Behälter für Harz',
+    icon: '🥥',
+    category: 'resource',
+    tier: 1,
+    inputs: [{ resourceId: 'palm_leaf', quantity: 2 }],
+    outputs: [{ resourceId: 'coconut_shell', quantity: 1 }],
+    craftingTime: 1500,
+    requiresTool: 'flint_knife',
+  },
+  {
+    id: 'torch',
+    name: 'Fackel',
+    description: 'In der Hand tragen – erhellt die Dunkelheit (+3 Sichtweite)',
+    icon: '🔦',
+    category: 'utility',
+    tier: 1,
+    inputs: [
+      { resourceId: 'sticks', quantity: 2 },
+      { resourceId: 'rope', quantity: 1 },
+      { resourceId: 'tree_resin', quantity: 2 },
+    ],
+    outputs: [{ resourceId: 'torch', quantity: 2 }],
+    craftingTime: 3000,
   },
   {
     id: 'stone_axe',
@@ -222,18 +238,6 @@ export const RECIPES: Recipe[] = [
     outputs: [{ resourceId: 'improved_pickaxe', quantity: 1 }],
     craftingTime: 8000,
     requiresTool: 'stone_pickaxe',
-  },
-  {
-    id: 'torch',
-    name: 'Fackel',
-    description: 'Erhöht Sichtweite in der Nacht',
-    icon: '🕯️',
-    category: 'utility',
-    tier: 2,
-    inputs: [{ resourceId: 'sticks', quantity: 2 }, { resourceId: 'palm_leaf', quantity: 2 }],
-    outputs: [{ resourceId: 'torch', quantity: 2 }],
-    craftingTime: 2000,
-    requiresTool: 'stone_axe',
   },
 
   // ════════════════════════════════════════════════════

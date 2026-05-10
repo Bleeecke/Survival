@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { useGameStore } from '../../store/gameStore';
+import { musicManager } from '../../services/MusicManager';
 
 export default function PauseMenu() {
   const setPaused = useGameStore(s => s.setPaused);
   const setPhase  = useGameStore(s => s.setPhase);
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'done'>('idle');
+  const [volume, setVolume] = useState(() => musicManager.volume);
 
   function handleResume() {
     setPaused(false);
@@ -60,7 +62,23 @@ export default function PauseMenu() {
             {saveState === 'idle'   && '💾  Save Game'}
           </button>
 
-          <div className="border-t border-slate-700 pt-3">
+          <div className="border-t border-slate-700 pt-3 space-y-3">
+            {/* Volume slider */}
+            <div className="flex items-center gap-3 px-1">
+              <span className="text-slate-400 text-sm">🎵</span>
+              <input
+                type="range" min={0} max={1} step={0.05}
+                value={volume}
+                onChange={e => {
+                  const v = parseFloat(e.target.value);
+                  setVolume(v);
+                  musicManager.setVolume(v);
+                }}
+                className="flex-1 accent-amber-500"
+              />
+              <span className="text-slate-400 text-xs w-8 text-right">{Math.round(volume * 100)}%</span>
+            </div>
+
             <button
               onClick={handleMainMenu}
               className="w-full py-2.5 bg-slate-700 hover:bg-slate-600 active:bg-slate-900 text-slate-300 hover:text-white font-semibold rounded-xl transition-colors text-sm"

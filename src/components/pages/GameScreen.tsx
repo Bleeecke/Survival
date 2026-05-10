@@ -19,7 +19,6 @@ export default function GameScreen() {
   const isPaused        = useGameStore(s => s.isPaused);
   const setPaused       = useGameStore(s => s.setPaused);
   const showSleepMenu   = useGameStore(s => s.showSleepMenu);
-  const gatherMenuOpen  = useGameStore(s => s.gatherMenuOpen);
   const closeGatherMenu = useGameStore(s => s.closeGatherMenu);
   const craftingOpen    = useGameStore(s => s.craftingOpen);
   const setCraftingOpen = useGameStore(s => s.setCraftingOpen);
@@ -66,17 +65,16 @@ export default function GameScreen() {
     return usePlayerStore.subscribe(check);
   }, [tutorialStep, tutorialSkipped, completeStep]);
 
-  // Step 4: Feuersteinmesser gecraftet (flint_knife oder flint_lighter im Inventar oder Equipment)
+  // Step 4: Feuersteinmesser gecraftet
   useEffect(() => {
     if (tutorialSkipped || tutorialStep !== 4) return;
     const check = () => {
       const player = usePlayerStore.getState().player;
       const inInv = player.inventory.items.some(
-        i => (i.resourceId === 'flint_knife' || i.resourceId === 'flint_lighter') && i.quantity > 0
+        i => i.resourceId === 'flint_knife' && i.quantity > 0
       );
       const eq = player.equipment;
-      const inHand = eq?.leftHand?.resourceId === 'flint_knife' || eq?.rightHand?.resourceId === 'flint_knife'
-                  || eq?.leftHand?.resourceId === 'flint_lighter' || eq?.rightHand?.resourceId === 'flint_lighter';
+      const inHand = eq?.leftHand?.resourceId === 'flint_knife' || eq?.rightHand?.resourceId === 'flint_knife';
       if (inInv || inHand) completeStep(4);
     };
     return usePlayerStore.subscribe(check);
@@ -116,7 +114,7 @@ export default function GameScreen() {
         setPaused(!useGameStore.getState().isPaused);
       }
       if ((e.key === 'c' || e.key === 'C') && !isPaused) {
-        setCraftingOpen(prev => !prev);
+        setCraftingOpen(!craftingOpen);
       }
 
       // Belt quick-use: 1 / 2 / 3

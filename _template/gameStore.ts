@@ -1,0 +1,112 @@
+import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
+import type { GamePhase, Difficulty } from '../types';
+import type { WorldResource } from '../types';
+
+interface GameStore {
+  phase: GamePhase;
+  difficulty: Difficulty;
+  isPaused: boolean;
+  elapsedTime: number;
+  score: number;
+  showSleepMenu: boolean;
+  sleepQuality: 'bed' | 'shelter' | 'outdoor';
+
+  // Gather interaction menu
+  gatherMenuOpen: boolean;
+  nearbyResources: WorldResource[];
+  pendingGatherId: string | null;
+  pendingGatherAction: string | null; // e.g. 'sticks' for chopping branches from tree
+
+  // Mouse hover tooltip
+  hoveredResource: WorldResource | null;
+  hoverSince: number | null;
+
+  // Crafting modal
+  craftingOpen: boolean;
+  setCraftingOpen: (open: boolean) => void;
+
+  // Storage box modal
+  storageBoxId: string | null;
+  openStorageBox: (id: string) => void;
+  closeStorageBox: () => void;
+
+  setPhase: (phase: GamePhase) => void;
+  setPaused: (paused: boolean) => void;
+  setDifficulty: (diff: Difficulty) => void;
+  tickTime: (delta: number) => void;
+  addScore: (points: number) => void;
+  setShowSleepMenu: (show: boolean, quality?: 'bed' | 'shelter' | 'outdoor') => void;
+  openGatherMenu: (resources: WorldResource[]) => void;
+  closeGatherMenu: () => void;
+  setPendingGather: (id: string | null, action?: string | null) => void;
+  setHoveredResource: (res: WorldResource | null) => void;
+  reset: () => void;
+}
+
+export const useGameStore = create<GameStore>()(
+  persist(
+    (set) => ({
+      phase: 'menu',
+      difficulty: 'normal',
+      isPaused: false,
+      elapsedTime: 0,
+      score: 0,
+      showSleepMenu: false,
+      sleepQuality: 'outdoor',
+      gatherMenuOpen: false,
+      nearbyResources: [],
+      pendingGatherId: null,
+      pendingGatherAction: null,
+      hoveredResource: null,
+      hoverSince: null,
+      craftingOpen: false,
+
+      setPhase: (phase) => set({ phase }),
+      setPaused: (paused) => set({ isPaused: paused }),
+      setDifficulty: (difficulty) => set({ difficulty }),
+      tickTime: (delta) =>
+        set((state) => ({ elapsedTime: state.elapsedTime + delta })),
+      addScore: (points) =>
+        set((state) => ({ score: state.score + points })),
+      setShowSleepMenu: (show, quality = 'outdoor') =>
+        set({ showSleepMenu: show, sleepQuality: quality }),
+      openGatherMenu: (resources) =>
+        set({ gatherMenuOpen: true, nearbyResources: resources, pendingGatherId: null, pendingGatherAction: null }),
+      closeGatherMenu: () =>
+        set({ gatherMenuOpen: false, nearbyResources: [], pendingGatherId: null, pendingGatherAction: null }),
+      setPendingGather: (id, action = null) =>
+        set({ pendingGatherId: id, pendingGatherAction: action }),
+      setCraftingOpen: (open) => set({ craftingOpen: open }),
+      storageBoxId: null,
+      openStorageBox: (id) => set({ storageBoxId: id, isPaused: false }),
+      closeStorageBox: () => set({ storageBoxId: null }),
+      setHoveredResource: (res) =>
+        set(state => {
+          if (res?.id === state.hoveredResource?.id) return {};
+          return { hoveredResource: res, hoverSince: res ? Date.now() : null };
+        }),
+      reset: () =>
+        set({
+          phase: 'menu',
+          difficulty: 'normal',
+          isPaused: false,
+          elapsedTime: 225_000,
+          score: 0,
+          showSleepMenu: false,
+          sleepQuality: 'outdoor',
+          gatherMenuOpen: false,
+          nearbyResources: [],
+          pendingGatherId: null,
+          pendingGatherAction: null,
+          hoveredResource: null,
+          hoverSince: null,
+          craftingOpen: false,
+          storageBoxId: null,
+        }),
+    }),
+    {
+      name: 'survival-game-save',
+    }
+  )
+);

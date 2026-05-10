@@ -21,6 +21,8 @@ export const ITEM_WEIGHTS: Record<string, number> = {
   fish:             0.3,
   rope:             0.3,
   torch:            0.2,
+  tree_resin:       0.3,
+  coconut_shell:    0.2,
   flint_knife:      0.3,
   water_container:  0.5,
   driftwood:        0.5,

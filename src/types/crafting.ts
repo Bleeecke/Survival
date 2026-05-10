@@ -11,7 +11,7 @@ export interface Recipe {
   description: string;
   icon: string;
   category: RecipeCategory;
-  tier: 1 | 2 | 3 | 4 | 5;
+  tier: 0 | 1 | 2 | 3 | 4 | 5;
   inputs: CraftingMaterial[];
   outputs: CraftingMaterial[];
   craftingTime: number;

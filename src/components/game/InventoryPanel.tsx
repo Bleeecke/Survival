@@ -1,7 +1,7 @@
 import { usePlayerStore } from '../../store/playerStore';
 import type { PlayerStats } from '../../types';
 import { calcWeight, MAX_CARRY_KG } from '../../data/weights';
-import { EQUIPPABLE, getDefaultSlot } from './CharacterPanel';
+import { getDefaultSlot } from './CharacterPanel';
 
 // Items that can be used from the inventory
 export const USABLE: Record<string, {

@@ -112,6 +112,18 @@ export class WorldGenerator {
         spawnOn: ['beach'],
         minQ: 4, maxQ: 6, minDistFromSpawn: 0,
       },
+      // Resin trees — deep in forest/jungle
+      resin_tree: {
+        clusterCount: 4, radius: 6, density: 0.18,
+        spawnOn: ['sparse_forest', 'dense_jungle'],
+        minQ: 3, maxQ: 5, minDistFromSpawn: 20,
+      },
+      // Coconut shells — scattered on beach near palms
+      coconut_shell: {
+        clusterCount: 5, radius: 4, density: 0.22,
+        spawnOn: ['beach'],
+        minQ: 1, maxQ: 2, minDistFromSpawn: 0,
+      },
     };
 
     for (const [type, cfg] of Object.entries(configs)) {
@@ -192,7 +204,7 @@ export class WorldGenerator {
     }
   }
 
-  private placeSpring(tileMap: Tile[][], sx: number, sy: number, rng: SeededRandom): WorldResource | null {
+  private placeSpring(tileMap: Tile[][], sx: number, sy: number, _rng: SeededRandom): WorldResource | null {
     for (let r = 10; r <= 22; r++) {
       for (let attempt = 0; attempt < r * 4; attempt++) {
         const angle = (attempt / (r * 4)) * Math.PI * 2;

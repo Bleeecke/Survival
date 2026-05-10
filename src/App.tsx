@@ -1,10 +1,12 @@
 import { useGameStore } from './store/gameStore';
+import { useMusic } from './hooks/useMusic';
 import { useWorldStore } from './store/worldStore';
 import MainMenu from './components/pages/MainMenu';
 import GameScreen from './components/pages/GameScreen';
 import DeathScreen from './components/pages/DeathScreen';
 
 function App() {
+  useMusic();
   const rawPhase = useGameStore((s) => s.phase);
   const world    = useWorldStore((s) => s.world);
 

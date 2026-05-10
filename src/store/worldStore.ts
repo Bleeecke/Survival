@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { WorldState, WorldSnapshot } from '../types';
+import type { WorldState } from '../types';
 
 interface WorldStore {
   world: WorldState | null;

@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { Player, PlayerStats, Inventory, Direction, Equipment, EquipSlot } from '../types';
+import type { Player, PlayerStats, Direction, Equipment, EquipSlot } from '../types';
 import { ITEM_WEIGHTS, MAX_CARRY_KG, calcWeight } from '../data/weights';
 
 interface PlayerStore {
