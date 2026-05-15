@@ -51,9 +51,9 @@ export class WorldGenerator {
     // Sticks: only under trees (forest/jungle tiles)
     this.generateSticks(resources, tileMap, rng);
 
-    // Single spring inland from spawn
-    const spring = this.placeSpring(tileMap, spawnX, spawnY, rng);
-    if (spring) resources.push(spring);
+    // Puddles near spawn (replace spring)
+    const puddles = this.placePuddles(tileMap, spawnX, spawnY, rng);
+    resources.push(...puddles);
 
     return { seed, width, height, tileMap, resources, structures: [], spawnX, spawnY };
   }
@@ -117,12 +117,6 @@ export class WorldGenerator {
         clusterCount: 4, radius: 6, density: 0.18,
         spawnOn: ['sparse_forest', 'dense_jungle'],
         minQ: 3, maxQ: 5, minDistFromSpawn: 20,
-      },
-      // Coconut shells — scattered on beach near palms
-      coconut_shell: {
-        clusterCount: 5, radius: 4, density: 0.22,
-        spawnOn: ['beach'],
-        minQ: 1, maxQ: 2, minDistFromSpawn: 0,
       },
     };
 
@@ -204,27 +198,32 @@ export class WorldGenerator {
     }
   }
 
-  private placeSpring(tileMap: Tile[][], sx: number, sy: number, _rng: SeededRandom): WorldResource | null {
-    for (let r = 10; r <= 22; r++) {
-      for (let attempt = 0; attempt < r * 4; attempt++) {
-        const angle = (attempt / (r * 4)) * Math.PI * 2;
-        const x = Math.round(sx + Math.cos(angle) * r);
-        const y = Math.round(sy + Math.sin(angle) * r);
-        const tile = tileMap[y]?.[x];
-        if (!tile?.walkable) continue;
-        if (!['grass', 'tall_grass', 'hills', 'sparse_forest'].includes(tile.type)) continue;
-        return {
-          id: `resource-spring-${x}-${y}`,
-          type: 'spring',
-          x, y,
-          quantity: 999,
-          maxQuantity: 999,
-          regenerationTime: 0,
-          lastHarvestedAt: undefined,
-        };
-      }
+  private placePuddles(tileMap: Tile[][], sx: number, sy: number, rng: SeededRandom): WorldResource[] {
+    const placed: WorldResource[] = [];
+    const used = new Set<string>();
+    // Try to place 3 puddles within 4–10 tiles of spawn on walkable non-beach tiles
+    for (let attempt = 0; attempt < 300 && placed.length < 3; attempt++) {
+      const r = 4 + rng.next() * 6; // 4–10 tiles radius
+      const angle = rng.next() * Math.PI * 2;
+      const x = Math.round(sx + Math.cos(angle) * r);
+      const y = Math.round(sy + Math.sin(angle) * r);
+      const key = `${x},${y}`;
+      if (used.has(key)) continue;
+      const tile = tileMap[y]?.[x];
+      if (!tile?.walkable) continue;
+      if (!['grass', 'tall_grass', 'sparse_forest', 'hills'].includes(tile.type)) continue;
+      used.add(key);
+      placed.push({
+        id: `resource-puddle-${x}-${y}`,
+        type: 'puddle',
+        x, y,
+        quantity: 3,
+        maxQuantity: 3,
+        regenerationTime: 0,
+        lastHarvestedAt: undefined,
+      });
     }
-    return null;
+    return placed;
   }
 
   private findBeachSpawn(tileMap: Tile[][], w: number, h: number): { spawnX: number; spawnY: number } {
@@ -247,29 +246,49 @@ export class WorldGenerator {
   private generateTile(x: number, y: number, seed: number, w: number, h: number): Tile {
     const cx = w / 2;
     const cy = h / 2;
-    const ndx = (x - cx) / (cx * 0.88);
-    const ndy = (y - cy) / (cy * 0.88);
+    // Normalized distance from center: 0=center, 1=island edge
+    const ndx = (x - cx) / (cx * 0.92);
+    const ndy = (y - cy) / (cy * 0.92);
     const dist = Math.sqrt(ndx * ndx + ndy * ndy);
-    const islandMask = Math.max(0, 1 - dist);
 
-    const { elevationScale, moistureScale } = WORLD_CONFIG;
-    const elev  = this.noise(x, y, seed, elevationScale) * islandMask;
-    const moist = this.noise(x + 1000, y + 1000, seed, moistureScale);
+    // Noise layers
+    const edgeNoise   = this.noise(x,        y,        seed,      12) * 0.14; // coastline irregularity
+    const moisture    = this.noise(x + 1000, y + 1000, seed,      22);        // biome variation
+    const rocky       = this.noise(x + 3000, y + 3000, seed + 1,  18);        // rocky/mountain patches
+    const detail      = this.noise(x + 5000, y + 5000, seed + 2,  8)  * 0.06; // fine detail
+
+    // Distance with noise perturbation — creates irregular coastline
+    const d = dist + edgeNoise + detail;
 
     let type: string;
-    if (elev < 0.05)       type = 'water';
-    else if (elev < 0.18)  type = 'beach';
-    else if (elev < 0.45) {
-      if (moist < 0.35)      type = 'grass';
-      else if (moist < 0.65) type = 'tall_grass';
-      else                   type = 'sparse_forest';
-    } else if (elev < 0.65) {
-      if (moist < 0.40)      type = 'hills';
-      else if (moist < 0.70) type = 'sparse_forest';
-      else                   type = 'dense_jungle';
-    } else if (elev < 0.82) type = 'hills';
-    else if (elev < 0.93)   type = 'mountain';
-    else                    type = 'impassable';
+
+    // ── Water & beach ring ──────────────────────────────────────────
+    if (d > 1.02)       { type = 'water'; }
+    else if (d > 0.82)  { type = 'beach'; }
+
+    // ── Thin grass strip just inland from beach ──────────────────────
+    else if (d > 0.72)  { type = 'grass'; }
+
+    // ── Mixed middle zone: jungle / forest / tall grass ──────────────
+    else if (d > 0.30) {
+      if      (moisture > 0.62) type = 'dense_jungle';
+      else if (moisture > 0.44) type = 'sparse_forest';
+      else if (moisture > 0.28) type = 'tall_grass';
+      else                      type = 'grass';
+      // Rocky outcrops scattered through mid zone (closer to center)
+      if (d < 0.50 && rocky > 0.74) type = 'hills';
+    }
+
+    // ── Inner mountainous core ──────────────────────────────────────
+    else {
+      if      (rocky > 0.82)  type = 'impassable';
+      else if (rocky > 0.62)  type = 'mountain';
+      else if (rocky > 0.42)  type = 'hills';
+      // Forest/jungle patches even in the interior
+      else if (moisture > 0.60) type = 'dense_jungle';
+      else if (moisture > 0.40) type = 'sparse_forest';
+      else                      type = 'tall_grass';
+    }
 
     const tileType = TILE_TYPES[type] ?? TILE_TYPES['impassable'];
     return {

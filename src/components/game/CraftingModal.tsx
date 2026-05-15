@@ -92,6 +92,13 @@ export default function CraftingModal({ onClose }: { onClose: () => void }) {
     const recipe = RECIPES.find(r => r.id === recipeId)!;
     if (!craftingSystem.hasRequiredTool(recipe, inv)) return;
 
+    // Structures → enter placement mode first, crafting happens on confirm
+    if (STRUCTURE_IDS.has(recipeId)) {
+      useGameStore.getState().enterPlacementMode(recipeId);
+      onClose();
+      return;
+    }
+
     setCraftingId(recipeId);
     setProgress(0);
     craftStartRef.current = Date.now();

@@ -6,14 +6,14 @@ const ITEM_NAMES: Record<string, string> = {
   pebbles: 'Kieselsteine', flint: 'Feuerstein', driftwood: 'Treibholz',
   shells: 'Muscheln', palm_leaf: 'Palmenblatt', herbs: 'Kräuter',
   fiber: 'Fasern', mushroom: 'Pilze', exotic_fruit: 'Exotische Frucht',
-  vine: 'Lianen', iron_ore: 'Eisenerz', spring: 'Quelle', palm_tree: 'Palme',
+  vine: 'Lianen', iron_ore: 'Eisenerz', spring: 'Quelle', puddle: 'Pfütze', palm_tree: 'Palme',
 };
 
 const ITEM_ICON: Record<string, string> = {
   wood: '🪵', stone: '🪨', food: '🫐', sticks: '🌿', pebbles: '⚪',
   flint: '🔶', driftwood: '🪵', shells: '🐚', palm_leaf: '🌴',
   herbs: '🌿', fiber: '🌾', mushroom: '🍄', exotic_fruit: '🍊',
-  vine: '🌿', iron_ore: '🟤', spring: '💧', palm_tree: '🌴',
+  vine: '🌿', iron_ore: '🟤', spring: '💧', puddle: '💧', palm_tree: '🌴',
 };
 
 // Tools needed per resource — shown as hint when missing

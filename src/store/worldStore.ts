@@ -42,6 +42,7 @@ export const useWorldStore = create<WorldStore>()(
         set((state) => {
           if (!state.world) return state;
 
+          const STRUCTURE_WIDTHS: Record<string, number> = { palm_shelter: 2 };
           state.world.structures.push({
             id: `structure-${Date.now()}`,
             type: structureId,
@@ -49,8 +50,8 @@ export const useWorldStore = create<WorldStore>()(
             y,
             health: 100,
             maxHealth: 100,
-            // Campfire starts with 1 day of fuel (from the sticks used to build it)
             ...(structureId === 'campfire' ? { fuel: 1 } : {}),
+            ...(STRUCTURE_WIDTHS[structureId] ? { width: STRUCTURE_WIDTHS[structureId] } : {}),
           });
 
           return { world: { ...state.world } };

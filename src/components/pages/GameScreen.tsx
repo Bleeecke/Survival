@@ -1,8 +1,10 @@
-import { useEffect } from 'react';
+import { useEffect, useCallback } from 'react';
 import GameCanvas from '../game/GameCanvas';
 import GameHUD from '../game/GameHUD';
 import InventoryPanel from '../game/InventoryPanel';
 import CraftingModal from '../game/CraftingModal';
+import CampfireModal from '../game/CampfireModal';
+import PalmShelterModal from '../game/PalmShelterModal';
 import SleepModal from '../game/SleepModal';
 import StorageBoxModal from '../game/StorageBoxModal';
 import CharacterPanel from '../game/CharacterPanel';
@@ -16,6 +18,9 @@ import { useWorldStore } from '../../store/worldStore';
 import { USABLE } from '../game/InventoryPanel';
 
 export default function GameScreen() {
+  const fatigue         = usePlayerStore(s => s.player.stats.fatigue ?? 0);
+  const placementMode   = useGameStore(s => s.placementMode);
+  const exitPlacement   = useGameStore(s => s.exitPlacementMode);
   const isPaused        = useGameStore(s => s.isPaused);
   const setPaused       = useGameStore(s => s.setPaused);
   const showSleepMenu   = useGameStore(s => s.showSleepMenu);
@@ -31,6 +36,7 @@ export default function GameScreen() {
   const tutorialStep    = useTutorialStore(s => s.currentStep);
   const completeStep    = useTutorialStore(s => s.completeStep);
   const tutorialSkipped = useTutorialStore(s => s.skipped);
+  const closeCrafting = useCallback(() => setCraftingOpen(false), [setCraftingOpen]);
 
   // ── Tutorial step detection ──────────────────────────────────────
   // Step 1: Wasserquelle finden → wenn Wasser im Inventar (gesammelt an Quelle)
@@ -107,14 +113,20 @@ export default function GameScreen() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      // Avoid key-repeat toggles (notably "C" opening and immediately closing modals)
+      if (e.repeat) return;
+
       if (e.key === 'Escape') {
+        if (useGameStore.getState().placementMode) { useGameStore.getState().exitPlacementMode(); return; }
+        if (useGameStore.getState().palmShelterModalId) { useGameStore.getState().closePalmShelterModal(); return; }
         if (useGameStore.getState().gatherMenuOpen) { closeGatherMenu(); return; }
         if (craftingOpen) { setCraftingOpen(false); return; }
         if (useGameStore.getState().storageBoxId) { closeStorageBox(); return; }
         setPaused(!useGameStore.getState().isPaused);
       }
       if ((e.key === 'c' || e.key === 'C') && !isPaused) {
-        setCraftingOpen(!craftingOpen);
+        const open = useGameStore.getState().craftingOpen;
+        setCraftingOpen(!open);
       }
 
       // Belt quick-use: 1 / 2 / 3
@@ -136,8 +148,15 @@ export default function GameScreen() {
 
   return (
     <div className="flex w-full h-screen bg-black relative">
-      {/* Game Canvas */}
-      <div className="flex-1 relative" style={{ minWidth: 0 }}>
+      {/* Game Canvas — blur increases with fatigue stage */}
+      <div
+        className="flex-1 relative"
+        style={{
+          minWidth: 0,
+          filter: fatigue >= 80 ? 'blur(2.5px)' : fatigue >= 65 ? 'blur(1.2px)' : fatigue >= 45 ? 'blur(0.4px)' : 'none',
+          transition: 'filter 2s ease',
+        }}
+      >
         <GameCanvas />
         {/* Character panel overlay – top-left of canvas */}
         <div className="absolute top-3 left-3 z-10 pointer-events-auto">
@@ -172,11 +191,32 @@ export default function GameScreen() {
         </div>
       </div>
 
+      {/* Placement mode overlay */}
+      {placementMode && (
+        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 pointer-events-none">
+          <div className="bg-black/70 border border-green-500/50 rounded-xl px-5 py-3 text-center backdrop-blur-sm">
+            <div className="text-green-400 font-bold text-sm mb-0.5">Platzierungsmodus</div>
+            <div className="text-slate-300 text-xs">Klicken zum Platzieren &nbsp;·&nbsp; <span className="text-slate-400">Esc = Abbrechen</span></div>
+          </div>
+        </div>
+      )}
+
+      {placementMode && (
+        <button
+          onClick={exitPlacement}
+          className="absolute top-4 left-1/2 -translate-x-1/2 z-20 px-4 py-1.5 bg-red-800/80 hover:bg-red-700 text-white text-xs font-semibold rounded-lg border border-red-600 transition-colors pointer-events-auto"
+        >
+          ✕ Abbrechen
+        </button>
+      )}
+
       {/* Crafting modal */}
-      {craftingOpen && <CraftingModal onClose={() => setCraftingOpen(false)} />}
+      {craftingOpen && <CraftingModal onClose={closeCrafting} />}
 
       {/* Storage box modal */}
       <StorageBoxModal />
+      <CampfireModal />
+      <PalmShelterModal />
 
       {/* Sleep modal */}
       {showSleepMenu && <SleepModal />}

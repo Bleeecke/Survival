@@ -14,6 +14,11 @@ export const ITEM_WEIGHTS: Record<string, number> = {
   cooked_mushroom:  0.2,
   cooked_food:      0.2,
   cooked_fish_meal: 0.3,
+  crab_meat:        0.2,
+  cooked_crab:      0.2,
+  turtle_meat:      0.5,
+  turtle_shell:     1.2,
+  cooked_turtle:    0.4,
 
   // Light – sticks, water, small tools
   sticks:           0.3,

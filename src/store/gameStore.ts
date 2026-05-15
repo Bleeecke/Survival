@@ -10,7 +10,7 @@ interface GameStore {
   elapsedTime: number;
   score: number;
   showSleepMenu: boolean;
-  sleepQuality: 'bed' | 'shelter' | 'outdoor';
+  sleepQuality: 'cabin' | 'shelter' | 'outdoor';
 
   // Gather interaction menu
   gatherMenuOpen: boolean;
@@ -26,17 +26,32 @@ interface GameStore {
   craftingOpen: boolean;
   setCraftingOpen: (open: boolean) => void;
 
+  // Placement mode — active after clicking "Craft" for a structure
+  placementMode: { recipeId: string } | null;
+  enterPlacementMode: (recipeId: string) => void;
+  exitPlacementMode: () => void;
+
   // Storage box modal
   storageBoxId: string | null;
   openStorageBox: (id: string) => void;
   closeStorageBox: () => void;
+
+  // Campfire modal
+  campfireModalId: string | null;
+  openCampfireModal: (id: string) => void;
+  closeCampfireModal: () => void;
+
+  // Palm shelter modal
+  palmShelterModalId: string | null;
+  openPalmShelterModal: (id: string) => void;
+  closePalmShelterModal: () => void;
 
   setPhase: (phase: GamePhase) => void;
   setPaused: (paused: boolean) => void;
   setDifficulty: (diff: Difficulty) => void;
   tickTime: (delta: number) => void;
   addScore: (points: number) => void;
-  setShowSleepMenu: (show: boolean, quality?: 'bed' | 'shelter' | 'outdoor') => void;
+  setShowSleepMenu: (show: boolean, quality?: 'cabin' | 'shelter' | 'outdoor') => void;
   openGatherMenu: (resources: WorldResource[]) => void;
   closeGatherMenu: () => void;
   setPendingGather: (id: string | null, action?: string | null) => void;
@@ -53,7 +68,7 @@ export const useGameStore = create<GameStore>()(
       elapsedTime: 0,
       score: 0,
       showSleepMenu: false,
-      sleepQuality: 'outdoor',
+      sleepQuality: 'outdoor' as 'cabin' | 'shelter' | 'outdoor',
       gatherMenuOpen: false,
       nearbyResources: [],
       pendingGatherId: null,
@@ -78,9 +93,18 @@ export const useGameStore = create<GameStore>()(
       setPendingGather: (id, action = null) =>
         set({ pendingGatherId: id, pendingGatherAction: action }),
       setCraftingOpen: (open) => set({ craftingOpen: open }),
+      placementMode: null,
+      enterPlacementMode: (recipeId) => set({ placementMode: { recipeId }, craftingOpen: false }),
+      exitPlacementMode: () => set({ placementMode: null }),
       storageBoxId: null,
       openStorageBox: (id) => set({ storageBoxId: id, isPaused: false }),
       closeStorageBox: () => set({ storageBoxId: null }),
+      campfireModalId: null,
+      openCampfireModal: (id) => set({ campfireModalId: id }),
+      closeCampfireModal: () => set({ campfireModalId: null }),
+      palmShelterModalId: null,
+      openPalmShelterModal: (id) => set({ palmShelterModalId: id }),
+      closePalmShelterModal: () => set({ palmShelterModalId: null }),
       setHoveredResource: (res) =>
         set(state => {
           if (res?.id === state.hoveredResource?.id) return {};
@@ -94,7 +118,7 @@ export const useGameStore = create<GameStore>()(
           elapsedTime: 225_000,
           score: 0,
           showSleepMenu: false,
-          sleepQuality: 'outdoor',
+          sleepQuality: 'outdoor' as 'cabin' | 'shelter' | 'outdoor',
           gatherMenuOpen: false,
           nearbyResources: [],
           pendingGatherId: null,
@@ -102,7 +126,10 @@ export const useGameStore = create<GameStore>()(
           hoveredResource: null,
           hoverSince: null,
           craftingOpen: false,
+          campfireModalId: null,
+          palmShelterModalId: null,
           storageBoxId: null,
+          placementMode: null,
         }),
     }),
     {

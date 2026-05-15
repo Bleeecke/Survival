@@ -5,78 +5,42 @@ import { DAY_DURATION_MS } from '../../data/worldConfig';
 
 const HOUR_MS = DAY_DURATION_MS / 24;
 
-type Quality = 'bed' | 'shelter' | 'outdoor';
-
-interface SleepOption {
-  id: string;
-  quality: Quality;
-  icon: string;
-  label: string;
-  hours: number;
-  fatigueReduction: number; // how much fatigue is removed (0–100)
-  fatigueResult?: number;   // fixed result value (overrides reduction)
-  healthDelta: number;
-  staminaBonus: number;
-  desc: string;
-  color: string;
-}
-
-const OPTIONS: SleepOption[] = [
-  {
-    id: 'nap',
-    quality: 'outdoor',
-    icon: '😴', label: 'Nickerchen',
-    hours: 2,
-    fatigueReduction: 20,
-    healthDelta: 0,
-    staminaBonus: 40,
-    desc: '2h · Müdigkeit -20 · Ausdauer +40',
-    color: 'bg-sky-900 hover:bg-sky-800 border-sky-700',
-  },
-  {
-    id: 'bed',
-    quality: 'bed',
-    icon: '🛏️', label: 'Im Bett schlafen',
-    hours: 6,
-    fatigueResult: 0,
-    fatigueReduction: 100,
-    healthDelta: +10,
-    staminaBonus: 60,
-    desc: '6h · Müdigkeit voll erholt · Gesundheit +10',
-    color: 'bg-emerald-800 hover:bg-emerald-700 border-emerald-600',
-  },
-  {
-    id: 'shelter',
-    quality: 'shelter',
-    icon: '🏠', label: 'Im Unterschlupf schlafen',
-    hours: 8,
-    fatigueResult: 0,
-    fatigueReduction: 100,
-    healthDelta: 0,
-    staminaBonus: 40,
-    desc: '8h · Müdigkeit voll erholt · Gesundheit neutral',
-    color: 'bg-slate-700 hover:bg-slate-600 border-slate-500',
-  },
-  {
-    id: 'outdoor',
-    quality: 'outdoor',
-    icon: '🌿', label: 'Auf der Erde schlafen',
-    hours: 8,
-    fatigueResult: 0,
-    fatigueReduction: 100,
-    healthDelta: -10,
-    staminaBonus: 25,
-    desc: '8h · Müdigkeit voll erholt · Gesundheit -10',
-    color: 'bg-slate-700 hover:bg-slate-600 border-orange-800',
-  },
-];
-
-const QUALITY_ORDER: Quality[] = ['outdoor', 'shelter', 'bed'];
-function qualityAtLeast(have: Quality, need: Quality) {
-  return QUALITY_ORDER.indexOf(have) >= QUALITY_ORDER.indexOf(need);
-}
-
+type Quality = 'cabin' | 'shelter' | 'outdoor';
 type FadeState = 'idle' | 'fading-out' | 'black' | 'fading-in';
+
+const DURATIONS = [2, 4, 6, 8, 10] as const;
+
+const QUALITY_LABELS: Record<Quality, string> = {
+  outdoor: '🌿 Draußen',
+  shelter: '⛺ Palmendach',
+  cabin:   '🏠 Unterkunft',
+};
+
+const QUALITY_COLORS: Record<Quality, string> = {
+  outdoor: 'text-orange-400',
+  shelter: 'text-sky-400',
+  cabin:   'text-emerald-400',
+};
+
+function calcEffects(hours: number, quality: Quality, currentFatigue: number) {
+  let newFatigue: number;
+  let healthDelta: number;
+
+  if (quality === 'outdoor') {
+    newFatigue   = Math.max(10, currentFatigue - hours * 11);
+    healthDelta  = -Math.min(10, hours);
+  } else if (quality === 'shelter') {
+    newFatigue  = Math.max(5, currentFatigue - Math.min(hours, 8) * 12);
+    healthDelta = 0;
+  } else {
+    // cabin
+    newFatigue  = Math.max(0, currentFatigue - hours * 13);
+    healthDelta = hours >= 8 ? +10 : 0;
+  }
+
+  const fatigueChange = currentFatigue - newFatigue; // positive = improved
+  return { newFatigue, healthDelta, fatigueChange };
+}
 
 export default function SleepModal() {
   const setShowSleepMenu = useGameStore(s => s.setShowSleepMenu);
@@ -86,108 +50,158 @@ export default function SleepModal() {
   const updateStats      = usePlayerStore(s => s.updateStats);
 
   const [fadeState, setFadeState] = useState<FadeState>('idle');
+  const [selected, setSelected]   = useState<number | null>(null);
 
-  function sleep(opt: SleepOption) {
+  const fatigue = stats.fatigue ?? 0;
+  const fatigueLabel =
+    fatigue < 20 ? 'Ausgeruht'           :
+    fatigue < 45 ? 'Müdigkeit setzt ein' :
+    fatigue < 65 ? 'Müde'                :
+    fatigue < 80 ? 'Erschöpft'           :
+    fatigue < 92 ? 'Übermüdet'           : '💤 Kollaps';
+
+  function sleep(hours: number) {
+    const health  = stats.health  ?? 100;
     const hunger  = stats.hunger  ?? 0;
     const thirst  = stats.thirst  ?? 0;
-    const health  = stats.health  ?? 100;
     const stamina = stats.stamina ?? 100;
 
-    // Fade out
+    const { newFatigue, healthDelta } = calcEffects(hours, quality, fatigue);
+
     setFadeState('fading-out');
     setTimeout(() => {
       setFadeState('black');
 
-      // Apply effects while screen is black
-      const newFatigue = opt.fatigueResult !== undefined
-        ? opt.fatigueResult
-        : Math.max(0, (stats.fatigue ?? 0) - opt.fatigueReduction);
-      const newHealth  = Math.min(100, Math.max(0, health + opt.healthDelta));
-      const newStamina = Math.min(100, stamina + opt.staminaBonus);
-      const newHunger  = Math.min(100, hunger + opt.hours * 1.5);
-      const newThirst  = Math.min(100, thirst  + opt.hours * 2.0);
       updateStats({
         fatigue:  newFatigue,
-        health:   newHealth,
-        stamina:  newStamina,
-        hunger:   newHunger,
-        thirst:   newThirst,
+        health:   Math.min(100, Math.max(0, health + healthDelta)),
+        stamina:  Math.min(100, stamina + hours * 8),
+        hunger:   Math.min(100, hunger + hours * 1.5),
+        thirst:   Math.min(100, thirst  + hours * 2.0),
       });
-      tickTime(opt.hours * HOUR_MS);
+      tickTime(hours * HOUR_MS);
 
-      // Fade in
       setTimeout(() => {
         setFadeState('fading-in');
         setTimeout(() => {
           setFadeState('idle');
           setShowSleepMenu(false);
         }, 1200);
-      }, 300);
+      }, 400);
     }, 1200);
   }
-
-  const fatigue = stats.fatigue ?? 0;
-  const fatigueLabel =
-    fatigue < 20 ? 'Frisch'     :
-    fatigue < 40 ? 'Ausgeruht'  :
-    fatigue < 60 ? 'Etwas müde' :
-    fatigue < 80 ? 'Müde'       :
-    fatigue < 90 ? 'Sehr müde'  : 'Erschöpft';
 
   const isSleeping = fadeState !== 'idle';
 
   return (
     <>
-      {/* Sleep modal — hidden while fade animation runs */}
       {!isSleeping && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center"
-          style={{ background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)' }}
+          style={{ background: 'rgba(0,0,0,0.78)', backdropFilter: 'blur(4px)' }}
         >
-          <div className="bg-slate-800 border border-slate-600 rounded-2xl shadow-2xl p-6 w-96">
-            <div className="flex items-center gap-3 mb-4">
+          <div className="bg-slate-800 border border-slate-600 rounded-2xl shadow-2xl p-6 w-[420px]">
+
+            {/* Header */}
+            <div className="flex items-center gap-3 mb-5">
               <span className="text-3xl">💤</span>
               <div>
                 <h2 className="text-white font-bold text-lg">Schlafen</h2>
-                <p className="text-slate-400 text-xs">
-                  Müdigkeit:{' '}
-                  <span className={fatigue > 60 ? 'text-orange-400' : 'text-green-400'}>
+                <div className="flex items-center gap-3 text-xs mt-0.5">
+                  <span className={QUALITY_COLORS[quality]}>{QUALITY_LABELS[quality]}</span>
+                  <span className="text-slate-500">·</span>
+                  <span className={fatigue > 65 ? 'text-orange-400' : 'text-slate-400'}>
                     {fatigueLabel} ({Math.round(fatigue)}%)
                   </span>
-                </p>
+                </div>
               </div>
             </div>
 
-            <div className="space-y-2 mb-4">
-              {OPTIONS.map(opt => {
-                const available = qualityAtLeast(quality, opt.quality);
+            {/* Duration grid */}
+            <div className="grid grid-cols-5 gap-2 mb-4">
+              {DURATIONS.map(h => {
+                const { fatigueChange } = calcEffects(h, quality, fatigue);
+                const isSelected = selected === h;
                 return (
                   <button
-                    key={opt.quality}
-                    onClick={() => available && sleep(opt)}
-                    disabled={!available}
-                    className={`w-full flex items-center gap-3 rounded-xl px-4 py-3 border transition-colors text-left ${
-                      available
-                        ? opt.color
-                        : 'bg-slate-800 border-slate-700 opacity-40 cursor-not-allowed'
+                    key={h}
+                    onClick={() => setSelected(isSelected ? null : h)}
+                    className={`rounded-xl py-3 px-1 border text-center transition-colors ${
+                      isSelected
+                        ? 'bg-indigo-700 border-indigo-500'
+                        : 'bg-slate-700 hover:bg-slate-600 border-slate-600'
                     }`}
                   >
-                    <span className="text-2xl">{opt.icon}</span>
-                    <div className="flex-1">
-                      <div className="text-white font-semibold text-sm">{opt.label}</div>
-                      <div className="text-slate-300 text-xs mt-0.5">{opt.desc}</div>
-                      {!available && (
-                        <div className="text-orange-400 text-xs">Nicht verfügbar</div>
-                      )}
+                    <div className="text-white font-bold text-sm">{h}h</div>
+                    <div className="text-slate-400 text-xs mt-1">
+                      -{Math.round(fatigueChange)}%
                     </div>
                   </button>
                 );
               })}
             </div>
 
+            {/* Preview */}
+            {selected !== null && (() => {
+              const { newFatigue, healthDelta, fatigueChange } = calcEffects(selected, quality, fatigue);
+              const hungerIncrease = Math.round(selected * 1.5);
+              const thirstIncrease = Math.round(selected * 2.0);
+              return (
+                <div className="bg-slate-900 rounded-xl px-4 py-3 mb-4 space-y-1.5 text-xs">
+                  <div className="text-slate-400 font-semibold mb-2 uppercase tracking-widest text-xs">
+                    Vorschau — {selected}h Schlaf
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Müdigkeit</span>
+                    <span className="text-violet-400">
+                      {Math.round(fatigue)}% → {Math.round(newFatigue)}%
+                      <span className="text-green-400 ml-1">(-{Math.round(fatigueChange)}%)</span>
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Gesundheit</span>
+                    <span className={healthDelta > 0 ? 'text-green-400' : healthDelta < 0 ? 'text-red-400' : 'text-slate-500'}>
+                      {healthDelta > 0 ? `+${healthDelta}` : healthDelta === 0 ? '±0' : healthDelta} HP
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Hunger</span>
+                    <span className="text-orange-400">+{hungerIncrease}%</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Durst</span>
+                    <span className="text-sky-400">+{thirstIncrease}%</span>
+                  </div>
+                  {quality === 'shelter' && selected > 8 && (
+                    <div className="text-slate-500 italic pt-1">
+                      Länger als 8h bringt im Unterschlupf keinen weiteren Nutzen
+                    </div>
+                  )}
+                  {quality === 'cabin' && selected >= 8 && (
+                    <div className="text-emerald-400 italic pt-1">
+                      ✓ Voll erholt + Gesundheitsbonus
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* Confirm button */}
+            <button
+              onClick={() => selected !== null && sleep(selected)}
+              disabled={selected === null}
+              className={`w-full py-3 rounded-xl font-bold text-sm transition-colors mb-2 ${
+                selected !== null
+                  ? 'bg-indigo-700 hover:bg-indigo-600 text-white'
+                  : 'bg-slate-700 text-slate-500 cursor-not-allowed'
+              }`}
+            >
+              {selected !== null ? `${selected}h schlafen` : 'Dauer wählen'}
+            </button>
+
             <button
               onClick={() => setShowSleepMenu(false)}
-              className="w-full py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg text-sm transition-colors"
+              className="w-full py-2 bg-slate-700 hover:bg-slate-600 text-slate-400 rounded-xl text-sm transition-colors"
             >
               Abbrechen
             </button>
@@ -195,21 +209,16 @@ export default function SleepModal() {
         </div>
       )}
 
-      {/* Full-screen fade overlay */}
+      {/* Fade overlay */}
       {isSleeping && (
         <div
           className="fixed inset-0 z-[999] bg-black pointer-events-none"
           style={{
-            opacity:
-              fadeState === 'fading-out' ? 0 :
-              fadeState === 'black'      ? 1 :
-              fadeState === 'fading-in'  ? 0 : 0,
-            transition:
-              fadeState === 'fading-out' ? 'opacity 1.2s ease-in'  :
-              fadeState === 'fading-in'  ? 'opacity 1.2s ease-out' : 'none',
+            opacity:    fadeState === 'black' ? 1 : 0,
+            transition: fadeState === 'fading-out' ? 'opacity 1.2s ease-in' :
+                        fadeState === 'fading-in'  ? 'opacity 1.2s ease-out' : 'none',
           }}
         >
-          {/* Small sleep indicator in center while black */}
           {fadeState === 'black' && (
             <div className="absolute inset-0 flex items-center justify-center">
               <div className="text-center">

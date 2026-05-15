@@ -41,6 +41,8 @@ export interface Structure {
   lastBuildDay?: number;
   // Campfire fuel (game-days remaining)
   fuel?: number;
+  // Multi-tile width (default 1)
+  width?: number;
 }
 
 export interface WorldState {

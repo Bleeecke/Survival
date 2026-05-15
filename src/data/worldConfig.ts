@@ -34,6 +34,7 @@ export const WORLD_CONFIG = {
     flint:        { frequency: 0.04,  minQuantity: 1, maxQuantity: 2, spawnOn: ['beach', 'hills'] },
     driftwood:    { frequency: 0.025, minQuantity: 1, maxQuantity: 2, spawnOn: ['beach'] },
     shells:       { frequency: 0.04,  minQuantity: 1, maxQuantity: 2, spawnOn: ['beach'] },
+    coconut_shell: { frequency: 0.03, minQuantity: 1, maxQuantity: 2, spawnOn: ['beach'] },
     herbs:        { frequency: 0.03,  minQuantity: 1, maxQuantity: 2, spawnOn: ['grass', 'tall_grass', 'sparse_forest'] },
     fiber:        { frequency: 0.035, minQuantity: 1, maxQuantity: 2, spawnOn: ['tall_grass'] },
     mushroom:     { frequency: 0.03,  minQuantity: 1, maxQuantity: 2, spawnOn: ['sparse_forest', 'dense_jungle', 'forest'] },

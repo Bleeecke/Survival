@@ -13,9 +13,9 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
   {
     id: 1,
     icon: '💧',
-    title: 'Wasserquelle finden',
-    description: 'Du brauchst dringend Wasser. Erkundige die Insel und finde eine Quelle.',
-    hint: 'Quellen findest du zwischen Felsen und im Inneren der Insel. Bewege dich mit WASD.',
+    title: 'Pfütze finden & trinken',
+    description: 'Du brauchst dringend Wasser. Suche eine Pfütze in der Nähe und trinke daraus.',
+    hint: 'Pfützen liegen nahe dem Startpunkt auf Wiesen. Geh ran und drücke LEERTASTE — Wasser wird sofort getrunken.',
   },
   {
     id: 2,

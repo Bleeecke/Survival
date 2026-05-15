@@ -21,6 +21,7 @@ export interface PlayerStats {
   thirst: number;   // 0-100  (0 = Hydriert, 100 = Verdurstend)
   stamina: number;  // 0-100
   fatigue: number;  // 0-100  (0 = Frisch, 100 = Erschöpft)
+  poisonedUntil?: number; // real timestamp ms — health drain while active
 }
 
 export interface InventoryItem {

@@ -38,6 +38,10 @@ export const RESOURCE_TYPES: Record<string, ResourceTypeDef> = {
     id: 'spring', name: 'Quelle', spriteIndex: 11,
     gatherTime: 800, maxStack: 1, regenerates: false, regenerationTime: 0,
   },
+  puddle: {
+    id: 'puddle', name: 'Pfütze', spriteIndex: 7,
+    gatherTime: 600, maxStack: 3, regenerates: false, regenerationTime: 0,
+  },
   palm_tree: {
     id: 'palm_tree', name: 'Palme', spriteIndex: 23,
     gatherTime: 800, maxStack: 1, regenerates: true, regenerationTime: 150_000,
@@ -91,6 +95,28 @@ export const RESOURCE_TYPES: Record<string, ResourceTypeDef> = {
   vine: {
     id: 'vine', name: 'Lianen', spriteIndex: 22,
     gatherTime: 600, maxStack: 40, regenerates: true, regenerationTime: 90_000,
+  },
+
+  // ── Animal drops ─────────────────────────────────────────────────
+  turtle_meat: {
+    id: 'turtle_meat', name: 'Schildkrötenfleisch', spriteIndex: 29,
+    gatherTime: 0, maxStack: 20, regenerates: false,
+  },
+  turtle_shell: {
+    id: 'turtle_shell', name: 'Schildkrötenpanzer', spriteIndex: 30,
+    gatherTime: 0, maxStack: 5, regenerates: false,
+  },
+  cooked_turtle: {
+    id: 'cooked_turtle', name: 'Gek. Schildkröte', spriteIndex: 31,
+    gatherTime: 0, maxStack: 20, regenerates: false,
+  },
+  crab_meat: {
+    id: 'crab_meat', name: 'Krabbenfleisch', spriteIndex: 27,
+    gatherTime: 0, maxStack: 20, regenerates: false,
+  },
+  cooked_crab: {
+    id: 'cooked_crab', name: 'Gek. Krabbe', spriteIndex: 28,
+    gatherTime: 0, maxStack: 20, regenerates: false,
   },
 
   // ── Special resources ─────────────────────────────────────────────

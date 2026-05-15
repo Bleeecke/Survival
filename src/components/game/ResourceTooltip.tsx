@@ -9,7 +9,7 @@ const ITEM_NAMES: Record<string, string> = {
   pebbles: 'Kieselsteine', flint: 'Feuerstein', driftwood: 'Treibholz',
   shells: 'Muscheln', palm_leaf: 'Palmenblatt', herbs: 'Kräuter',
   fiber: 'Fasern', mushroom: 'Pilze', exotic_fruit: 'Exotische Frucht',
-  vine: 'Lianen', iron_ore: 'Eisenerz', spring: 'Quelle', palm_tree: 'Palme',
+  vine: 'Lianen', iron_ore: 'Eisenerz', spring: 'Quelle', puddle: 'Pfütze', palm_tree: 'Palme',
   rope: 'Seil', plank: 'Holzbrett', iron_bar: 'Eisenbarren', fish: 'Fisch',
   flint_knife: 'Feuersteinmesser', stone_axe: 'Steinaxt',
   stone_pickaxe: 'Steinspitzhacke', stone_spear: 'Steinspeer',
@@ -25,7 +25,7 @@ const ITEM_ICON: Record<string, string> = {
   wood: '🪵', stone: '🪨', food: '🫐', sticks: '🌿', pebbles: '⚪',
   flint: '🔶', driftwood: '🪵', shells: '🐚', palm_leaf: '🌴',
   herbs: '🌿', fiber: '🌾', mushroom: '🍄', exotic_fruit: '🍊',
-  vine: '🌿', iron_ore: '🟤', spring: '💧', palm_tree: '🌴',
+  vine: '🌿', iron_ore: '🟤', spring: '💧', puddle: '💧', palm_tree: '🌴',
 };
 
 const RESOURCE_DESC: Record<string, string> = {
@@ -45,6 +45,7 @@ const RESOURCE_DESC: Record<string, string> = {
   vine:         'Lianen – zähe Pflanzenstränge für Seile. Messer nötig.',
   iron_ore:     'Eisenerz aus dem Gebirge – für Metallwerkzeuge. Spitzhacke nötig.',
   spring:       'Natürliche Wasserquelle – sprudelt unerschöpflich.',
+  puddle:       'Regenpfütze – nur 3 Schlucke Wasser. Wird sofort getrunken, nicht gesammelt.',
   palm_tree:    'Palme – gibt Palmenblätter beim Ablesen. Mit Messer auch Fasern.',
 };
 

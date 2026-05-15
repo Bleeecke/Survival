@@ -15,12 +15,12 @@ const HUNGER_LEVELS = [
 
 // ── Fatigue status ────────────────────────────────────────────────
 const FATIGUE_LEVELS = [
-  { max: 20,  label: 'Frisch',      bar: 'bg-violet-500',      text: 'text-violet-400' },
-  { max: 40,  label: 'Ausgeruht',   bar: 'bg-violet-400',      text: 'text-violet-300' },
-  { max: 60,  label: 'Etwas müde', bar: 'bg-yellow-500',      text: 'text-yellow-400' },
-  { max: 80,  label: 'Müde',        bar: 'bg-orange-500',      text: 'text-orange-400' },
-  { max: 90,  label: 'Sehr müde',   bar: 'bg-red-500',         text: 'text-red-400'    },
-  { max: 100, label: 'Erschöpft',   bar: 'bg-red-700',         text: 'text-red-300'    },
+  { max: 20,  label: 'Ausgeruht',           bar: 'bg-violet-500', text: 'text-violet-400' },
+  { max: 45,  label: 'Müdigkeit setzt ein', bar: 'bg-yellow-400', text: 'text-yellow-300' },
+  { max: 65,  label: 'Müde',               bar: 'bg-yellow-500', text: 'text-yellow-400' },
+  { max: 80,  label: 'Erschöpft',          bar: 'bg-orange-400', text: 'text-orange-400' },
+  { max: 92,  label: 'Übermüdet',          bar: 'bg-orange-600', text: 'text-orange-300' },
+  { max: 100, label: '💤 Kollaps',          bar: 'bg-red-800',    text: 'text-red-300'    },
 ] as const;
 
 // ── Thirst status ─────────────────────────────────────────────────
@@ -56,10 +56,10 @@ export default function GameHUD() {
   const tl      = getThirstLevel(thirst);
   const fl      = getFatigueLevel(fatigue);
 
-  // Stamina regen hint
-  const staminaRegens = hunger < 31 && thirst < 26 && fatigue < 60;
-  const staminaSlow   = !staminaRegens && (hunger < 56 && thirst < 51 && fatigue < 80);
-  const staminaDrains = fatigue > 80;
+  // Stamina regen hint — reflects new regen logic (rest=fast, running=slow, maluses from needs)
+  const staminaRegens = hunger < 40 && thirst < 30 && fatigue < 50;
+  const staminaSlow   = !staminaRegens && hunger < 80 && thirst < 75 && fatigue < 90;
+  const staminaDrains = hunger > 80 || thirst > 75 || fatigue > 90;
 
   return (
     <div className="flex-shrink-0 border-b border-slate-700">
@@ -119,7 +119,7 @@ export default function GameHUD() {
             statusLabel={hl.label}
             statusTextClass={hl.text}
             barClass={hl.bar}
-            warn={hunger > 75}
+            warn={hunger > 80}
           />
 
           {/* Thirst – status label */}
@@ -129,7 +129,7 @@ export default function GameHUD() {
             statusLabel={tl.label}
             statusTextClass={tl.text}
             barClass={tl.bar}
-            warn={thirst > 70}
+            warn={thirst > 75}
           />
 
           {/* Fatigue – status label */}
@@ -139,7 +139,7 @@ export default function GameHUD() {
             statusLabel={fl.label}
             statusTextClass={fl.text}
             barClass={fl.bar}
-            warn={fatigue > 60}
+            warn={fatigue > 75}
           />
 
         </div>
