@@ -26,12 +26,16 @@ export const RESOURCE_TYPES: Record<string, ResourceTypeDef> = {
     id: 'food', name: 'Beeren', spriteIndex: 8,
     gatherTime: 800, maxStack: 30, regenerates: true, regenerationTime: 150_000,
   },
+  berry_bush: {
+    id: 'berry_bush', name: 'Beerenstrauch', spriteIndex: 8,
+    gatherTime: 800, maxStack: 10, regenerates: true, regenerationTime: 600_000,
+  },
   sticks: {
     id: 'sticks', name: 'Äste', spriteIndex: 9,
     gatherTime: 500, maxStack: 99, regenerates: true, regenerationTime: 60_000,
   },
   pebbles: {
-    id: 'pebbles', name: 'Kieselsteine', spriteIndex: 10,
+    id: 'pebbles', name: 'Bruchstein', spriteIndex: 10,
     gatherTime: 400, maxStack: 99, regenerates: true, regenerationTime: 120_000,
   },
   spring: {
@@ -90,7 +94,7 @@ export const RESOURCE_TYPES: Record<string, ResourceTypeDef> = {
   },
   exotic_fruit: {
     id: 'exotic_fruit', name: 'Exotische Frucht', spriteIndex: 21,
-    gatherTime: 900, maxStack: 15, regenerates: true, regenerationTime: 200_000,
+    gatherTime: 900, maxStack: 15, regenerates: true, regenerationTime: 1_200_000,
   },
   vine: {
     id: 'vine', name: 'Lianen', spriteIndex: 22,
@@ -131,5 +135,19 @@ export const RESOURCE_TYPES: Record<string, ResourceTypeDef> = {
   coconut_shell: {
     id: 'coconut_shell', name: 'Kokosschale', spriteIndex: 26,
     gatherTime: 800, maxStack: 10, regenerates: true, regenerationTime: 200_000,
+  },
+  coconut: {
+    id: 'coconut', name: 'Kokosnuss', spriteIndex: 26,
+    gatherTime: 1200, maxStack: 5, regenerates: true, regenerationTime: 300_000,
+  },
+
+  // ── Wildschwein drops ─────────────────────────────────────────────
+  boar_meat: {
+    id: 'boar_meat', name: 'Wildschweinfleisch', spriteIndex: 29,
+    gatherTime: 0, maxStack: 10, regenerates: false,
+  },
+  cooked_boar: {
+    id: 'cooked_boar', name: 'Gek. Wildschwein', spriteIndex: 31,
+    gatherTime: 0, maxStack: 10, regenerates: false,
   },
 };

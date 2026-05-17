@@ -1,4 +1,4 @@
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useState } from 'react';
 import GameCanvas from '../game/GameCanvas';
 import GameHUD from '../game/GameHUD';
 import InventoryPanel from '../game/InventoryPanel';
@@ -11,8 +11,12 @@ import CharacterPanel from '../game/CharacterPanel';
 import IntroModal from '../game/IntroModal';
 import TutorialPanel from '../game/TutorialPanel';
 import PauseMenu from './PauseMenu';
+import DevPanel from '../game/DevPanel';
+import HelpPanel from '../game/HelpPanel';
+import PickupMenu from '../game/PickupMenu';
 import { useGameStore } from '../../store/gameStore';
 import { usePlayerStore } from '../../store/playerStore';
+import { DAY_DURATION_MS } from '../../data/worldConfig';
 import { useTutorialStore } from '../../store/tutorialStore';
 import { useWorldStore } from '../../store/worldStore';
 import { USABLE } from '../game/InventoryPanel';
@@ -31,6 +35,25 @@ export default function GameScreen() {
   const closeStorageBox = useGameStore(s => s.closeStorageBox);
   const useBeltSlot     = usePlayerStore(s => s.useBeltSlot);
   const updateStats     = usePlayerStore(s => s.updateStats);
+
+  const devMode         = useGameStore(s => s.devMode);
+  const elapsedTime     = useGameStore(s => s.elapsedTime);
+  const currentDay      = Math.floor(elapsedTime / DAY_DURATION_MS) + 1;
+  const isAwakening     = useGameStore(s => s.isAwakening);
+  const awakeningBlur   = useGameStore(s => s.awakeningBlur);
+  const [subtitlePhase, setSubtitlePhase] = useState(0); // 0=hidden, 1-4=lines, 5=fading, 6=gone
+
+  useEffect(() => {
+    if (!isAwakening) return;
+    setSubtitlePhase(0);
+    const t1 = setTimeout(() => setSubtitlePhase(1), 2800);
+    const t2 = setTimeout(() => setSubtitlePhase(2), 5200);
+    const t3 = setTimeout(() => setSubtitlePhase(3), 7400);
+    const t4 = setTimeout(() => setSubtitlePhase(4), 9400);
+    const t5 = setTimeout(() => setSubtitlePhase(5), 11500);
+    const t6 = setTimeout(() => setSubtitlePhase(6), 13500);
+    return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); clearTimeout(t4); clearTimeout(t5); clearTimeout(t6); };
+  }, [isAwakening]);
 
   const introDismissed  = useTutorialStore(s => s.introDismissed);
   const tutorialStep    = useTutorialStore(s => s.currentStep);
@@ -119,6 +142,7 @@ export default function GameScreen() {
       if (e.key === 'Escape') {
         if (useGameStore.getState().placementMode) { useGameStore.getState().exitPlacementMode(); return; }
         if (useGameStore.getState().palmShelterModalId) { useGameStore.getState().closePalmShelterModal(); return; }
+        if (useGameStore.getState().pickupMenuOpen) { useGameStore.getState().closePickupMenu(); return; }
         if (useGameStore.getState().gatherMenuOpen) { closeGatherMenu(); return; }
         if (craftingOpen) { setCraftingOpen(false); return; }
         if (useGameStore.getState().storageBoxId) { closeStorageBox(); return; }
@@ -132,12 +156,19 @@ export default function GameScreen() {
       // Belt quick-use: 1 / 2 / 3
       const beltIdx = e.key === '1' ? 0 : e.key === '2' ? 1 : e.key === '3' ? 2 : -1;
       if (beltIdx >= 0 && !isPaused) {
-        const resourceId = useBeltSlot(beltIdx as 0|1|2);
-        if (resourceId) {
-          const def = USABLE[resourceId];
-          if (def) {
-            const currentStats = usePlayerStore.getState().player.stats;
-            updateStats(def.effect(currentStats));
+        const FOOD_IDS = new Set([
+          'food', 'cooked_food', 'cooked_fish_meal', 'mushroom', 'cooked_mushroom',
+          'exotic_fruit', 'turtle_meat', 'cooked_turtle', 'crab_meat', 'cooked_crab',
+        ]);
+        const currentStats = usePlayerStore.getState().player.stats;
+        const peekId = usePlayerStore.getState().player.equipment.belt[beltIdx as 0|1|2]?.resourceId;
+        if (peekId && FOOD_IDS.has(peekId) && currentStats.hunger <= 0) {
+          // satt — nichts tun
+        } else {
+          const resourceId = useBeltSlot(beltIdx as 0|1|2);
+          if (resourceId) {
+            const def = USABLE[resourceId];
+            if (def) updateStats(def.effect(currentStats));
           }
         }
       }
@@ -153,8 +184,10 @@ export default function GameScreen() {
         className="flex-1 relative"
         style={{
           minWidth: 0,
-          filter: fatigue >= 80 ? 'blur(2.5px)' : fatigue >= 65 ? 'blur(1.2px)' : fatigue >= 45 ? 'blur(0.4px)' : 'none',
-          transition: 'filter 2s ease',
+          filter: awakeningBlur > 0
+            ? `blur(${awakeningBlur.toFixed(1)}px)`
+            : fatigue >= 80 ? 'blur(2.5px)' : fatigue >= 65 ? 'blur(1.2px)' : fatigue >= 45 ? 'blur(0.4px)' : 'none',
+          transition: awakeningBlur > 0 ? 'filter 0.1s linear' : 'filter 2s ease',
         }}
       >
         <GameCanvas />
@@ -162,6 +195,16 @@ export default function GameScreen() {
         <div className="absolute top-3 left-3 z-10 pointer-events-auto">
           <CharacterPanel />
         </div>
+
+        {/* Day counter – top-center of canvas */}
+        <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10 pointer-events-none">
+          <div className="bg-black/60 border border-amber-700/60 rounded-lg px-4 py-1 backdrop-blur-sm">
+            <span className="text-amber-300 font-bold text-sm tracking-widest">Tag {currentDay}</span>
+          </div>
+        </div>
+
+        {/* Help & controls panel – bottom-left of canvas */}
+        <HelpPanel />
       </div>
 
       {/* Right Sidebar */}
@@ -221,11 +264,80 @@ export default function GameScreen() {
       {/* Sleep modal */}
       {showSleepMenu && <SleepModal />}
 
+      {/* Pickup menu (dropped items) */}
+      <PickupMenu />
+
+      {/* Dev panel */}
+      {devMode && <DevPanel />}
+
       {/* Pause overlay */}
       {isPaused && <PauseMenu />}
 
       {/* Intro modal — shown once on first play */}
       {!introDismissed && <IntroModal />}
+
+      {/* Cinematic subtitle awakening overlay */}
+      {subtitlePhase >= 1 && subtitlePhase < 6 && (
+        <div
+          className="absolute inset-x-0 bottom-0 z-[900000] pointer-events-none"
+          style={{ opacity: subtitlePhase === 5 ? 0 : 1, transition: 'opacity 2s ease' }}
+        >
+          {/* Gradient vignette at bottom */}
+          <div className="absolute inset-x-0 bottom-0 h-48"
+               style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.92) 0%, rgba(0,0,0,0.5) 60%, transparent 100%)' }} />
+
+          <div className="relative px-10 pb-10 pt-16 max-w-3xl mx-auto">
+            {/* Chapter label */}
+            <SubtitleLine
+              visible={subtitlePhase >= 1}
+              text="— Kapitel I —"
+              className="text-amber-600/80 text-sm tracking-[0.5em] uppercase font-light mb-4"
+            />
+            {/* Main line */}
+            <SubtitleLine
+              visible={subtitlePhase >= 2}
+              text="Du öffnest die Augen. Sand. Salz. Stille."
+              className="text-white text-3xl font-light tracking-wide leading-snug mb-4"
+              style={{ textShadow: '0 2px 30px rgba(0,0,0,0.9)' }}
+            />
+            {/* Story line 1 */}
+            <SubtitleLine
+              visible={subtitlePhase >= 3}
+              text="Das Schiff ist verschwunden. Die anderen auch. Nur das Rauschen der Wellen bleibt."
+              className="text-slate-300 text-lg font-light leading-relaxed tracking-wide mb-6"
+              style={{ textShadow: '0 1px 16px rgba(0,0,0,1)' }}
+            />
+            {/* Final dramatic line */}
+            <SubtitleLine
+              visible={subtitlePhase >= 4}
+              text="Überlebe."
+              className="text-amber-400 text-2xl font-semibold tracking-[0.4em] uppercase"
+              style={{ textShadow: '0 0 32px rgba(255,180,50,0.6)' }}
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SubtitleLine({ visible, text, className, style }: {
+  visible: boolean;
+  text: string;
+  className?: string;
+  style?: React.CSSProperties;
+}) {
+  return (
+    <div
+      className={className}
+      style={{
+        ...style,
+        opacity: visible ? 1 : 0,
+        transform: visible ? 'translateY(0)' : 'translateY(8px)',
+        transition: 'opacity 1.4s ease, transform 1.4s ease',
+      }}
+    >
+      {text}
     </div>
   );
 }

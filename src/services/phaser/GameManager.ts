@@ -32,12 +32,34 @@ export class GameManager {
 
   // Individual y-sorted objects
   private resourceObjects = new Map<string, Phaser.GameObjects.Graphics>();
+  private resourceQuantities = new Map<string, number>();
   private structureObjects = new Map<string, Phaser.GameObjects.Graphics>();
+  private droppedItemObjects = new Map<string, Phaser.GameObjects.Graphics>();
   private fireGraphics: Phaser.GameObjects.Graphics | null = null;
+  private shipwreckGraphics: Phaser.GameObjects.Graphics | null = null;
   private microsleepOverlay: Phaser.GameObjects.Rectangle | null = null;
+  private awakeningOverlay: Phaser.GameObjects.Rectangle | null = null;
+  private awakeningTimer = 0;
+  private readonly AWAKENING_DURATION = 16000; // 16s total
+  private awakeningPose = 0; // 0=lying, 1=standing
   private placementGraphics: Phaser.GameObjects.Graphics | null = null;
   private placementTileX = -1;
   private placementTileY = -1;
+  private nextRainDay = -1;
+  private isRaining = false;
+  private rainTimer = 0;
+  private rainType: 'drizzle'|'shower'|'rain'|'downpour'|'storm'|'long_rain' = 'rain';
+  private rainDuration = 2000; // ticks
+  private lightningTimer = 0;
+  private nextLightning = 0;
+  private rainGraphics: Phaser.GameObjects.Graphics | null = null;
+  private rainOverlay: Phaser.GameObjects.Rectangle | null = null;
+  private lightningOverlay: Phaser.GameObjects.Rectangle | null = null;
+  private lightningBoltGraphics: Phaser.GameObjects.Graphics | null = null;
+  private lightningBoltTimer = 0;
+  private rainDrops: { x: number; y: number; speed: number; len: number }[] = [];
+  private rainAudioNode: AudioNode | null = null;
+  private rainGainNode: GainNode | null = null;
 
   // Turtles
   private turtles: {
@@ -54,16 +76,15 @@ export class GameManager {
   private mouseWorldX = 0;
   private mouseWorldY = 0;
 
-  // Spear projectiles
-  private spears: {
-    id: string;
-    px: number; py: number;      // world-space position (center of spear)
-    vx: number; vy: number;      // velocity px/s
-    angle: number;               // radians, for drawing
-    traveledPx: number;          // distance covered so far
-    maxRangePx: number;
+  // Spear melee lunge animation
+  private spearLunge: {
+    angle: number;       // direction of lunge (radians)
+    progress: number;    // 0→1→0 (out and back)
+    phase: 'out' | 'back';
     g: Phaser.GameObjects.Graphics;
-  }[] = [];
+    hitTargets: Set<string>; // ids already damaged this lunge
+  } | null = null;
+  private spearCooldown = 0; // ms remaining cooldown
 
   // Crabs
   private crabs: {
@@ -72,6 +93,22 @@ export class GameManager {
     targetPx: number; targetPy: number;
     state: 'idle' | 'wander' | 'flee';
     stateTimer: number;
+    facingLeft: boolean;
+    g: Phaser.GameObjects.Graphics;
+  }[] = [];
+
+  // Boars
+  private boars: {
+    id: string;
+    px: number; py: number;
+    targetPx: number; targetPy: number;
+    health: number;
+    state: 'patrol' | 'chase' | 'attack' | 'wary' | 'dead';
+    stateTimer: number;
+    lastAttack: number;
+    hitFlash: number;
+    deadAt: number;
+    waryTimer: number; // countdown before boar calms down after fire exposure
     facingLeft: boolean;
     g: Phaser.GameObjects.Graphics;
   }[] = [];
@@ -193,6 +230,10 @@ export class GameManager {
     // Fire animation graphics: drawn in world space, depth just above structures
     this.fireGraphics = this.scene.add.graphics().setDepth(500);
 
+    // Shipwreck — drawn once in world space, depth below player
+    this.shipwreckGraphics = this.scene.add.graphics().setDepth(10);
+    this.renderShipwreck(world);
+
     // Microsleep blackout overlay — sits above everything, tweened on stage 4 fatigue
     this.microsleepOverlay = this.scene.add.rectangle(
       0, 0, this.game!.scale.width, this.game!.scale.height, 0x000000
@@ -200,6 +241,32 @@ export class GameManager {
 
     // Placement preview graphics — drawn in world space above fog
     this.placementGraphics = this.scene.add.graphics().setDepth(600_500);
+
+    // Awakening overlay — above everything, starts fully black (only for new games)
+    const isNewGame = useGameStore.getState().isNewGame;
+    this.awakeningOverlay = this.scene.add.rectangle(
+      0, 0, this.game!.scale.width * 3, this.game!.scale.height * 3, 0x000000
+    ).setScrollFactor(0).setDepth(800_000).setOrigin(0, 0).setAlpha(isNewGame ? 1 : 0);
+    if (isNewGame) {
+      this.awakeningPose = 0;
+      useGameStore.getState().setAwakening(true);
+      useGameStore.getState().setIsNewGame(false);
+    } else {
+      this.awakeningPose = 1; // already standing when loading a save
+      useGameStore.getState().setAwakening(false);
+      useGameStore.getState().setAwakeningBlur(0);
+    }
+
+    // Rain graphics (screen-space, above fog but below awakening overlay)
+    this.rainOverlay = this.scene.add.rectangle(
+      0, 0, this.game!.scale.width, this.game!.scale.height, 0x1a3a6e
+    ).setScrollFactor(0).setDepth(550_000).setOrigin(0, 0).setAlpha(0);
+    this.lightningOverlay = this.scene.add.rectangle(
+      0, 0, this.game!.scale.width, this.game!.scale.height, 0xffffff
+    ).setScrollFactor(0).setDepth(550_002).setOrigin(0, 0).setAlpha(0);
+    this.lightningBoltGraphics = this.scene.add.graphics().setDepth(550_003).setScrollFactor(0);
+    this.rainGraphics = this.scene.add.graphics().setDepth(550_001).setScrollFactor(0);
+    this.initRainDrops();
 
     // Mouse move: track world position for placement preview + weapon aim
     this.scene.input.on('pointermove', (ptr: Phaser.Input.Pointer) => {
@@ -234,16 +301,19 @@ export class GameManager {
     // Spawn crabs and turtles on beach tiles
     this.spawnCrabs(world);
     this.spawnTurtles(world);
+    this.spawnBoars(world);
 
-    // Reveal starting area
-    this.markExplored(player.x, player.y, SIGHT_DAY);
-    this.updateFog(player.x, player.y, SIGHT_DAY);
+    // Reveal starting area — skip during awakening (fog expands gradually)
+    if (!useGameStore.getState().isAwakening) {
+      this.markExplored(player.x, player.y, SIGHT_DAY);
+      this.updateFog(player.x, player.y, SIGHT_DAY);
+    }
 
     this.worldUnsubscribe = useWorldStore.subscribe((state) => {
       if (state.world) {
         this.syncResources(state.world);
         this.syncStructures(state.world);
-        // Campfire fuel changed → fog needs redraw (handled by updateFog each frame)
+        this.syncDroppedItems(state.world);
       }
     });
 
@@ -552,7 +622,8 @@ export class GameManager {
     if (!this.scene) return;
     const g = this.scene.add.graphics();
     g.setDepth(this.objectDepth(res.x, res.y));
-    this.drawResource(g, res.type, res.x, res.y);
+    this.drawResource(g, res.type, res.x, res.y, res.quantity);
+    this.resourceQuantities.set(res.id, res.quantity);
     this.resourceObjects.set(res.id, g);
   }
 
@@ -560,7 +631,7 @@ export class GameManager {
     if (!this.scene) return;
     const g = this.scene.add.graphics();
     g.setDepth(this.objectDepth(s.x, s.y));
-    this.drawStructure(g, s.type, s.x, s.y);
+    this.drawStructure(g, s.type, s.x, s.y, s.fuel);
     this.structureObjects.set(s.id, g);
   }
 
@@ -683,11 +754,21 @@ export class GameManager {
   private syncResources(world: any) {
     for (const res of world.resources) {
       const hasObj = this.resourceObjects.has(res.id);
-      if (res.quantity > 0 && !hasObj) {
+      const alwaysShow = res.type === 'berry_bush' || res.type === 'exotic_fruit';
+      if ((res.quantity > 0 || alwaysShow) && !hasObj) {
         this.createResourceObject(res);            // regenerated
-      } else if (res.quantity <= 0 && hasObj) {
+      } else if (res.quantity <= 0 && hasObj && res.type !== 'berry_bush' && res.type !== 'exotic_fruit') {
         this.resourceObjects.get(res.id)!.destroy();
         this.resourceObjects.delete(res.id);
+        this.resourceQuantities.delete(res.id);
+      } else if (hasObj && (res.type === 'berry_bush' || res.type === 'exotic_fruit')) {
+        const prev = this.resourceQuantities.get(res.id);
+        if (prev !== res.quantity) {
+          const g = this.resourceObjects.get(res.id)!;
+          g.clear();
+          this.drawResource(g, res.type, res.x, res.y, res.quantity);
+          this.resourceQuantities.set(res.id, res.quantity);
+        }
       }
     }
   }
@@ -698,11 +779,130 @@ export class GameManager {
       if (!ids.has(id)) { g.destroy(); this.structureObjects.delete(id); }
     }
     for (const s of world.structures) {
-      if (!this.structureObjects.has(s.id)) this.createStructureObject(s);
+      if (!this.structureObjects.has(s.id)) {
+        this.createStructureObject(s);
+      } else if (s.type === 'water_container') {
+        // Redraw when fuel changes so water level updates visually
+        const g = this.structureObjects.get(s.id)!;
+        g.clear();
+        this.drawStructure(g, s.type, s.x, s.y, s.fuel);
+      }
     }
   }
 
-  private drawResource(g: Phaser.GameObjects.Graphics, type: string, tx: number, ty: number) {
+  private syncDroppedItems(world: any) {
+    const drops: any[] = world.droppedItems ?? [];
+    const ids = new Set(drops.map((d: any) => d.id));
+    for (const [id, g] of this.droppedItemObjects) {
+      if (!ids.has(id)) { g.destroy(); this.droppedItemObjects.delete(id); }
+    }
+    for (const drop of drops) {
+      if (!this.droppedItemObjects.has(drop.id)) {
+        this.createDroppedItemObject(drop);
+      }
+    }
+  }
+
+  private static DROP_NAMES: Record<string, string> = {
+    wood: 'Holz', stone: 'Stein', sticks: 'Äste', pebbles: 'Bruchstein',
+    flint: 'Feuerstein', driftwood: 'Treibholz', shells: 'Muscheln',
+    palm_leaf: 'Palmenblatt', herbs: 'Kräuter', fiber: 'Fasern',
+    mushroom: 'Pilze', exotic_fruit: 'Exotische Frucht', vine: 'Lianen',
+    iron_ore: 'Eisenerz', food: 'Beeren', berry_bush: 'Beeren',
+    coconut: 'Kokosnuss', coconut_shell: 'Kokosschale', tree_resin: 'Baumharz',
+    fish: 'Fisch', turtle_meat: 'Schildkrötenfleisch', turtle_shell: 'Schildkrötenpanzer',
+    crab_meat: 'Krabbenfleisch', cooked_turtle: 'Gek. Schildkröte',
+    cooked_crab: 'Gek. Krabbe', water: 'Wasser',
+  };
+
+  private createDroppedItemObject(drop: any) {
+    if (!this.scene) return;
+    const g = this.scene.add.graphics();
+    g.setDepth(drop.y * 1000 + 1);
+    this.drawDroppedItem(g, drop.resourceId, drop.x, drop.y);
+
+    // Hover tooltip
+    const cx = drop.x * TS + TS / 2;
+    const cy = drop.y * TS + TS / 2;
+    g.setInteractive(new Phaser.Geom.Rectangle(cx - 10, cy - 12, 20, 18), Phaser.Geom.Rectangle.Contains);
+
+    let tooltip: Phaser.GameObjects.Container | null = null;
+
+    g.on('pointerover', () => {
+      if (!this.scene) return;
+      const name = GameManager.DROP_NAMES[drop.resourceId] ?? drop.resourceId;
+      const label = `${name}  ×${drop.quantity}`;
+
+      const bg = this.scene.add.graphics();
+      const text = this.scene.add.text(0, 0, label, {
+        fontSize: '11px',
+        color: '#f1f5f9',
+        backgroundColor: undefined,
+        padding: { x: 0, y: 0 },
+      });
+      const tw = text.width + 12;
+      const th = text.height + 8;
+      bg.fillStyle(0x0f172a, 0.9);
+      bg.fillRoundedRect(-tw / 2, -th - 2, tw, th, 4);
+      bg.lineStyle(1, 0x475569, 0.8);
+      bg.strokeRoundedRect(-tw / 2, -th - 2, tw, th, 4);
+      text.setPosition(-tw / 2 + 6, -th - 2 + 4);
+
+      tooltip = this.scene.add.container(cx, cy, [bg, text]);
+      tooltip.setDepth(drop.y * 1000 + 500);
+      tooltip.setScrollFactor(1);
+    });
+
+    g.on('pointerout', () => {
+      tooltip?.destroy();
+      tooltip = null;
+    });
+
+    this.droppedItemObjects.set(drop.id, g);
+  }
+
+  // Category colors for dropped item bags
+  private static DROP_COLORS: Record<string, number> = {
+    wood: 0x8b5e3c, driftwood: 0x8b5e3c, sticks: 0x8b5e3c,
+    stone: 0x7a7a7a, pebbles: 0x7a7a7a, iron_ore: 0x8b7355, flint: 0xc8a050,
+    food: 0xd44030, berry_bush: 0xd44030, exotic_fruit: 0xf5a623,
+    mushroom: 0xa0522d, herbs: 0x4a9040, fiber: 0xc8c050, vine: 0x2e8b2e,
+    shells: 0xf0e0c0, coconut: 0x8b6914, coconut_shell: 0x8b6914,
+    palm_leaf: 0x3a9428, fish: 0x4682b4, tree_resin: 0xd4820a,
+    turtle_meat: 0xc05030, turtle_shell: 0x4a6040, crab_meat: 0xe05020,
+    cooked_turtle: 0xa03820, cooked_crab: 0xc04010,
+    water: 0x38bdf8,
+  };
+
+  private drawDroppedItem(g: Phaser.GameObjects.Graphics, resourceId: string, tx: number, ty: number) {
+    const cx = tx * TS + TS / 2;
+    const cy = ty * TS + TS / 2;
+    const color = GameManager.DROP_COLORS[resourceId] ?? 0x888888;
+
+    // Shadow
+    g.fillStyle(0x000000, 0.25);
+    g.fillEllipse(cx, cy + 6, 18, 5);
+
+    // Bag body
+    g.fillStyle(color, 0.95);
+    g.fillRoundedRect(cx - 7, cy - 6, 14, 12, 3);
+
+    // Bag highlight
+    g.fillStyle(0xffffff, 0.15);
+    g.fillRoundedRect(cx - 5, cy - 5, 6, 4, 2);
+
+    // Tie at top
+    g.fillStyle(color, 1);
+    g.fillRect(cx - 3, cy - 10, 6, 5);
+    g.fillStyle(0x000000, 0.3);
+    g.fillRect(cx - 3, cy - 7, 6, 2);
+
+    // Knot dot
+    g.fillStyle(0xffffff, 0.5);
+    g.fillCircle(cx, cy - 8, 2);
+  }
+
+  private drawResource(g: Phaser.GameObjects.Graphics, type: string, tx: number, ty: number, quantity = 0) {
     const cx = tx * TS + TS / 2;
     // base = ground anchor at bottom of tile
     const base = ty * TS + TS - 4;
@@ -943,15 +1143,64 @@ export class GameManager {
         g.fillCircle(cx - 2, base - 12, 2);
         break;
       }
+      case 'berry_bush': {
+        // Shadow
+        g.fillStyle(0x000000, 0.15);
+        g.fillEllipse(cx, base + 1, 22, 5);
+        // Main bush — always green
+        g.fillStyle(0x2d7a1f);
+        g.fillCircle(cx, base - 8, 9);
+        g.fillStyle(0x3a9428);
+        g.fillCircle(cx - 5, base - 6, 6);
+        g.fillCircle(cx + 5, base - 7, 6);
+        g.fillStyle(0x4ab033, 0.7);
+        g.fillCircle(cx - 2, base - 12, 5);
+        g.fillCircle(cx + 3, base - 11, 4);
+        // Berries — shown when quantity > 0
+        if (quantity > 0) {
+          const berryColors = [0xff3333, 0xff6600, 0xffcc00, 0xff4488];
+          const positions = [
+            [cx - 4, base - 9], [cx + 4, base - 8], [cx, base - 5],
+            [cx - 6, base - 7], [cx + 6, base - 9], [cx + 1, base - 13],
+            [cx - 3, base - 13],
+          ];
+          for (let i = 0; i < Math.min(quantity + 2, positions.length); i++) {
+            g.fillStyle(berryColors[i % berryColors.length]);
+            g.fillCircle(positions[i][0], positions[i][1], 2);
+          }
+        }
+        break;
+      }
       case 'exotic_fruit': {
-        g.fillStyle(0xf5a623);
-        g.fillCircle(cx, base - 5, 7);
-        g.fillStyle(0xffc84a, 0.8);
-        g.fillCircle(cx - 2, base - 7, 5);
-        g.fillStyle(0xff8c00, 0.5);
-        g.fillCircle(cx + 2, base - 3, 4);
-        g.lineStyle(1, 0x1a6a08, 0.9);
-        g.lineBetween(cx, base - 12, cx - 2, base - 14);
+        // Shadow
+        g.fillStyle(0x000000, 0.18);
+        g.fillEllipse(cx, base + 1, 20, 5);
+        // Trunk
+        g.fillStyle(0x5a3010);
+        g.fillRect(cx - 3, base - 22, 6, 22);
+        // Canopy layers
+        g.fillStyle(0x1a6a08);
+        g.fillCircle(cx, base - 26, 11);
+        g.fillStyle(0x228b22);
+        g.fillCircle(cx - 5, base - 22, 7);
+        g.fillCircle(cx + 5, base - 23, 7);
+        g.fillStyle(0x2ea824, 0.7);
+        g.fillCircle(cx, base - 30, 7);
+        // Fruits hanging in canopy — shown when quantity > 0
+        if (quantity > 0) {
+          const fruitColors = [0xff6b35, 0xffd700, 0xff4500, 0xffb347, 0xda70d6];
+          const positions = [
+            [cx - 7, base - 21], [cx + 6, base - 22], [cx - 1, base - 19],
+            [cx + 3, base - 25], [cx - 4, base - 26], [cx + 8, base - 26],
+          ];
+          for (let i = 0; i < Math.min(quantity + 1, positions.length); i++) {
+            g.fillStyle(fruitColors[i % fruitColors.length]);
+            g.fillCircle(positions[i][0], positions[i][1], 3);
+            // Small stem
+            g.lineStyle(1, 0x2d5a10, 0.8);
+            g.lineBetween(positions[i][0], positions[i][1] - 3, positions[i][0], positions[i][1] - 5);
+          }
+        }
         break;
       }
       case 'vine': {
@@ -1000,7 +1249,7 @@ export class GameManager {
     }
   }
 
-  private drawStructure(g: Phaser.GameObjects.Graphics, type: string, tx: number, ty: number) {
+  private drawStructure(g: Phaser.GameObjects.Graphics, type: string, tx: number, ty: number, fuel?: number) {
     const cx  = tx * TS + TS / 2;
     const base = ty * TS + TS - 2; // ground anchor
 
@@ -1059,6 +1308,27 @@ export class GameManager {
       g.fillStyle(0x8b2500, 0.9);
       g.fillCircle(cx - 2, base - 5, 2.5);
       g.fillCircle(cx + 3, base - 5, 2);
+
+    } else if (type === 'water_container') {
+      // Kokosschale mit Palmenblatt — Regensammler
+      const water = fuel ?? 0;
+      // Shadow
+      g.fillStyle(0x000000, 0.18);
+      g.fillEllipse(cx, base + 2, 18, 5);
+      // Schale (Kokosschale - braun)
+      g.fillStyle(0x5c3a1a);
+      g.fillEllipse(cx, base - 4, 20, 10);
+      g.fillStyle(0x7a4f28);
+      g.fillEllipse(cx, base - 6, 18, 7);
+      // Palmenblatt (grün, oben)
+      g.fillStyle(0x3a7a2a, 0.85);
+      g.fillEllipse(cx - 6, base - 10, 10, 4);
+      g.fillEllipse(cx + 5, base - 11, 9, 4);
+      // Wasser drin (hellblau, wenn gefüllt)
+      if (water > 0) {
+        g.fillStyle(0x38bdf8, 0.7);
+        g.fillEllipse(cx, base - 5, 12, 5);
+      }
 
     } else if (type === 'wooden_shelter') {
       g.fillStyle(0x000000, 0.25);
@@ -1205,6 +1475,13 @@ export class GameManager {
     const cx = this.playerPx + TS / 2;
     const cy = this.playerPy + TS / 2;
 
+    // ── Awakening pose: liegend (pose=0) → stehend (pose=1) ──────────
+    if (useGameStore.getState().isAwakening && this.awakeningPose < 1) {
+      this.renderPlayerLying(g, cx, cy, this.awakeningPose);
+      this.scene.cameras.main.centerOn(cx, cy);
+      return;
+    }
+
     // Walk-cycle offsets
     const f = this.walkFrame;
     // Body bob: frames 1&3 bob up 1px
@@ -1292,6 +1569,207 @@ export class GameManager {
 
     // Camera follow
     this.scene.cameras.main.centerOn(cx, cy);
+  }
+
+  // ── Shipwreck rendering ───────────────────────────────────────────
+  private renderShipwreck(world: any) {
+    const g = this.shipwreckGraphics;
+    if (!g || !world.shipwreck) return;
+
+    for (const piece of world.shipwreck as import('../../types').ShipwreckPiece[]) {
+      const cx = piece.x * TS + TS / 2;
+      const cy = piece.y * TS + TS / 2;
+      const s = piece.scale;
+      const r = piece.rotation;
+
+      // Rotate helper
+      const rotPt = (lx: number, ly: number): [number, number] => {
+        const rx = lx * Math.cos(r) - ly * Math.sin(r);
+        const ry = lx * Math.sin(r) + ly * Math.cos(r);
+        return [cx + rx * s, cy + ry * s];
+      };
+
+      // Water shadow under each piece
+      g.fillStyle(0x000000, 0.18);
+      g.fillEllipse(cx + 2, cy + 3, 38 * s, 14 * s);
+
+      switch (piece.type) {
+        case 'hull': {
+          // Large curved hull section — dark weathered wood
+          const wood1 = 0x4a2e12;
+          const wood2 = 0x5c3a1a;
+          const wood3 = 0x3a2008;
+          // Hull body — wide curved plank shape
+          g.fillStyle(wood2);
+          const [h0x, h0y] = rotPt(-18, -6);
+          const [h1x, h1y] = rotPt( 18, -6);
+          const [h2x, h2y] = rotPt( 22,  4);
+          const [h3x, h3y] = rotPt(-22,  4);
+          g.fillTriangle(h0x, h0y, h1x, h1y, h2x, h2y);
+          g.fillTriangle(h0x, h0y, h2x, h2y, h3x, h3y);
+          // Darker top edge (broken rim)
+          g.fillStyle(wood3);
+          const [r0x, r0y] = rotPt(-18, -6);
+          const [r1x, r1y] = rotPt( 18, -6);
+          const [r2x, r2y] = rotPt( 16, -9);
+          const [r3x, r3y] = rotPt(-16, -9);
+          g.fillTriangle(r0x, r0y, r1x, r1y, r2x, r2y);
+          g.fillTriangle(r0x, r0y, r2x, r2y, r3x, r3y);
+          // Wood grain lines
+          g.lineStyle(1, wood1, 0.6);
+          for (let i = -12; i <= 12; i += 6) {
+            const [la, lb] = rotPt(i, -8);
+            const [lc, ld] = rotPt(i + 1, 5);
+            g.beginPath(); g.moveTo(la, lb); g.lineTo(lc, ld); g.strokePath();
+          }
+          // Copper nails
+          g.fillStyle(0x8b6914);
+          for (const [nx, ny] of [[-14,-7],[0,-7],[14,-7],[-10,0],[10,0]]) {
+            const [px, py] = rotPt(nx, ny);
+            g.fillCircle(px, py, 1.2 * s);
+          }
+          break;
+        }
+        case 'hull_small': {
+          // Smaller broken hull fragment
+          g.fillStyle(0x5c3a1a);
+          const [a0x,a0y] = rotPt(-12,-4);
+          const [a1x,a1y] = rotPt( 12,-4);
+          const [a2x,a2y] = rotPt( 10, 5);
+          const [a3x,a3y] = rotPt(-10, 5);
+          g.fillTriangle(a0x,a0y,a1x,a1y,a2x,a2y);
+          g.fillTriangle(a0x,a0y,a2x,a2y,a3x,a3y);
+          g.fillStyle(0x3a2008);
+          const [b0x,b0y] = rotPt(-12,-4);
+          const [b1x,b1y] = rotPt( 12,-4);
+          const [b2x,b2y] = rotPt( 10,-7);
+          const [b3x,b3y] = rotPt(-10,-7);
+          g.fillTriangle(b0x,b0y,b1x,b1y,b2x,b2y);
+          g.fillTriangle(b0x,b0y,b2x,b2y,b3x,b3y);
+          g.lineStyle(1, 0x4a2e12, 0.5);
+          for (let i = -8; i <= 8; i += 5) {
+            const [la,lb] = rotPt(i,-6); const [lc,ld] = rotPt(i,4);
+            g.beginPath(); g.moveTo(la,lb); g.lineTo(lc,ld); g.strokePath();
+          }
+          break;
+        }
+        case 'mast': {
+          // Fallen mast — long thin pole, partially submerged
+          g.fillStyle(0x6b4423);
+          const [m0x,m0y] = rotPt(-26,-3);
+          const [m1x,m1y] = rotPt( 26,-3);
+          const [m2x,m2y] = rotPt( 26, 3);
+          const [m3x,m3y] = rotPt(-26, 3);
+          g.fillTriangle(m0x,m0y,m1x,m1y,m2x,m2y);
+          g.fillTriangle(m0x,m0y,m2x,m2y,m3x,m3y);
+          // Rope remnant
+          g.lineStyle(1, 0x8b7355, 0.7);
+          const [ra,rb] = rotPt(-10,-2); const [rc,rd] = rotPt(8,6);
+          g.beginPath(); g.moveTo(ra,rb); g.lineTo(rc,rd); g.strokePath();
+          // Cross spar
+          g.fillStyle(0x5c3a1a);
+          const angle2 = r + Math.PI / 2;
+          const cos2 = Math.cos(angle2); const sin2 = Math.sin(angle2);
+          const bx = cx + (-10) * Math.cos(r) * s;
+          const by = cy + (-10) * Math.sin(r) * s;
+          g.fillRect(bx - 2 * s, by - 10 * s, 4 * s, 20 * s);
+          void cos2; void sin2;
+          break;
+        }
+        case 'plank': {
+          // Loose drifting plank
+          g.fillStyle(0x7a4f28);
+          const [p0x,p0y] = rotPt(-14,-2);
+          const [p1x,p1y] = rotPt( 14,-2);
+          const [p2x,p2y] = rotPt( 13, 2);
+          const [p3x,p3y] = rotPt(-13, 2);
+          g.fillTriangle(p0x,p0y,p1x,p1y,p2x,p2y);
+          g.fillTriangle(p0x,p0y,p2x,p2y,p3x,p3y);
+          // Nail holes
+          g.fillStyle(0x3a2008);
+          for (const [nx,ny] of [[-10,0],[0,0],[10,0]]) {
+            const [px,py] = rotPt(nx,ny);
+            g.fillCircle(px,py,0.8*s);
+          }
+          break;
+        }
+      }
+    }
+  }
+
+  // ── Lying-down / rising animation ────────────────────────────────
+  private renderPlayerLying(g: Phaser.GameObjects.Graphics, cx: number, cy: number, pose: number) {
+    g.clear();
+
+    // pose=0: lying flat (rotation=90°), pose=1: standing (rotation=0°)
+    // We simulate rotation by lerping coordinates
+    const angle = (1 - pose) * (Math.PI / 2); // 90° → 0°
+    const cosA = Math.cos(angle);
+    const sinA = Math.sin(angle);
+
+    // Helper: rotate a point around cx,cy and draw offset
+    const rot = (lx: number, ly: number): [number, number] => {
+      const rx = lx * cosA - ly * sinA;
+      const ry = lx * sinA + ly * cosA;
+      return [cx + rx, cy + ry];
+    };
+
+    // Shadow — stretches as player rises
+    g.fillStyle(0x000000, 0.22);
+    g.fillEllipse(cx + (1 - pose) * 4, cy + 10 * pose + 6 * (1 - pose),
+      18 + (1 - pose) * 8, 7 - (1 - pose) * 3);
+
+    // Legs
+    g.fillStyle(0x2c3e50);
+    const [lx1, ly1] = rot(-3, 8);
+    const [lx2, ly2] = rot(2,  8);
+    const [lx3, ly3] = rot(-3, 14);
+    const [lx4, ly4] = rot(2,  14);
+    g.fillTriangle(lx1, ly1, lx2, ly2, lx3, ly3);
+    g.fillStyle(0x1a252f);
+    g.fillTriangle(lx2, ly2, lx3, ly3, lx4, ly4);
+
+    // Body
+    g.fillStyle(0x2471a3);
+    const [bx1, by1] = rot(-5, -1);
+    const [bx2, by2] = rot( 5, -1);
+    const [bx3, by3] = rot( 5,  8);
+    const [bx4, by4] = rot(-5,  8);
+    g.fillTriangle(bx1, by1, bx2, by2, bx3, by3);
+    g.fillTriangle(bx1, by1, bx3, by3, bx4, by4);
+
+    // Arms
+    g.fillStyle(0xfde3a7);
+    const [ax1, ay1] = rot(-8, 0);
+    const [ax2, ay2] = rot(-5, 0);
+    const [ax3, ay3] = rot(-8, 6);
+    const [ax4, ay4] = rot(-5, 6);
+    g.fillTriangle(ax1, ay1, ax2, ay2, ax3, ay3);
+    g.fillTriangle(ax2, ay2, ax3, ay3, ax4, ay4);
+    const [ax5, ay5] = rot(5, 0);
+    const [ax6, ay6] = rot(8, 0);
+    const [ax7, ay7] = rot(5, 6);
+    const [ax8, ay8] = rot(8, 6);
+    g.fillTriangle(ax5, ay5, ax6, ay6, ax7, ay7);
+    g.fillTriangle(ax6, ay6, ax7, ay7, ax8, ay8);
+
+    // Head
+    g.fillStyle(0xfde3a7);
+    const [hx, hy] = rot(0, -7);
+    g.fillCircle(hx, hy, 6);
+
+    // Hair
+    g.fillStyle(0x5d3e2a);
+    g.fillCircle(hx, hy - 3, 5);
+
+    // Closed eyes (unconscious / waking) — only show when nearly lying
+    if (pose < 0.6) {
+      g.fillStyle(0x2c1810);
+      const [ex1, ey1] = rot(-2, -8);
+      const [ex2, ey2] = rot( 2, -8);
+      g.fillRect(ex1 - 2, ey1 - 0.5, 3, 1);
+      g.fillRect(ex2 - 2, ey2 - 0.5, 3, 1);
+    }
   }
 
   // ── Fog of War ────────────────────────────────────────────────────
@@ -1599,39 +2077,43 @@ export class GameManager {
     }
     if (this.placementGraphics) this.placementGraphics.clear();
 
-    this.updateCrabs(delta);
-    this.updateTurtles(delta);
-    this.updateSpears(delta);
+    this.updateAwakening(delta);
+    const awakening = useGameStore.getState().isAwakening;
 
-    // Fatigue visual effects (stumble + microsleep) — before movement so freeze takes effect
-    this.updateFatigueEffects(delta);
-
-    // Smooth movement runs every frame
-    this.updatePlayerMovement(delta);
+    // Gameplay only when not awakening
+    if (!awakening) {
+      this.updateCrabs(delta);
+      this.updateTurtles(delta);
+      this.updateBoars(delta);
+      this.updateSpearLunge(delta);
+      this.updateFatigueEffects(delta);
+      this.updatePlayerMovement(delta);
+    }
 
     this.gameLoop.update(delta);
     const tick = this.gameLoop.isTickReady();
 
-    // Process gather menu selection every frame
-    this.gatherResource();
-
-    if (tick) {
-      this.onGameTick();
-      this.interactStructure();
-      this.updateFishing(delta);
-      this.updateFarmPlots(delta);
+    if (!awakening) {
+      this.gatherResource();
+      if (tick) {
+        this.onGameTick();
+        this.interactStructure();
+        this.updateFishing(delta);
+        this.updateFarmPlots(delta);
+      }
+      this.updateHover();
     }
 
-    // Mouse hover detection
-    this.updateHover();
+    // Rain animation
+    if (this.isRaining) this.updateRain(delta);
 
-    // Per-frame renders
+    // Always render
     this.renderPlayer();
     const elapsed = useGameStore.getState().elapsedTime;
     this.updateDayNight(elapsed);
-    this.updateFire();
+    if (!awakening) this.updateFire();
 
-    // Tiles: redraw only when camera crosses a tile boundary
+    // Tiles redraw
     if (this.scene && this.cachedWorld) {
       const cam = this.scene.cameras.main;
       const curTx = Math.floor(cam.worldView.x / TS);
@@ -1641,11 +2123,12 @@ export class GameManager {
       }
     }
 
-    // Fog redraws every frame — row-segment approach keeps it to ~40 draw calls
+    // Fog — always runs, uses awakening sight override during sequence
     {
       const { x, y } = usePlayerStore.getState().player;
-      const sight = this.getSightRadius(elapsed);
-      if (tick) this.markExplored(x, y, sight);
+      const overrideSight = this.awakeningOverrideSight();
+      const sight = overrideSight !== null ? overrideSight : this.getSightRadius(elapsed);
+      if (sight > 0 && (tick || overrideSight !== null)) this.markExplored(x, y, sight);
       this.updateFog(x, y, sight);
     }
   }
@@ -1663,25 +2146,14 @@ export class GameManager {
     const playerCx = this.playerPx + TS / 2;
     const playerCy = this.playerPy + TS / 2;
 
-    // ── Spear throw (range 6 tiles) ───────────────────────────────────
+    // ── Spear melee lunge (2 tiles range) ────────────────────────────
     if (hasSpear) {
+      if (this.spearLunge || this.spearCooldown > 0) return; // already lunging / on cooldown
       const dx = wx - playerCx;
       const dy = wy - playerCy;
-      const len = Math.sqrt(dx * dx + dy * dy) || 1;
-      const speed = 420; // px/s
       const angle = Math.atan2(dy, dx);
-      const g = this.scene!.add.graphics().setDepth(700_100);
-      this.spears.push({
-        id: Math.random().toString(36).slice(2),
-        px: playerCx,
-        py: playerCy,
-        vx: (dx / len) * speed,
-        vy: (dy / len) * speed,
-        angle,
-        traveledPx: 0,
-        maxRangePx: 6 * TS,
-        g,
-      });
+      const g = this.scene!.add.graphics().setDepth(playerCy + 3);
+      this.spearLunge = { angle, progress: 0, phase: 'out', g, hitTargets: new Set() };
       return;
     }
 
@@ -1707,75 +2179,448 @@ export class GameManager {
     }
   }
 
-  private updateSpears(delta: number) {
-    if (!this.scene) return;
-    const dt = delta / 1000;
-    const { addToInventory } = usePlayerStore.getState();
+  // Returns the sight radius override during awakening (0 = not awakening)
+  awakeningOverrideSight(): number | null {
+    if (!useGameStore.getState().isAwakening) return null;
+    const t = this.awakeningTimer;
+    // Phase 1+2 (0–4000ms): sight = 0
+    if (t < 4000) return 0;
+    // Phase 3 (4000–16000ms): sight grows 0 → SIGHT_DAY over 12s
+    const p = Math.min(1, (t - 4000) / 12000);
+    const eased = p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
+    return Math.round(eased * SIGHT_DAY);
+  }
 
-    for (const spear of [...this.spears]) {
-      spear.px += spear.vx * dt;
-      spear.py += spear.vy * dt;
-      const step = Math.sqrt(spear.vx ** 2 + spear.vy ** 2) * dt;
-      spear.traveledPx += step;
+  private initRainDrops() {
+    const W = this.game!.scale.width;
+    const H = this.game!.scale.height;
+    const cfg = GameManager.RAIN_TYPES[this.rainType];
+    this.rainDrops = [];
+    for (let i = 0; i < cfg.drops; i++) {
+      this.rainDrops.push({
+        x: Math.random() * W,
+        y: Math.random() * H,
+        speed: cfg.speedMin + Math.random() * (cfg.speedMax - cfg.speedMin),
+        len:   cfg.lenMin   + Math.random() * (cfg.lenMax   - cfg.lenMin),
+      });
+    }
+  }
 
-      // Check turtle hit
-      let hit = false;
+  private static readonly RAIN_TYPES: Record<string, {
+    drops: number; speedMin: number; speedMax: number;
+    lenMin: number; lenMax: number; diagonal: number;
+    overlayAlpha: number; soundVol: number;
+    fadeTicks: number;
+    label: string;
+  }> = {
+    drizzle:   { drops: 60,  speedMin: 3,  speedMax: 5,  lenMin: 5,  lenMax: 8,  diagonal: 0.1, overlayAlpha: 0.08, soundVol: 0.04, fadeTicks: 200, label: 'Nieselregen' },
+    shower:    { drops: 120, speedMin: 5,  speedMax: 8,  lenMin: 7,  lenMax: 12, diagonal: 0.2, overlayAlpha: 0.14, soundVol: 0.08, fadeTicks: 300, label: 'Regenschauer' },
+    rain:      { drops: 180, speedMin: 6,  speedMax: 10, lenMin: 8,  lenMax: 14, diagonal: 0.25,overlayAlpha: 0.18, soundVol: 0.12, fadeTicks: 400, label: 'Regen' },
+    downpour:  { drops: 300, speedMin: 10, speedMax: 16, lenMin: 12, lenMax: 20, diagonal: 0.4, overlayAlpha: 0.28, soundVol: 0.20, fadeTicks: 150, label: 'Wolkenbruch' },
+    storm:     { drops: 260, speedMin: 12, speedMax: 18, lenMin: 14, lenMax: 22, diagonal: 0.5, overlayAlpha: 0.32, soundVol: 0.22, fadeTicks: 200, label: 'Gewitter' },
+    long_rain: { drops: 150, speedMin: 5,  speedMax: 8,  lenMin: 8,  lenMax: 13, diagonal: 0.2, overlayAlpha: 0.16, soundVol: 0.10, fadeTicks: 600, label: 'Langer Regen' },
+  };
+
+  // ticks per rain type (1 game day = 6000 ticks)
+  private static readonly RAIN_DURATIONS: Record<string, [number, number]> = {
+    drizzle:   [300,  600],   // 30min–1h game
+    shower:    [500,  1000],  // ~1–2h game
+    rain:      [1000, 2000],  // ~2–4h game
+    downpour:  [250,  500],   // ~30–60min game, intense
+    storm:     [800,  1500],  // ~1.5–3h game
+    long_rain: [3000, 6000],  // half–full game day
+  };
+
+  private pickRainType(): void {
+    const types = ['drizzle','shower','rain','downpour','storm','long_rain'] as const;
+    const weights = [2, 3, 4, 1, 1, 1]; // drizzle & shower more common
+    const total = weights.reduce((a, b) => a + b, 0);
+    let r = Math.random() * total;
+    for (let i = 0; i < types.length; i++) {
+      r -= weights[i];
+      if (r <= 0) { this.rainType = types[i]; break; }
+    }
+    const [min, max] = GameManager.RAIN_DURATIONS[this.rainType];
+    this.rainDuration = min + Math.floor(Math.random() * (max - min));
+    this.initRainDrops();
+    if (this.rainType === 'storm') {
+      this.lightningTimer = 0;
+      this.nextLightning = 200 + Math.floor(Math.random() * 400);
+    }
+  }
+
+  private updateRain(delta: number) {
+    const W = this.game!.scale.width;
+    const H = this.game!.scale.height;
+    const cfg = GameManager.RAIN_TYPES[this.rainType];
+    const devRain = useGameStore.getState().devRain;
+
+    // Alpha: instant for dev, faded for natural
+    let alpha: number;
+    if (devRain) {
+      alpha = 1;
+    } else {
+      const fade = cfg.fadeTicks;
+      if (this.rainTimer < fade) {
+        alpha = this.rainTimer / fade;
+      } else if (this.rainTimer > this.rainDuration - fade) {
+        alpha = Math.max(0, (this.rainDuration - this.rainTimer) / fade);
+      } else {
+        alpha = 1;
+      }
+      alpha = Math.max(0, Math.min(1, alpha));
+    }
+
+    this.rainOverlay?.setAlpha(alpha * cfg.overlayAlpha);
+
+    const g = this.rainGraphics;
+    if (!g) return;
+    g.clear();
+    g.lineStyle(1, 0xadd8e6, alpha * 0.55);
+
+    const dt = delta / 16.67;
+    for (const drop of this.rainDrops) {
+      drop.y += drop.speed * dt;
+      drop.x += drop.speed * cfg.diagonal * dt;
+      if (drop.y > H + drop.len) { drop.y = -drop.len; drop.x = Math.random() * W; }
+      if (drop.x > W + 10) drop.x -= W + 20;
+      g.beginPath();
+      g.moveTo(drop.x, drop.y);
+      g.lineTo(drop.x - drop.len * cfg.diagonal, drop.y - drop.len);
+      g.strokePath();
+    }
+
+    // Lightning for storm
+    if (this.rainType === 'storm') this.updateLightning(delta, alpha);
+
+    this.updateRainSound(alpha * cfg.soundVol / 0.12);
+  }
+
+  private updateLightning(delta: number, rainAlpha: number) {
+    if (rainAlpha < 0.3) return;
+    this.lightningTimer += delta;
+    if (this.lightningTimer >= this.nextLightning) {
+      this.lightningTimer = 0;
+      this.nextLightning = 3000 + Math.random() * 8000;
+      this.triggerLightning();
+    }
+    // Fade flash overlay
+    const la = this.lightningOverlay?.alpha ?? 0;
+    if (la > 0.01) this.lightningOverlay?.setAlpha(la * 0.78);
+    else this.lightningOverlay?.setAlpha(0);
+    // Fade bolt
+    this.lightningBoltTimer -= delta;
+    if (this.lightningBoltTimer <= 0) this.lightningBoltGraphics?.clear();
+  }
+
+  private triggerLightning() {
+    // Screen flash
+    this.lightningOverlay?.setAlpha(0.65);
+
+    // Draw zigzag bolt
+    const W = this.game!.scale.width;
+    const H = this.game!.scale.height;
+    const g = this.lightningBoltGraphics;
+    if (g) {
+      g.clear();
+      g.lineStyle(2, 0xeeeeff, 0.9);
+      const startX = W * 0.2 + Math.random() * W * 0.6;
+      let x = startX;
+      let y = 0;
+      const segments = 8 + Math.floor(Math.random() * 6);
+      const segH = (H * 0.7) / segments;
+      g.beginPath();
+      g.moveTo(x, y);
+      for (let i = 0; i < segments; i++) {
+        x += (Math.random() - 0.5) * 80;
+        y += segH;
+        g.lineTo(x, y);
+      }
+      g.strokePath();
+      // Bright glow layer
+      g.lineStyle(5, 0xffffff, 0.25);
+      x = startX; y = 0;
+      g.beginPath();
+      g.moveTo(x, y);
+      for (let i = 0; i < segments; i++) {
+        x += (Math.random() - 0.5) * 80;
+        y += segH;
+        g.lineTo(x, y);
+      }
+      g.strokePath();
+    }
+    this.lightningBoltTimer = 120; // visible for ~120ms
+
+    // Thunder after distance-based delay
+    const delay = 300 + Math.random() * 1700;
+    setTimeout(() => this.playThunder(), delay);
+  }
+
+  private playThunder() {
+    try {
+      const ctx = this.getRainCtx();
+      const dur = 1.5 + Math.random() * 1.5;
+      const buf = ctx.createBuffer(1, ctx.sampleRate * dur, ctx.sampleRate);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < data.length; i++) {
+        const env = Math.pow(1 - i / data.length, 0.3);
+        data[i] = (Math.random() * 2 - 1) * env;
+      }
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      const lpf = ctx.createBiquadFilter();
+      lpf.type = 'lowpass';
+      lpf.frequency.value = 180;
+      const gain = ctx.createGain();
+      gain.gain.value = 0.5;
+      src.connect(lpf); lpf.connect(gain); gain.connect(ctx.destination);
+      src.start();
+    } catch {}
+  }
+
+  private rainAudioCtx: AudioContext | null = null;
+
+  private getRainCtx(): AudioContext {
+    if (!this.rainAudioCtx) this.rainAudioCtx = new AudioContext();
+    return this.rainAudioCtx;
+  }
+
+  private updateRainSound(alpha: number) {
+    try {
+      const ctx = this.getRainCtx();
+      if (alpha > 0.01) {
+        if (!this.rainGainNode) {
+          // White noise buffer
+          const bufLen = ctx.sampleRate * 2;
+          const buf = ctx.createBuffer(1, bufLen, ctx.sampleRate);
+          const data = buf.getChannelData(0);
+          for (let i = 0; i < bufLen; i++) data[i] = Math.random() * 2 - 1;
+          const src = ctx.createBufferSource();
+          src.buffer = buf;
+          src.loop = true;
+          // Bandpass filter for rain-like sound
+          const filter = ctx.createBiquadFilter();
+          filter.type = 'bandpass';
+          filter.frequency.value = 3500;
+          filter.Q.value = 0.4;
+          const gain = ctx.createGain();
+          gain.gain.value = 0;
+          src.connect(filter);
+          filter.connect(gain);
+          gain.connect(ctx.destination);
+          src.start();
+          this.rainAudioNode = src;
+          this.rainGainNode = gain;
+        }
+        this.rainGainNode.gain.setTargetAtTime(alpha * 0.12, ctx.currentTime, 0.3);
+      } else if (this.rainGainNode) {
+        this.rainGainNode.gain.setTargetAtTime(0, ctx.currentTime, 0.5);
+        setTimeout(() => {
+          try { (this.rainAudioNode as AudioBufferSourceNode)?.stop(); } catch {}
+          this.rainAudioNode = null;
+          this.rainGainNode = null;
+        }, 2000);
+      }
+    } catch {}
+  }
+
+  private static readonly FIRE_EXTINGUISHING_TYPES = new Set(['rain', 'downpour', 'storm', 'long_rain']);
+
+  private extinguishCampfires() {
+    const worldState = useWorldStore.getState();
+    const campfires = worldState.world?.structures.filter(s => s.type === 'campfire' && (s.fuel ?? 0) > 0) ?? [];
+    for (const cf of campfires) worldState.updateStructure(cf.id, { fuel: 0 });
+    if (campfires.length > 0) {
+      const { x, y } = usePlayerStore.getState().player;
+      this.spawnFloatingText('🌧️ Lagerfeuer erloschen!', x, y, '#94a3b8');
+    }
+  }
+
+  private stopRain() {
+    this.rainGraphics?.clear();
+    this.rainOverlay?.setAlpha(0);
+    this.lightningOverlay?.setAlpha(0);
+    this.lightningBoltGraphics?.clear();
+    this.updateRainSound(0);
+  }
+
+  private updateAwakening(delta: number) {
+    if (!useGameStore.getState().isAwakening) return;
+    this.awakeningTimer += delta;
+    const t = this.awakeningTimer;
+    const store = useGameStore.getState();
+
+    // Phase 1 (0–2000ms): overlay schwarz, Spieler liegt
+    if (t < 2000) {
+      this.awakeningOverlay?.setAlpha(1);
+      this.awakeningPose = 0;
+      store.setAwakeningBlur(0);
+      return;
+    }
+
+    // Phase 2 (2000–4000ms): overlay blendet schnell aus — Spieler liegt sichtbar
+    if (t < 4000) {
+      const p = (t - 2000) / 2000;
+      const eased = p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
+      this.awakeningOverlay?.setAlpha(Math.max(0, 1 - eased));
+      this.awakeningPose = 0;
+      store.setAwakeningBlur(0);
+      return;
+    }
+
+    // Overlay weg ab Phase 3
+    if (this.awakeningOverlay) {
+      this.awakeningOverlay.setAlpha(0);
+      this.awakeningOverlay.destroy();
+      this.awakeningOverlay = null;
+    }
+
+    // Phase 3 (4000–13000ms): Fog öffnet sich + Blur löst sich auf, Spieler liegt noch
+    if (t < 13000) {
+      this.awakeningPose = 0;
+      const blurP = Math.min(1, (t - 4000) / 9000);
+      store.setAwakeningBlur(Math.max(0, 8 * (1 - blurP)));
+      return;
+    }
+
+    // Phase 4 (13000–16000ms): Spieler steht auf — Welt bereits sichtbar
+    if (t < this.AWAKENING_DURATION) {
+      const riseP = (t - 13000) / 3000;
+      const riseEased = riseP < 0.5 ? 2 * riseP * riseP : 1 - Math.pow(-2 * riseP + 2, 2) / 2;
+      this.awakeningPose = riseEased;
+      store.setAwakeningBlur(0);
+      return;
+    }
+
+    // Fertig
+    this.awakeningPose = 1;
+    store.setAwakeningBlur(0);
+    store.setAwakening(false);
+  }
+
+  private updateSpearLunge(delta: number) {
+    if (this.spearCooldown > 0) this.spearCooldown = Math.max(0, this.spearCooldown - delta);
+    const lunge = this.spearLunge;
+    if (!lunge || !this.scene) return;
+
+    // Animation: 120ms out, 100ms back
+    const OUT_MS  = 120;
+    const BACK_MS = 100;
+    const LUNGE_RANGE = 2 * TS; // max extension in pixels
+
+    const speed = lunge.phase === 'out' ? 1 / OUT_MS : 1 / BACK_MS;
+    lunge.progress += speed * delta;
+
+    if (lunge.phase === 'out' && lunge.progress >= 1) {
+      lunge.progress = 1;
+      lunge.phase = 'back';
+    }
+    if (lunge.phase === 'back' && lunge.progress >= 1) {
+      lunge.g.destroy();
+      this.spearLunge = null;
+      this.spearCooldown = 350; // ms before next strike
+      return;
+    }
+
+    // Ease: quick out, smooth back
+    const t = lunge.phase === 'out'
+      ? lunge.progress              // linear out
+      : 1 - lunge.progress;         // linear back (progress 0→1 means 1→0 extension)
+    const ext = t * LUNGE_RANGE;    // current extension from player center
+
+    const playerCx = this.playerPx + TS / 2;
+    const playerCy = this.playerPy + TS / 2;
+    const cos = Math.cos(lunge.angle);
+    const sin = Math.sin(lunge.angle);
+
+    // Tip world position
+    const tipX = playerCx + cos * (ext + 8);
+    const tipY = playerCy + sin * (ext + 8);
+
+    // Hit detection — only on the way out, each target once
+    if (lunge.phase === 'out') {
+      const HIT_R = TS * 0.9;
+      const { addToInventory } = usePlayerStore.getState();
+
       for (const turtle of [...this.turtles]) {
-        const dist = Math.hypot(spear.px - turtle.px, spear.py - turtle.py);
-        if (dist < TS * 0.8) {
+        if (lunge.hitTargets.has(turtle.id)) continue;
+        if (Math.hypot(tipX - turtle.px, tipY - turtle.py) < HIT_R) {
+          lunge.hitTargets.add(turtle.id);
           addToInventory('turtle_meat', 1);
-          this.spawnFloatingText('🐢 Getroffen! Fleisch ×1', Math.floor(turtle.px / TS), Math.floor(turtle.py / TS), '#86efac');
+          addToInventory('turtle_shell', 1);
+          this.spawnFloatingText('🐢 Getroffen!', Math.floor(turtle.px / TS), Math.floor(turtle.py / TS), '#86efac');
           turtle.g.destroy();
-          this.turtles = this.turtles.filter(t => t.id !== turtle.id);
-          hit = true;
-          break;
+          this.turtles = this.turtles.filter(tt => tt.id !== turtle.id);
         }
       }
-
-      // Check crab hit
-      if (!hit) {
-        for (const crab of [...this.crabs]) {
-          const dist = Math.hypot(spear.px - crab.px, spear.py - crab.py);
-          if (dist < TS * 0.6) {
-            addToInventory('crab_meat', 1);
-            this.spawnFloatingText('🦀 Getroffen! Fleisch ×1', Math.floor(crab.px / TS), Math.floor(crab.py / TS), '#fb923c');
-            crab.g.destroy();
-            this.crabs = this.crabs.filter(c => c.id !== crab.id);
-            hit = true;
-            break;
+      for (const crab of [...this.crabs]) {
+        if (lunge.hitTargets.has(crab.id)) continue;
+        if (Math.hypot(tipX - crab.px, tipY - crab.py) < HIT_R) {
+          lunge.hitTargets.add(crab.id);
+          addToInventory('crab_meat', 1);
+          this.spawnFloatingText('🦀 Getroffen!', Math.floor(crab.px / TS), Math.floor(crab.py / TS), '#fb923c');
+          crab.g.destroy();
+          this.crabs = this.crabs.filter(c => c.id !== crab.id);
+        }
+      }
+      for (const boar of [...this.boars]) {
+        if (lunge.hitTargets.has(boar.id) || boar.state === 'dead') continue;
+        if (Math.hypot(tipX - boar.px, tipY - boar.py) < HIT_R) {
+          lunge.hitTargets.add(boar.id);
+          const dmg = 25 + Math.random() * 10;
+          boar.health = Math.max(0, boar.health - dmg);
+          boar.hitFlash = 250;
+          this.spawnFloatingText(`-${Math.round(dmg)}`, Math.floor(boar.px / TS), Math.floor(boar.py / TS), '#ff4444');
+          if (boar.health <= 0) {
+            const drops = 2 + (Math.random() > 0.4 ? 1 : 0);
+            useWorldStore.getState().dropItem('boar_meat', drops, Math.floor(boar.px / TS), Math.floor(boar.py / TS));
+            this.spawnFloatingText('🐗 Erlegt!', Math.floor(boar.px / TS), Math.floor(boar.py / TS) - 1, '#f97316');
+            boar.state = 'dead';
+            boar.deadAt = Date.now();
+            boar.g.clear();
+            const g = boar.g;
+            g.fillStyle(0x000000, 0.25); g.fillEllipse(boar.px, boar.py + 10, 36, 8);
+            g.fillStyle(0x5a2008);       g.fillEllipse(boar.px, boar.py + 4, 34, 14);
+            g.fillStyle(0x9a4a20);       g.fillEllipse(boar.px + (boar.facingLeft ? -16 : 16), boar.py + 4, 12, 8);
           }
         }
       }
-
-      // Remove spear when hit or out of range
-      if (hit || spear.traveledPx >= spear.maxRangePx) {
-        spear.g.destroy();
-        this.spears = this.spears.filter(s => s.id !== spear.id);
-        continue;
-      }
-
-      // Draw spear as a line (shaft + tip)
-      spear.g.clear();
-      const cos = Math.cos(spear.angle);
-      const sin = Math.sin(spear.angle);
-      const L = 18; // shaft length px
-      spear.g.lineStyle(2, 0xc8a46e); // wood shaft
-      spear.g.beginPath();
-      spear.g.moveTo(spear.px - cos * L, spear.py - sin * L);
-      spear.g.lineTo(spear.px + cos * (L * 0.4), spear.py + sin * (L * 0.4));
-      spear.g.strokePath();
-      // Flint tip — small triangle
-      spear.g.fillStyle(0x94a3b8);
-      const tipX = spear.px + cos * L * 0.4;
-      const tipY = spear.py + sin * L * 0.4;
-      const perpX = -sin * 3;
-      const perpY =  cos * 3;
-      spear.g.fillTriangle(
-        tipX + cos * 6, tipY + sin * 6,
-        tipX + perpX,   tipY + perpY,
-        tipX - perpX,   tipY - perpY,
-      );
     }
+
+    // Draw spear extending from player toward cursor
+    const g = lunge.g;
+    g.clear();
+    g.setDepth(Math.floor(this.playerPy / TS) * 1000 + 3);
+
+    const SHAFT_LEN = 22;
+    const baseX = playerCx - cos * 4;
+    const baseY = playerCy - sin * 4;
+    const headX  = playerCx + cos * ext;
+    const headY  = playerCy + sin * ext;
+
+    // Shaft
+    g.lineStyle(3, 0xc8a46e);
+    g.beginPath();
+    g.moveTo(baseX, baseY);
+    g.lineTo(headX, headY);
+    g.strokePath();
+
+    // Tip triangle
+    const perpX = -sin * 4;
+    const perpY  =  cos * 4;
+    g.fillStyle(0x94a3b8);
+    g.fillTriangle(
+      headX + cos * 10, headY + sin * 10,
+      headX + perpX,    headY + perpY,
+      headX - perpX,    headY - perpY,
+    );
+    // Tip sheen
+    g.fillStyle(0xdde8f0, 0.5);
+    g.fillTriangle(
+      headX + cos * 10, headY + sin * 10,
+      headX + perpX * 0.4, headY + perpY * 0.4,
+      headX,            headY,
+    );
   }
 
   // ── Turtles ───────────────────────────────────────────────────────
@@ -2166,9 +3011,16 @@ export class GameManager {
     if (valid) {
       const cx = px + (w * TS) / 2;
       const base = py + TS - 4;
-      g.fillStyle(0xffffff, 0.18);
+      g.fillStyle(0xffffff, 0.25);
       if (recipeId === 'palm_shelter') {
         g.fillRect(px + 4, py + 4, w * TS - 8, TS - 8);
+      } else if (recipeId === 'water_container') {
+        // Kokosschale Silhouette
+        g.fillStyle(0x5c3a1a, 0.5);
+        g.fillEllipse(cx, base - 4, 20, 10);
+        g.fillStyle(0x3a7a2a, 0.5);
+        g.fillEllipse(cx - 6, base - 10, 10, 4);
+        g.fillEllipse(cx + 5, base - 11, 9, 4);
       } else {
         g.fillRect(cx - 14, base - 18, 28, 18);
       }
@@ -2436,7 +3288,7 @@ export class GameManager {
     gameState.tickTime(100);
     gameState.addScore(0.1); // ~1 pt/sec survival
 
-    // Drain campfire fuel once per game day
+    // Drain campfire fuel once per game day + rain scheduling
     const currentDay = Math.floor(gameState.elapsedTime / DAY_DURATION_MS);
     if (currentDay !== this.lastGameDay && this.lastGameDay !== -1) {
       const worldState = useWorldStore.getState();
@@ -2445,8 +3297,49 @@ export class GameManager {
         const newFuel = Math.max(0, (cf.fuel ?? 0) - 1);
         worldState.updateStructure(cf.id, { fuel: newFuel });
       }
+
+      // Schedule first rain on day 2, then every 3–6 days randomly
+      if (this.nextRainDay === -1) {
+        this.nextRainDay = 2;
+      } else if (currentDay >= this.nextRainDay && !this.isRaining) {
+        this.pickRainType();
+        this.isRaining = true;
+        this.rainTimer = 0;
+        const containers = worldState.world?.structures.filter(s => s.type === 'water_container') ?? [];
+        for (const c of containers) worldState.updateStructure(c.id, { fuel: 2 });
+        if (GameManager.FIRE_EXTINGUISHING_TYPES.has(this.rainType)) this.extinguishCampfires();
+        this.nextRainDay = currentDay + 3 + Math.floor(Math.random() * 4);
+      }
     }
     this.lastGameDay = currentDay;
+
+    // Dev rain toggle
+    const devRain = useGameStore.getState().devRain;
+    if (devRain) {
+      if (!this.isRaining) {
+        this.pickRainType();
+        this.isRaining = true;
+        this.rainTimer = 0;
+        const containers = useWorldStore.getState().world?.structures.filter(s => s.type === 'water_container') ?? [];
+        for (const c of containers) useWorldStore.getState().updateStructure(c.id, { fuel: 2 });
+        if (GameManager.FIRE_EXTINGUISHING_TYPES.has(this.rainType)) this.extinguishCampfires();
+      } else {
+        this.rainTimer = 500; // keep in full-rain zone
+      }
+    } else if (this.isRaining) {
+      // devRain turned off → stop instantly
+      this.isRaining = false;
+      this.stopRain();
+    }
+
+    // Natural rain duration
+    if (this.isRaining && !devRain) {
+      this.rainTimer++;
+      if (this.rainTimer > this.rainDuration) {
+        this.isRaining = false;
+        this.stopRain();
+      }
+    }
 
     const now = Date.now();
     if (now - this.lastSaveTime > this.autoSaveInterval) {
@@ -2597,9 +3490,11 @@ export class GameManager {
 
     // Determine what item to give
     const giveType = action === 'sticks'              ? 'sticks'
+                   : action === 'coconut'             ? 'coconut'
                    : resource.type === 'spring'       ? 'water'
                    : resource.type === 'palm_tree'    ? 'palm_leaf'
                    : resource.type === 'resin_tree'   ? 'tree_resin'
+                   : resource.type === 'berry_bush'   ? 'food'
                    : resource.type;
 
     // Always 1 per click
@@ -2608,7 +3503,7 @@ export class GameManager {
       if (resource.type !== 'spring') worldState.harvestResource(resource.id, amount);
 
       // Bonus fiber from palm_tree with knife
-      if (resource.type === 'palm_tree' && anyKnife) {
+      if (resource.type === 'palm_tree' && anyKnife && action !== 'coconut') {
         addToInventory('fiber', 1);
       }
       if (resource.type === 'vine') {
@@ -2623,7 +3518,9 @@ export class GameManager {
       usePlayerStore.getState().updateStats({
         stamina: Math.max(0, currentStamina - staminaCost),
       });
-      const label = resource.type === 'palm_tree'
+      const label = action === 'coconut'
+        ? `+${amount} Kokosnuss 🥥`
+        : resource.type === 'palm_tree'
         ? `+${amount} Palmenblatt${anyKnife ? ' +1 Faser' : ''}`
         : resource.type === 'resin_tree'
           ? `+${amount} Baumharz 🫙`
@@ -2663,6 +3560,22 @@ export class GameManager {
         return;
       }
 
+      // Water container (Regensammler): trinken wenn gefüllt
+      const waterContainer = structures.find(s => s.type === 'water_container' && Math.abs(s.x - player.x) <= 1 && Math.abs(s.y - player.y) <= 1);
+      if (waterContainer) {
+        const water = waterContainer.fuel ?? 0;
+        if (water <= 0) {
+          this.spawnFloatingText('Leer – wartet auf Regen 🌧️', player.x, player.y, '#94a3b8');
+        } else {
+          worldState.updateStructure(waterContainer.id, { fuel: water - 1 });
+          const { updateStats } = usePlayerStore.getState();
+          const stats = usePlayerStore.getState().player.stats;
+          updateStats({ thirst: Math.max(0, (stats.thirst ?? 0) - 25) });
+          this.spawnFloatingText(`Durst -25 💧 (${water - 1} Schluck übrig)`, player.x, player.y, '#38bdf8');
+        }
+        return;
+      }
+
       const storageBox = structures.find(s => s.type === 'storage_box' && Math.abs(s.x - player.x) <= 1 && Math.abs(s.y - player.y) <= 1);
       if (storageBox) {
         useGameStore.getState().openStorageBox(storageBox.id);
@@ -2683,6 +3596,15 @@ export class GameManager {
             this.spawnFloatingText(`Arbeit getan – noch ${updated.constructionDaysLeft} Tag(e) 🛠️`, player.x, player.y, '#fbbf24');
           }
         }
+        return;
+      }
+
+      // Dropped items nearby → open pickup menu
+      const drops = (worldState.world?.droppedItems ?? []).filter(
+        d => Math.abs(d.x - player.x) <= 1 && Math.abs(d.y - player.y) <= 1
+      );
+      if (drops.length > 0) {
+        useGameStore.getState().openPickupMenu(drops);
         return;
       }
     }
@@ -2821,5 +3743,331 @@ export class GameManager {
     this.fireGraphics = null;
     this.jungleTreeObjects = [];
     this.footstepAudio.destroy();
+  }
+
+  // ── Boars ─────────────────────────────────────────────────────────
+
+  private spawnBoars(world: any) {
+    const BOAR_COUNT = 1;
+    const BOAR_MAX_HP = 60;
+    const candidates: { x: number; y: number }[] = [];
+    for (let y = 3; y < world.height - 3; y++) {
+      for (let x = 3; x < world.width - 3; x++) {
+        const t = world.tileMap[y]?.[x]?.type;
+        if (t !== 'dense_jungle') continue;
+        const dist = Math.hypot(x - world.spawnX, y - world.spawnY);
+        if (dist < 20) continue;
+        candidates.push({ x, y });
+      }
+    }
+    for (let i = candidates.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
+    }
+    const chosen = candidates.slice(0, BOAR_COUNT);
+    for (let i = 0; i < chosen.length; i++) {
+      const { x, y } = chosen[i];
+      const px = x * TS + TS / 2;
+      const py = y * TS + TS / 2;
+      const g = this.scene!.add.graphics().setDepth(y * 1000 + 2);
+      this.boars.push({
+        id: `boar-${i}`,
+        px, py,
+        targetPx: px, targetPy: py,
+        health: BOAR_MAX_HP,
+        state: 'patrol',
+        stateTimer: 2000 + Math.random() * 3000,
+        lastAttack: 0,
+        hitFlash: 0,
+        deadAt: 0,
+        waryTimer: 0,
+        facingLeft: Math.random() > 0.5,
+        g,
+      });
+      this.drawBoar(this.boars[this.boars.length - 1]);
+    }
+  }
+
+  private drawBoar(boar: typeof this.boars[0]) {
+    const g = boar.g;
+    g.clear();
+    if (boar.state === 'dead') return;
+
+    const x = 0, y = 0;
+    const flip = boar.facingLeft ? -1 : 1;
+    const isChasing = boar.state === 'chase' || boar.state === 'attack';
+    const isWary    = boar.state === 'wary';
+    const flash = boar.hitFlash > 0;
+
+    // Shadow
+    g.fillStyle(0x000000, 0.22);
+    g.fillEllipse(x, y + 14, 34, 8);
+
+    // Legs
+    g.fillStyle(flash ? 0xff6666 : 0x3d1a0a);
+    g.fillRect(x - 10, y + 8,  5, 10);
+    g.fillRect(x - 3,  y + 8,  5, 10);
+    g.fillRect(x + 4,  y + 8,  5, 10);
+    g.fillRect(x + 11, y + 8,  5, 10);
+
+    // Body
+    const bodyColor = flash ? 0xff4444 : (isChasing ? 0x6b2a0e : 0x7a3010);
+    g.fillStyle(bodyColor);
+    g.fillEllipse(x, y, 34, 22);
+
+    // Head
+    const headColor = flash ? 0xff5555 : (isChasing ? 0x5a2008 : 0x6a2808);
+    g.fillStyle(headColor);
+    g.fillEllipse(x + flip * 17, y - 2, 18, 14);
+
+    // Snout
+    g.fillStyle(flash ? 0xff8888 : 0x9a4a20);
+    g.fillEllipse(x + flip * 25, y, 10, 8);
+    // Nostrils
+    g.fillStyle(0x2a0a00);
+    g.fillCircle(x + flip * 23, y - 1, 1.5);
+    g.fillCircle(x + flip * 27, y - 1, 1.5);
+
+    // Tusk
+    g.fillStyle(0xf0e8c0);
+    g.fillEllipse(x + flip * 24, y + 5, 8, 4);
+
+    // Ear
+    g.fillStyle(headColor);
+    g.fillEllipse(x + flip * 13, y - 9, 7, 9);
+
+    // Eye — red when chasing/attacking, orange when wary of fire, dark otherwise
+    const eyeColor = isChasing ? 0xff2200 : isWary ? 0xff8800 : 0x111111;
+    g.fillStyle(eyeColor);
+    g.fillCircle(x + flip * 19, y - 4, 2);
+
+    // Fire-fear indicator: small flame above head when wary
+    if (isWary) {
+      g.fillStyle(0xff6600, 0.8);
+      g.fillTriangle(x + flip * 17, y - 16, x + flip * 14, y - 10, x + flip * 20, y - 10);
+      g.fillStyle(0xffcc00, 0.9);
+      g.fillTriangle(x + flip * 17, y - 14, x + flip * 15, y - 10, x + flip * 19, y - 10);
+    }
+
+    // Tail (small curl on opposite side)
+    g.fillStyle(bodyColor);
+    g.fillCircle(x - flip * 17, y - 4, 3);
+
+    // HP bar (above boar)
+    const BOAR_MAX_HP = 60;
+    const hpPct = boar.health / BOAR_MAX_HP;
+    const barW = 30;
+    g.fillStyle(0x000000, 0.5);
+    g.fillRect(x - barW / 2 - 1, y - 22, barW + 2, 5);
+    g.fillStyle(hpPct > 0.5 ? 0x44cc44 : hpPct > 0.25 ? 0xeeaa00 : 0xee2222);
+    g.fillRect(x - barW / 2, y - 21, Math.round(barW * hpPct), 3);
+
+    g.setPosition(boar.px, boar.py);
+  }
+
+  private updateBoars(delta: number) {
+    if (!this.scene || this.boars.length === 0) return;
+    if (useGameStore.getState().isPaused) return;
+    const world = useWorldStore.getState().world;
+    if (!world) return;
+
+    const BOAR_MAX_HP    = 60;
+    const AGGRO_RANGE    = 5 * TS;
+    const LOSE_RANGE     = 12 * TS;
+    const ATTACK_RANGE   = 1.8 * TS;
+    const FIRE_FEAR_DIST = 12 * TS;   // boar stays this far from fire sources
+    const PATROL_SPEED   = 48;
+    const CHASE_SPEED    = 80;
+    const FLEE_SPEED     = 70;
+    const ATTACK_DMG     = 10;
+    const ATTACK_CD      = 1500;
+    const DEAD_LINGER    = 1200;
+    const WARY_CALM_MS   = 5000;      // time until boar calms after fire gone
+
+    const gameState = useGameStore.getState();
+    const ppx = this.playerPx + TS / 2;
+    const ppy = this.playerPy + TS / 2;
+    const now = Date.now();
+
+    // Detect fire sources this frame
+    const freshEq = usePlayerStore.getState().player.equipment;
+    const handIds = [freshEq?.leftHand?.resourceId, freshEq?.rightHand?.resourceId].filter(Boolean) as string[];
+    const playerHasTorch = handIds.includes('torch');
+
+    const litCampfires = world.structures.filter(
+      (s: any) => s.type === 'campfire' && (s.fuel ?? 0) > 0
+    );
+
+    // Returns the closest fire-source pixel position within FIRE_FEAR_DIST of (bx,by), or null
+    const nearestFireSource = (bx: number, by: number): { fx: number; fy: number } | null => {
+      let best: { fx: number; fy: number } | null = null;
+      let bestDist2 = FIRE_FEAR_DIST * FIRE_FEAR_DIST;
+
+      if (playerHasTorch) {
+        const d2 = (bx - ppx) ** 2 + (by - ppy) ** 2;
+        if (d2 < bestDist2) { bestDist2 = d2; best = { fx: ppx, fy: ppy }; }
+      }
+      for (const cf of litCampfires) {
+        const cfpx = cf.x * TS + TS / 2;
+        const cfpy = cf.y * TS + TS / 2;
+        const d2 = (bx - cfpx) ** 2 + (by - cfpy) ** 2;
+        if (d2 < bestDist2) { bestDist2 = d2; best = { fx: cfpx, fy: cfpy }; }
+      }
+      return best;
+    };
+
+    for (const boar of [...this.boars]) {
+      // ── Dead state ────────────────────────────────────
+      if (boar.state === 'dead') {
+        if (now - boar.deadAt > DEAD_LINGER) {
+          boar.g.destroy();
+          this.boars = this.boars.filter(b => b.id !== boar.id);
+        }
+        continue;
+      }
+
+      const dx = ppx - boar.px;
+      const dy = ppy - boar.py;
+      const distToPlayer = Math.sqrt(dx * dx + dy * dy);
+
+      // ── Hit flash decay ───────────────────────────────
+      if (boar.hitFlash > 0) boar.hitFlash = Math.max(0, boar.hitFlash - delta);
+
+      // ── Space key: player attacks boar ───────────────
+      if (this.keyPressed.space && distToPlayer < ATTACK_RANGE && !gameState.gatherMenuOpen && !gameState.placementMode) {
+        const atkEq = usePlayerStore.getState().player.equipment;
+        const atkHands = [atkEq?.leftHand?.resourceId, atkEq?.rightHand?.resourceId].filter(Boolean) as string[];
+        const hasWeapon = atkHands.some(id => ['stone_spear','flint_knife','stone_axe','improved_axe','iron_axe'].includes(id));
+        const dmg = hasWeapon ? (25 + Math.random() * 10) : (5 + Math.random() * 3);
+        boar.health = Math.max(0, boar.health - dmg);
+        boar.hitFlash = 250;
+        this.spawnFloatingText(`-${Math.round(dmg)}`, Math.floor(boar.px / TS), Math.floor(boar.py / TS), '#ff4444');
+        this.keyPressed.space = false;
+
+        if (boar.health <= 0) {
+          const drops = 2 + (Math.random() > 0.4 ? 1 : 0);
+          useWorldStore.getState().dropItem('boar_meat', drops, Math.floor(boar.px / TS), Math.floor(boar.py / TS));
+          this.spawnFloatingText('🐗 Erlegt!', Math.floor(boar.px / TS), Math.floor(boar.py / TS) - 1, '#f97316');
+          boar.state = 'dead';
+          boar.deadAt = now;
+          boar.g.clear();
+          const g = boar.g;
+          g.fillStyle(0x000000, 0.25);
+          g.fillEllipse(boar.px, boar.py + 10, 36, 8);
+          g.fillStyle(0x5a2008);
+          g.fillEllipse(boar.px, boar.py + 4, 34, 14);
+          g.fillStyle(0x9a4a20);
+          g.fillEllipse(boar.px + (boar.facingLeft ? -16 : 16), boar.py + 4, 12, 8);
+          continue;
+        }
+      }
+
+      // ── Fire-fear check ───────────────────────────────
+      const fireSource = nearestFireSource(boar.px, boar.py);
+      if (fireSource) {
+        // Fire nearby — become/stay wary, flee from fire source
+        boar.waryTimer = WARY_CALM_MS;
+        if (boar.state !== 'wary') boar.state = 'wary';
+        // Flee target: directly away from fire source
+        const fdx = boar.px - fireSource.fx;
+        const fdy = boar.py - fireSource.fy;
+        const fdist = Math.sqrt(fdx * fdx + fdy * fdy) || 1;
+        boar.targetPx = boar.px + (fdx / fdist) * FIRE_FEAR_DIST;
+        boar.targetPy = boar.py + (fdy / fdist) * FIRE_FEAR_DIST;
+        boar.facingLeft = fdx < 0;
+      } else if (boar.state === 'wary') {
+        // Fire gone — count down wary timer
+        boar.waryTimer -= delta;
+        if (boar.waryTimer <= 0) {
+          boar.state = 'patrol';
+          boar.stateTimer = 0;
+        }
+      }
+
+      if (boar.state !== 'wary') {
+        // ── Normal state transitions ─────────────────────
+        if (boar.state !== 'attack') {
+          if (distToPlayer < AGGRO_RANGE) {
+            boar.state = distToPlayer < ATTACK_RANGE ? 'attack' : 'chase';
+          } else if (boar.state === 'chase' && distToPlayer > LOSE_RANGE) {
+            boar.state = 'patrol';
+            boar.stateTimer = 2000 + Math.random() * 3000;
+          }
+        } else {
+          if (distToPlayer > ATTACK_RANGE) {
+            boar.state = distToPlayer < LOSE_RANGE ? 'chase' : 'patrol';
+          }
+        }
+
+        boar.stateTimer -= delta;
+
+        // ── Patrol: pick new non-beach target ────────────
+        if (boar.state === 'patrol' && boar.stateTimer <= 0) {
+          const tx = Math.floor(boar.px / TS);
+          const ty = Math.floor(boar.py / TS);
+          const candidates: { x: number; y: number }[] = [];
+          for (let dy2 = -5; dy2 <= 5; dy2++) {
+            for (let dx2 = -5; dx2 <= 5; dx2++) {
+              const nx = tx + dx2, ny = ty + dy2;
+              const t = world.tileMap[ny]?.[nx];
+              // Never go to beach or water
+              if (t?.walkable && t.type !== 'beach' && t.type !== 'sand' && t.type !== 'water') {
+                candidates.push({ x: nx, y: ny });
+              }
+            }
+          }
+          if (candidates.length > 0) {
+            const t = candidates[Math.floor(Math.random() * candidates.length)];
+            boar.targetPx = t.x * TS + TS / 2;
+            boar.targetPy = t.y * TS + TS / 2;
+            boar.facingLeft = boar.targetPx < boar.px;
+            boar.stateTimer = 4000 + Math.random() * 4000;
+          } else {
+            boar.stateTimer = 1000;
+          }
+        }
+
+        // ── Attack: deal damage on cooldown ──────────────
+        if (boar.state === 'attack' && now - boar.lastAttack > ATTACK_CD) {
+          boar.lastAttack = now;
+          const { updateStats, player } = usePlayerStore.getState();
+          updateStats({ health: Math.max(0, player.stats.health - ATTACK_DMG) });
+          this.spawnFloatingText(`-${ATTACK_DMG} HP`, Math.floor(ppx / TS), Math.floor(ppy / TS), '#ff2222');
+        }
+      }
+
+      // ── Movement ──────────────────────────────────────
+      let speed = 0;
+      let targetX = boar.targetPx;
+      let targetY = boar.targetPy;
+
+      if (boar.state === 'wary') {
+        speed = FLEE_SPEED;
+      } else if (boar.state === 'chase' || boar.state === 'attack') {
+        speed = CHASE_SPEED;
+        targetX = ppx;
+        targetY = ppy;
+        boar.facingLeft = ppx < boar.px;
+      } else if (boar.state === 'patrol') {
+        speed = PATROL_SPEED;
+      }
+
+      if (speed > 0) {
+        const tdx = targetX - boar.px;
+        const tdy = targetY - boar.py;
+        const tdist = Math.sqrt(tdx * tdx + tdy * tdy);
+        if (tdist > 4) {
+          const step = speed * delta / 1000;
+          boar.px += (tdx / tdist) * step;
+          boar.py += (tdy / tdist) * step;
+          if (boar.state === 'patrol') boar.facingLeft = tdx < 0;
+        } else if (boar.state === 'patrol') {
+          boar.stateTimer = 0;
+        }
+      }
+
+      boar.g.setDepth(Math.floor(boar.py / TS) * 1000 + 2);
+      this.drawBoar(boar);
+    }
   }
 }

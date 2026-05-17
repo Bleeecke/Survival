@@ -24,6 +24,7 @@ export interface WorldResource {
   maxQuantity: number;
   regenerationTime?: number;
   lastHarvestedAt?: number;
+  regenStep?: number; // units restored per regen tick (default: full restore)
 }
 
 export interface Structure {
@@ -45,6 +46,21 @@ export interface Structure {
   width?: number;
 }
 
+export interface ShipwreckPiece {
+  x: number; y: number;          // tile coords
+  type: 'hull' | 'plank' | 'mast' | 'hull_small';
+  rotation: number;              // radians, visual only
+  scale: number;                 // 0.6–1.4
+}
+
+export interface DroppedItem {
+  id: string;
+  resourceId: string;
+  quantity: number;
+  x: number;
+  y: number;
+}
+
 export interface WorldState {
   seed: number;
   width: number;
@@ -52,8 +68,10 @@ export interface WorldState {
   tileMap: Tile[][];
   resources: WorldResource[];
   structures: Structure[];
+  droppedItems: DroppedItem[];
   spawnX: number;
   spawnY: number;
+  shipwreck?: ShipwreckPiece[];
 }
 
 export interface WorldSnapshot {

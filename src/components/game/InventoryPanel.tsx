@@ -1,4 +1,5 @@
 import { usePlayerStore } from '../../store/playerStore';
+import { useWorldStore } from '../../store/worldStore';
 import type { PlayerStats } from '../../types';
 import { calcWeight, MAX_CARRY_KG } from '../../data/weights';
 import { getDefaultSlot } from './CharacterPanel';
@@ -15,9 +16,9 @@ export const USABLE: Record<string, {
     color: 'bg-green-700 hover:bg-green-600',
     effect: s => ({
       hunger: Math.max(0, s.hunger - 25),
-      health: Math.min(100, s.health + 3),
+      thirst: Math.max(0, (s.thirst ?? 0) - 8),
     }),
-    tooltip: 'Hunger -25, Gesundheit +3',
+    tooltip: 'Hunger -25, Durst -8',
   },
   cooked_food: {
     label: 'Essen',
@@ -36,16 +37,6 @@ export const USABLE: Record<string, {
       stamina: Math.min(100, s.stamina + 10),
     }),
     tooltip: 'Durst -30, Ausdauer +10',
-  },
-  water_container: {
-    label: 'Trinken',
-    color: 'bg-sky-700 hover:bg-sky-600',
-    effect: s => ({
-      thirst:  Math.max(0, (s.thirst ?? 0) - 60),
-      stamina: Math.min(100, s.stamina + 25),
-      health:  Math.min(100, s.health + 5),
-    }),
-    tooltip: 'Durst -60, Ausdauer +25, Gesundheit +5',
   },
   cooked_fish_meal: {
     label: 'Essen',
@@ -79,10 +70,11 @@ export const USABLE: Record<string, {
     color: 'bg-orange-700 hover:bg-orange-600',
     effect: s => ({
       hunger: Math.max(0, s.hunger - 50),
+      thirst: Math.max(0, (s.thirst ?? 0) - 15),
       stamina: Math.min(100, s.stamina + 20),
       health: Math.min(100, s.health + 8),
     }),
-    tooltip: 'Hunger -50, Ausdauer +20, Gesundheit +8',
+    tooltip: 'Hunger -50, Durst -15, Ausdauer +20, Gesundheit +8',
   },
   herbal_remedy: {
     label: 'Heilen',
@@ -130,15 +122,35 @@ export const USABLE: Record<string, {
     }),
     tooltip: 'Hunger -55, Gesundheit +18, Ausdauer +15',
   },
+  boar_meat: {
+    label: '⚠️ Roh essen',
+    color: 'bg-red-800 hover:bg-red-700',
+    effect: s => ({
+      hunger: Math.max(0, s.hunger - 30),
+      poisonedUntil: Date.now() + 3 * 60_000,
+    }),
+    tooltip: '⚠️ Hunger -30 aber Vergiftung für 3 Min!',
+  },
+  cooked_boar: {
+    label: 'Essen',
+    color: 'bg-red-700 hover:bg-red-600',
+    effect: s => ({
+      hunger: Math.max(0, s.hunger - 55),
+      health: Math.min(100, s.health + 15),
+      stamina: Math.min(100, s.stamina + 20),
+    }),
+    tooltip: 'Hunger -55, Gesundheit +15, Ausdauer +20',
+  },
 };
 
 const ITEM_NAMES: Record<string, string> = {
   wood: 'Holz', stone: 'Stein', food: 'Beeren', water: 'Wasser',
-  sticks: 'Äste', pebbles: 'Kieselsteine', spring: 'Quelle',
+  sticks: 'Äste', pebbles: 'Bruchstein', spring: 'Quelle',
   rope: 'Seil', plank: 'Holzbretter', iron_ore: 'Eisenerz', iron_bar: 'Eisenbarren',
   // New resources
   flint: 'Feuerstein', driftwood: 'Treibholz', shells: 'Muscheln',
   palm_leaf: 'Palmenblatt', herbs: 'Kräuter', fiber: 'Fasern',
+  coconut: 'Kokosnuss', coconut_shell: 'Kokosschale',
   mushroom: 'Pilze', exotic_fruit: 'Exotische Frucht', vine: 'Lianen',
   // Tools
   flint_knife: 'Feuersteinmesser',
@@ -149,6 +161,7 @@ const ITEM_NAMES: Record<string, string> = {
   // Consumables
   turtle_meat: 'Schildkrötenfleisch', turtle_shell: 'Schildkrötenpanzer', cooked_turtle: 'Gek. Schildkröte',
   crab_meat: 'Krabbenfleisch', cooked_crab: 'Gek. Krabbe',
+  boar_meat: 'Wildschweinfleisch', cooked_boar: 'Gek. Wildschwein',
   cooked_food: 'Gekochtes Essen', water_container: 'Wassercontainer',
   cooked_fish_meal: 'Gebratener Fisch', herbal_remedy: 'Kräutermittel',
   cooked_mushroom: 'Geb. Pilze', fish: 'Fisch',
@@ -189,14 +202,30 @@ export default function InventoryPanel() {
   const removeResource = usePlayerStore(s => s.removeResource);
   const equip          = usePlayerStore(s => s.equip);
 
+  const dropItem   = useWorldStore(s => s.dropItem);
+  const playerX    = usePlayerStore(s => s.player.x);
+  const playerY    = usePlayerStore(s => s.player.y);
+
   const currentWeight = calcWeight(inventory.items);
   const weightPct     = Math.min(100, (currentWeight / MAX_CARRY_KG) * 100);
   const weightFull    = currentWeight >= MAX_CARRY_KG * 0.95;
   const weightWarn    = currentWeight >= MAX_CARRY_KG * 0.80;
 
+  function handleDrop(resourceId: string, quantity: number) {
+    const placed = dropItem(resourceId, quantity, playerX, playerY);
+    if (placed) removeResource(resourceId, quantity);
+  }
+
+  const FOOD_IDS = new Set([
+    'food', 'cooked_food', 'cooked_fish_meal', 'mushroom', 'cooked_mushroom',
+    'exotic_fruit', 'turtle_meat', 'cooked_turtle', 'crab_meat', 'cooked_crab',
+    'boar_meat', 'cooked_boar',
+  ]);
+
   function useItem(resourceId: string) {
     const def = USABLE[resourceId];
     if (!def) return;
+    if (FOOD_IDS.has(resourceId) && stats.hunger <= 0) return; // satt
     const newStats = def.effect(stats);
     updateStats(newStats);
     removeResource(resourceId, 1);
@@ -270,6 +299,15 @@ export default function InventoryPanel() {
                   </button>
                 )}
 
+                {/* Drop button */}
+                <button
+                  onClick={() => handleDrop(item.resourceId, item.quantity)}
+                  title="Ablegen"
+                  className="px-2 py-1 text-xs font-bold rounded-lg text-slate-400 hover:text-white bg-slate-600 hover:bg-red-800 transition-colors"
+                >
+                  ↓
+                </button>
+
                 {/* Equip button */}
                 {(() => {
                   const slot = getDefaultSlot(item.resourceId, equipment);
@@ -321,6 +359,7 @@ const ITEM_ICON: Record<string, string> = {
   iron_ore:         '🟤',
   iron_bar:         '🔩',
   tree_resin:       '🫙',
+  coconut:          '🥥',
   coconut_shell:    '🥥',
   // Essen & Trinken
   food:             '🫐',
@@ -334,6 +373,8 @@ const ITEM_ICON: Record<string, string> = {
   cooked_turtle:    '🍖',
   crab_meat:        '🦀',
   cooked_crab:      '🦀',
+  boar_meat:        '🥩',
+  cooked_boar:      '🥩',
   cooked_food:      '🍖',
   cooked_fish_meal: '🍽️',
   cooked_mushroom:  '🥘',

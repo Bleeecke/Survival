@@ -8,40 +8,26 @@ export interface ResourceSpawnConfig {
 }
 
 export const WORLD_CONFIG = {
-  width: 150,
-  height: 150,
+  width: 250,
+  height: 250,
   tileSize: 32,
-
-  // Noise scales (used by WorldGenerator)
-  elevationScale: 40,
-  moistureScale: 25,
-
-  // Legacy thresholds (unused by new generator, kept for reference)
-  thresholds: {
-    water: 0.05,
-    beach: 0.18,
-    grass: 0.45,
-    hills: 0.65,
-    mountain: 0.82,
-    impassable: 0.93,
-  },
 
   // Frequency-based scattered resources
   resources: {
     wood:         { frequency: 0.04,  minQuantity: 1, maxQuantity: 3, spawnOn: ['sparse_forest', 'dense_jungle', 'forest'] },
-    food:         { frequency: 0.025, minQuantity: 1, maxQuantity: 2, spawnOn: ['grass', 'tall_grass', 'sparse_forest'] },
-    iron_ore:     { frequency: 0.03,  minQuantity: 1, maxQuantity: 2, spawnOn: ['mountain', 'hills', 'rock'] },
-    flint:        { frequency: 0.04,  minQuantity: 1, maxQuantity: 2, spawnOn: ['beach', 'hills'] },
+    berry_bush:   { frequency: 0.006, minQuantity: 1, maxQuantity: 3, spawnOn: ['grass', 'tall_grass', 'sparse_forest'] },
+    iron_ore:     { frequency: 0.03,  minQuantity: 1, maxQuantity: 2, spawnOn: ['mountain', 'hills'] },
+    flint:        { frequency: 0.018, minQuantity: 1, maxQuantity: 2, spawnOn: ['beach', 'hills'] },
     driftwood:    { frequency: 0.025, minQuantity: 1, maxQuantity: 2, spawnOn: ['beach'] },
     shells:       { frequency: 0.04,  minQuantity: 1, maxQuantity: 2, spawnOn: ['beach'] },
-    coconut_shell: { frequency: 0.03, minQuantity: 1, maxQuantity: 2, spawnOn: ['beach'] },
+    coconut:      { frequency: 0.04,  minQuantity: 1, maxQuantity: 2, spawnOn: ['beach'] },
     herbs:        { frequency: 0.03,  minQuantity: 1, maxQuantity: 2, spawnOn: ['grass', 'tall_grass', 'sparse_forest'] },
-    fiber:        { frequency: 0.035, minQuantity: 1, maxQuantity: 2, spawnOn: ['tall_grass'] },
+    fiber:        { frequency: 0.035, minQuantity: 1, maxQuantity: 2, spawnOn: ['tall_grass', 'grass'] },
     mushroom:     { frequency: 0.03,  minQuantity: 1, maxQuantity: 2, spawnOn: ['sparse_forest', 'dense_jungle', 'forest'] },
-    exotic_fruit: { frequency: 0.025, minQuantity: 1, maxQuantity: 2, spawnOn: ['dense_jungle'] },
-    vine:         { frequency: 0.04,  minQuantity: 1, maxQuantity: 2, spawnOn: ['dense_jungle', 'sparse_forest'] },
+    exotic_fruit: { frequency: 0.012, minQuantity: 1, maxQuantity: 3, spawnOn: ['dense_jungle'] },
+    vine:         { frequency: 0.04,  minQuantity: 1, maxQuantity: 2, spawnOn: ['dense_jungle', 'sparse_forest', 'forest'] },
   } as Record<string, ResourceSpawnConfig>,
 
-  startX: 75,
-  startY: 75,
+  startX: 125,
+  startY: 210,
 };

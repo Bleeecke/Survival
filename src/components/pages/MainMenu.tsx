@@ -34,10 +34,12 @@ export default function MainMenu() {
     // Place player at beach spawn
     usePlayerStore.getState().movePlayer(world.spawnX, world.spawnY);
 
+    useGameStore.getState().setIsNewGame(true);
     setPhase('playing');
   };
 
   const handleLoadGame = () => {
+    useGameStore.getState().setIsNewGame(false);
     setPhase('playing');
   };
 

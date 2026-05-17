@@ -33,11 +33,11 @@ const defaultPlayer: Player = {
   y: 32,
   direction: 'down',
   stats: {
-    health: 100,
-    hunger: 0,
-    thirst: 0,
-    stamina: 100,
-    fatigue: 0,
+    health: 68,   // injured from shipwreck
+    hunger: 28,   // hours in the water, starving
+    thirst: 42,   // salt water doesn't help
+    stamina: 22,  // exhausted
+    fatigue: 58,  // barely conscious
   },
   inventory: {
     items: [],

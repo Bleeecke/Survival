@@ -9,7 +9,7 @@ import type { Recipe, RecipeCategory } from '../../types';
 // ── Constants ─────────────────────────────────────────────────────
 
 const STRUCTURE_IDS = new Set([
-  'campfire', 'palm_shelter', 'wooden_shelter', 'workbench', 'log_cabin', 'bed', 'farm_plot', 'furnace', 'storage_box',
+  'campfire', 'palm_shelter', 'wooden_shelter', 'workbench', 'log_cabin', 'bed', 'farm_plot', 'furnace', 'storage_box', 'water_container',
 ]);
 
 // Structures that become construction sites first (type → days to build)
@@ -20,7 +20,7 @@ const CONSTRUCTION_DAYS: Record<string, number> = {
 
 const ITEM_NAMES: Record<string, string> = {
   // Materials
-  sticks: 'Äste', pebbles: 'Kieselsteine',
+  sticks: 'Äste', pebbles: 'Bruchstein',
   wood: 'Holz', stone: 'Stein', food: 'Beeren', water: 'Wasser',
   rope: 'Seil', plank: 'Holzbretter', iron_ore: 'Eisenerz', iron_bar: 'Eisenbarren',
   // New materials
@@ -128,7 +128,9 @@ export default function CraftingModal({ onClose }: { onClose: () => void }) {
     const { player, addToInventory, removeResource } = usePlayerStore.getState();
     if (!craftingSystem.canCraft(recipeId, player.inventory)) { setCraftingId(null); return; }
 
-    for (const input of recipe.inputs) removeResource(input.resourceId, input.quantity);
+    if (!useGameStore.getState().freeCraft) {
+      for (const input of recipe.inputs) removeResource(input.resourceId, input.quantity);
+    }
 
     if (STRUCTURE_IDS.has(recipeId)) {
       const { x, y } = usePlayerStore.getState().player;
@@ -141,6 +143,11 @@ export default function CraftingModal({ onClose }: { onClose: () => void }) {
       useGameStore.getState().addScore(200);
     } else {
       for (const output of recipe.outputs) addToInventory(output.resourceId, output.quantity);
+      // Kokosnuss öffnen: Kokoswasser direkt trinken
+      if (recipeId === 'coconut_shell') {
+        const stats = usePlayerStore.getState().player.stats;
+        usePlayerStore.getState().updateStats({ thirst: Math.max(0, (stats.thirst ?? 0) - 20) });
+      }
       useGameStore.getState().addScore(100);
     }
 
@@ -345,7 +352,7 @@ function RecipeCard({ recipe, inventory, craftingId, progress, onCraft }: {
       {!hasTool && recipe.requiresTool && recipe.requiresTool !== 'campfire_near' && (
         <div className="text-xs text-orange-400 mb-2 flex items-center gap-1">
           <span>⚠️</span>
-          <span>Benötigt: {ITEM_NAMES[recipe.requiresTool] ?? recipe.requiresTool}</span>
+          <span>Benötigt: {recipe.requiresTool === 'any_axe' ? 'Eine Axt' : (ITEM_NAMES[recipe.requiresTool] ?? recipe.requiresTool)}</span>
         </div>
       )}
 

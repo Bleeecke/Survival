@@ -3,7 +3,7 @@ import { usePlayerStore } from '../../store/playerStore';
 
 const ITEM_NAMES: Record<string, string> = {
   wood: 'Holz', stone: 'Stein', food: 'Beeren', sticks: 'Äste',
-  pebbles: 'Kieselsteine', flint: 'Feuerstein', driftwood: 'Treibholz',
+  pebbles: 'Bruchstein', flint: 'Feuerstein', driftwood: 'Treibholz',
   shells: 'Muscheln', palm_leaf: 'Palmenblatt', herbs: 'Kräuter',
   fiber: 'Fasern', mushroom: 'Pilze', exotic_fruit: 'Exotische Frucht',
   vine: 'Lianen', iron_ore: 'Eisenerz', spring: 'Quelle', puddle: 'Pfütze', palm_tree: 'Palme',
@@ -75,7 +75,11 @@ export default function GatherMenu() {
             const hasAxe = eq?.leftHand?.resourceId === 'stone_axe'   || eq?.rightHand?.resourceId === 'stone_axe'
                         || eq?.leftHand?.resourceId === 'improved_axe' || eq?.rightHand?.resourceId === 'improved_axe'
                         || eq?.leftHand?.resourceId === 'iron_axe'     || eq?.rightHand?.resourceId === 'iron_axe';
+            const hasAxeInInventory = inventory.items.some(i =>
+              ['stone_axe','improved_axe','iron_axe'].includes(i.resourceId) && i.quantity > 0
+            );
             const showSticksOption = res.type === 'wood' && hasAxe;
+            const showCoconutOption = res.type === 'palm_tree' && (hasAxe || hasAxeInInventory);
 
             return (
               <div
@@ -109,6 +113,14 @@ export default function GatherMenu() {
                       className="px-3 py-1 text-xs font-bold rounded-lg bg-amber-800 hover:bg-amber-700 text-white transition-colors"
                     >
                       Äste 🌿
+                    </button>
+                  )}
+                  {showCoconutOption && (
+                    <button
+                      onClick={() => setPendingGather(res.id, 'coconut')}
+                      className="px-3 py-1 text-xs font-bold rounded-lg bg-yellow-800 hover:bg-yellow-700 text-white transition-colors"
+                    >
+                      Kokosnuss 🥥
                     </button>
                   )}
                 </div>

@@ -2,9 +2,12 @@ import { useState } from 'react';
 import { useGameStore } from '../../store/gameStore';
 import { musicManager } from '../../services/MusicManager';
 
+
 export default function PauseMenu() {
-  const setPaused = useGameStore(s => s.setPaused);
-  const setPhase  = useGameStore(s => s.setPhase);
+  const setPaused      = useGameStore(s => s.setPaused);
+  const setPhase       = useGameStore(s => s.setPhase);
+  const devMode        = useGameStore(s => s.devMode);
+  const toggleDevMode  = useGameStore(s => s.toggleDevMode);
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'done'>('idle');
   const [volume, setVolume] = useState(() => musicManager.volume);
 
@@ -78,6 +81,17 @@ export default function PauseMenu() {
               />
               <span className="text-slate-400 text-xs w-8 text-right">{Math.round(volume * 100)}%</span>
             </div>
+
+            <button
+              onClick={toggleDevMode}
+              className={`w-full py-2.5 font-semibold rounded-xl transition-colors text-sm ${
+                devMode
+                  ? 'bg-purple-700 hover:bg-purple-600 text-white'
+                  : 'bg-slate-700 hover:bg-slate-600 text-slate-400 hover:text-white'
+              }`}
+            >
+              🛠 Dev Modus {devMode ? 'AN' : 'AUS'}
+            </button>
 
             <button
               onClick={handleMainMenu}

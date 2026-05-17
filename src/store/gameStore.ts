@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { GamePhase, Difficulty } from '../types';
-import type { WorldResource } from '../types';
+import type { WorldResource, DroppedItem } from '../types';
 
 interface GameStore {
   phase: GamePhase;
@@ -17,6 +17,12 @@ interface GameStore {
   nearbyResources: WorldResource[];
   pendingGatherId: string | null;
   pendingGatherAction: string | null; // e.g. 'sticks' for chopping branches from tree
+
+  // Pickup menu (dropped items)
+  pickupMenuOpen: boolean;
+  nearbyDrops: DroppedItem[];
+  openPickupMenu: (drops: DroppedItem[]) => void;
+  closePickupMenu: () => void;
 
   // Mouse hover tooltip
   hoveredResource: WorldResource | null;
@@ -46,6 +52,23 @@ interface GameStore {
   openPalmShelterModal: (id: string) => void;
   closePalmShelterModal: () => void;
 
+  // Dev mode
+  devMode: boolean;
+  freeCraft: boolean;
+  devRain: boolean;
+  toggleDevMode: () => void;
+  toggleFreeCraft: () => void;
+  toggleDevRain: () => void;
+  setDevRain: (v: boolean) => void;
+
+  // Shipwreck awakening sequence
+  isAwakening: boolean;
+  awakeningBlur: number;   // px blur applied to canvas, fades 0→0 during rising
+  isNewGame: boolean;
+  setAwakening: (v: boolean) => void;
+  setAwakeningBlur: (v: number) => void;
+  setIsNewGame: (v: boolean) => void;
+
   setPhase: (phase: GamePhase) => void;
   setPaused: (paused: boolean) => void;
   setDifficulty: (diff: Difficulty) => void;
@@ -73,8 +96,25 @@ export const useGameStore = create<GameStore>()(
       nearbyResources: [],
       pendingGatherId: null,
       pendingGatherAction: null,
+      pickupMenuOpen: false,
+      nearbyDrops: [],
+      openPickupMenu: (drops) => set({ pickupMenuOpen: true, nearbyDrops: drops }),
+      closePickupMenu: () => set({ pickupMenuOpen: false, nearbyDrops: [] }),
       hoveredResource: null,
       hoverSince: null,
+      devMode: false,
+      freeCraft: false,
+      devRain: false,
+      toggleDevMode: () => set(s => ({ devMode: !s.devMode })),
+      toggleFreeCraft: () => set(s => ({ freeCraft: !s.freeCraft })),
+      toggleDevRain: () => set(s => ({ devRain: !s.devRain })),
+      setDevRain: (v) => set({ devRain: v }),
+      isAwakening: false,
+      awakeningBlur: 0,
+      isNewGame: false,
+      setAwakening: (v) => set({ isAwakening: v }),
+      setAwakeningBlur: (v) => set({ awakeningBlur: v }),
+      setIsNewGame: (v) => set({ isNewGame: v }),
       craftingOpen: false,
 
       setPhase: (phase) => set({ phase }),
@@ -123,6 +163,8 @@ export const useGameStore = create<GameStore>()(
           nearbyResources: [],
           pendingGatherId: null,
           pendingGatherAction: null,
+          pickupMenuOpen: false,
+          nearbyDrops: [],
           hoveredResource: null,
           hoverSince: null,
           craftingOpen: false,
@@ -134,6 +176,30 @@ export const useGameStore = create<GameStore>()(
     }),
     {
       name: 'survival-game-save',
+      partialize: (s) => {
+        const { isAwakening, awakeningBlur, isNewGame, devRain, freeCraft,
+                setAwakening, setAwakeningBlur, setIsNewGame, setDevRain, toggleFreeCraft, toggleDevMode, toggleDevRain, ...rest } = s;
+        void isAwakening; void awakeningBlur; void isNewGame; void devRain; void freeCraft;
+        void setAwakening; void setAwakeningBlur; void setIsNewGame; void setDevRain; void toggleFreeCraft; void toggleDevMode; void toggleDevRain;
+        return rest;
+      },
+      onRehydrateStorage: () => (state) => {
+        if (state) {
+          state.isAwakening = false;
+          state.awakeningBlur = 0;
+          state.isNewGame = false;
+          state.isPaused = false;
+          state.gatherMenuOpen = false;
+          state.craftingOpen = false;
+          state.storageBoxId = null;
+          state.campfireModalId = null;
+          state.palmShelterModalId = null;
+          state.showSleepMenu = false;
+          state.placementMode = null;
+          state.pickupMenuOpen = false;
+          state.nearbyDrops = [];
+        }
+      },
     }
   )
 );

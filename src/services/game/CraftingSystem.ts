@@ -2,6 +2,7 @@ import type { Inventory, CraftingMaterial, Recipe, Equipment } from '../../types
 import { getRecipe } from '../../data/recipes';
 import { usePlayerStore } from '../../store/playerStore';
 import { useWorldStore } from '../../store/worldStore';
+import { useGameStore } from '../../store/gameStore';
 
 export class CraftingSystem {
   getItemQuantity(inventory: Inventory, resourceId: string): number {
@@ -13,6 +14,7 @@ export class CraftingSystem {
   }
 
   canCraft(recipeId: string, inventory: Inventory): boolean {
+    if (useGameStore.getState().freeCraft) return true;
     const recipe = getRecipe(recipeId);
     if (!recipe) return false;
     return recipe.inputs.every(
@@ -22,8 +24,18 @@ export class CraftingSystem {
 
   /** Whether the player has unlocked the ability to craft this (tool requirement) */
   hasRequiredTool(recipe: Recipe, inventory: Inventory): boolean {
+    if (useGameStore.getState().freeCraft) return true;
     if (!recipe.requiresTool) return true;
     if (recipe.requiresTool === 'campfire_near') return this.isCampfireNear();
+    if (recipe.requiresTool === 'any_axe') {
+      const axes = ['stone_axe', 'improved_axe', 'iron_axe'];
+      const eq = usePlayerStore.getState().player.equipment;
+      return axes.some(a =>
+        this.hasItem(inventory, a) ||
+        eq?.leftHand?.resourceId === a ||
+        eq?.rightHand?.resourceId === a
+      );
+    }
     // Check inventory AND equipped hand slots
     if (this.hasItem(inventory, recipe.requiresTool)) return true;
     const eq: Equipment | undefined = usePlayerStore.getState().player.equipment;
