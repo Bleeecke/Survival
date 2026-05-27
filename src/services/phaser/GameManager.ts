@@ -123,8 +123,10 @@ export class GameManager {
   private readonly MICROSLEEP_INTERVAL = 8000;
   private jungleTreeObjects: Phaser.GameObjects.Graphics[] = [];
   private jungleCanopyTiles = new Set<string>();
+  private jungleCanopyCoveredTiles = new Set<string>(); // tiles under canopy (rain protection + shadow)
   private jungleCanopyMeta = new Map<string, { tx: number; ty: number; seed: number; stripped: boolean; g: Phaser.GameObjects.Graphics }>();
   private vineTreeByResourceId = new Map<string, string>();
+  private canopyShadowGraphics: Phaser.GameObjects.Graphics | null = null;
 
   // Fog of war - local state, not persisted
   private exploredTiles: boolean[][] = [];
@@ -256,6 +258,9 @@ export class GameManager {
       useGameStore.getState().setAwakening(false);
       useGameStore.getState().setAwakeningBlur(0);
     }
+
+    // Canopy shadow layer (world-space, just above tiles, below objects)
+    this.canopyShadowGraphics = this.scene.add.graphics().setDepth(1);
 
     // Rain graphics (screen-space, above fog but below awakening overlay)
     this.rainOverlay = this.scene.add.rectangle(
@@ -640,6 +645,7 @@ export class GameManager {
     for (const g of this.jungleTreeObjects) g.destroy();
     this.jungleTreeObjects = [];
     this.jungleCanopyTiles.clear();
+    this.jungleCanopyCoveredTiles.clear();
     this.jungleCanopyMeta.clear();
     this.vineTreeByResourceId.clear();
 
@@ -647,7 +653,7 @@ export class GameManager {
     for (const vine of vineNodes) {
       const tx = vine.x;
       const ty = vine.y;
-      if (tx < 1 || ty < 1 || tx >= world.width - 1 || ty >= world.height - 1) continue;
+      if (tx < 2 || ty < 2 || tx >= world.width - 2 || ty >= world.height - 2) continue;
       const tile = world.tileMap[ty]?.[tx];
       if (!tile || tile.type !== 'dense_jungle') continue;
 
@@ -657,6 +663,15 @@ export class GameManager {
       const seed = (tx * 928371 + ty * 523543) % 100;
       this.jungleCanopyTiles.add(key);
 
+      // Mark 2-tile radius as covered (rain protection + shadow)
+      for (let dy = -2; dy <= 2; dy++) {
+        for (let dx = -2; dx <= 2; dx++) {
+          if (dx * dx + dy * dy <= 4) {
+            this.jungleCanopyCoveredTiles.add(`${tx + dx},${ty + dy}`);
+          }
+        }
+      }
+
       const g = this.scene.add.graphics();
       g.setDepth(this.objectDepth(tx, ty) + 1);
       this.drawJungleCanopyTree(g, tx, ty, seed, false);
@@ -664,60 +679,103 @@ export class GameManager {
       this.jungleCanopyMeta.set(key, { tx, ty, seed, stripped: false, g });
       this.vineTreeByResourceId.set(vine.id, key);
     }
+
+    this.drawCanopyShadows();
     this.renderVisibleTiles();
   }
 
+  private drawCanopyShadows() {
+    const g = this.canopyShadowGraphics;
+    if (!g) return;
+    g.clear();
+    for (const meta of this.jungleCanopyMeta.values()) {
+      const cx = meta.tx * TS + TS / 2;
+      const cy = meta.ty * TS + TS / 2;
+      // Large shadow ellipse spanning ~2.5 tiles radius
+      g.fillStyle(0x000000, 0.28);
+      g.fillEllipse(cx, cy - TS * 0.5, TS * 4.5, TS * 2.8);
+      // Softer inner highlight to give depth
+      g.fillStyle(0x000000, 0.12);
+      g.fillEllipse(cx, cy - TS * 0.3, TS * 3.0, TS * 1.8);
+    }
+  }
+
   private drawJungleCanopyTree(g: Phaser.GameObjects.Graphics, tx: number, ty: number, seed: number, stripped: boolean) {
-    const baseX = tx * TS + TS / 2 + ((seed % 3) - 1) * 2;
-    const baseY = ty * TS + TS - 3;
-    const trunkH = 26 + (seed % 6);
+    const baseX = tx * TS + TS / 2 + ((seed % 3) - 1) * 3;
+    const baseY = ty * TS + TS - 2;
+    const trunkH = 44 + (seed % 10); // taller trunk
 
-    // Clearer ground patch under tree so it doesn't read as dense-jungle tile there
-    g.fillStyle(0x315f2d, 0.65);
-    g.fillEllipse(baseX, baseY + 1, 24, 12);
-    g.fillStyle(0x4a7a3f, 0.25);
-    g.fillEllipse(baseX - 2, baseY, 16, 7);
+    // Ground root spread
+    g.fillStyle(0x3a2010, 0.7);
+    g.fillEllipse(baseX, baseY + 2, 18, 6);
+    g.fillStyle(0x4a7a3f, 0.4);
+    g.fillEllipse(baseX, baseY + 1, 30, 10);
 
-    // Shadow
-    g.fillStyle(0x000000, 0.22);
-    g.fillEllipse(baseX, baseY + 3, 22, 7);
+    // Ground shadow (cast shadow to the side, world-space depth)
+    g.fillStyle(0x000000, 0.18);
+    g.fillEllipse(baseX + 8, baseY + 4, 36, 10);
 
-    // Main trunk
-    g.fillStyle(0x5a3720, 0.95);
-    g.fillRect(baseX - 3, baseY - trunkH, 6, trunkH);
-    g.fillStyle(0x7a4b2b, 0.4);
-    g.fillRect(baseX - 1, baseY - trunkH, 2, trunkH);
+    // Main trunk — wider, darker
+    g.fillStyle(0x4a2c15, 0.98);
+    g.fillRect(baseX - 5, baseY - trunkH, 10, trunkH);
+    // Bark highlight
+    g.fillStyle(0x7a4b2b, 0.45);
+    g.fillRect(baseX - 2, baseY - trunkH, 3, trunkH);
+    // Root buttresses
+    g.fillStyle(0x3d2010, 0.8);
+    g.fillTriangle(baseX - 5, baseY, baseX - 12, baseY + 5, baseX - 5, baseY - 12);
+    g.fillTriangle(baseX + 5, baseY, baseX + 12, baseY + 5, baseX + 5, baseY - 12);
 
-    // Big canopy layers (extends into upper neighboring tiles)
-    g.fillStyle(0x154a19, 0.98);
-    g.fillCircle(baseX, baseY - trunkH - 8, 15);
-    g.fillStyle(0x1f6123, 0.9);
-    g.fillCircle(baseX - 10, baseY - trunkH - 4, 11);
-    g.fillCircle(baseX + 10, baseY - trunkH - 3, 10);
-    g.fillStyle(0x2f8734, 0.7);
-    g.fillCircle(baseX, baseY - trunkH + 3, 9);
+    // Canopy — large, multi-layer, extends 1.5–2 tiles in all directions
+    const cr = 26 + (seed % 6); // base canopy radius ~26-31px (~1 tile)
+    const topY = baseY - trunkH;
 
-    // Hanging vines from canopy only
+    // Dark base layer (largest, lowest)
+    g.fillStyle(0x0d3a11, 0.95);
+    g.fillCircle(baseX, topY - 4, cr);
+    // Secondary off-center lobes
+    g.fillStyle(0x154a19, 0.92);
+    g.fillCircle(baseX - cr * 0.6, topY - cr * 0.3, cr * 0.82);
+    g.fillCircle(baseX + cr * 0.55, topY - cr * 0.25, cr * 0.78);
+    g.fillCircle(baseX - cr * 0.2, topY - cr * 0.7, cr * 0.72);
+    // Mid greens
+    g.fillStyle(0x1f6123, 0.88);
+    g.fillCircle(baseX + cr * 0.3, topY - cr * 0.55, cr * 0.65);
+    g.fillCircle(baseX - cr * 0.45, topY - cr * 0.6, cr * 0.58);
+    // Bright top highlights
+    g.fillStyle(0x2f8734, 0.75);
+    g.fillCircle(baseX - cr * 0.15, topY - cr * 0.85, cr * 0.45);
+    g.fillCircle(baseX + cr * 0.2, topY - cr * 0.4, cr * 0.38);
+    // Very bright tip
+    g.fillStyle(0x3da040, 0.5);
+    g.fillCircle(baseX, topY - cr, cr * 0.28);
+
+    // Hanging vines from canopy
     const drawVine = (sx: number, sy: number, bend: number, len: number, col: number, alpha: number) => {
-      g.lineStyle(1, col, alpha);
+      g.lineStyle(1.5, col, alpha);
       let px = sx;
       let py = sy;
       for (let k = 1; k <= len; k++) {
-        const nx = sx + Math.sin((k + bend) * 0.55) * bend * 0.9;
-        const ny = sy + k * 2;
+        const nx = sx + Math.sin((k + bend) * 0.5) * bend * 1.1;
+        const ny = sy + k * 2.2;
         g.lineBetween(px, py, nx, ny);
         px = nx; py = ny;
       }
       g.fillStyle(0x45ba4e, alpha * 0.9);
-      g.fillCircle(px, py, 1.2);
+      g.fillCircle(px, py, 1.5);
     };
 
     if (!stripped) {
-      // Vines originate from lower canopy / upper trunk and hang down visibly
-      const vineRootY = baseY - trunkH - 6;
-      drawVine(baseX - 3, vineRootY, 1.5, 14, 0x2f8a36, 0.86);
-      drawVine(baseX + 2, vineRootY + 1, 2.1, 12, 0x3aa342, 0.78);
-      if (seed % 2 === 0) drawVine(baseX + 7, vineRootY + 2, 1.7, 10, 0x2f8a36, 0.7);
+      const vineRootY = topY + cr * 0.2;
+      drawVine(baseX - 8,  vineRootY,      1.8, 16, 0x2f8a36, 0.88);
+      drawVine(baseX + 4,  vineRootY + 2,  2.3, 14, 0x3aa342, 0.80);
+      drawVine(baseX - 18, vineRootY + 4,  1.4, 12, 0x2f8a36, 0.72);
+      if (seed % 2 === 0) {
+        drawVine(baseX + 14, vineRootY + 3, 1.9, 13, 0x38b040, 0.68);
+      }
+      if (seed % 3 === 0) {
+        drawVine(baseX - 2,  vineRootY + 6, 2.5, 10, 0x2f8a36, 0.6);
+      }
     }
   }
 
@@ -907,26 +965,29 @@ export class GameManager {
     // base = ground anchor at bottom of tile
     const base = ty * TS + TS - 4;
 
+    // Deterministic per-tile size variation for trees (0.75 – 1.25)
+    const treeSeed = (tx * 374761 + ty * 914723) % 100;
+    const sc = 0.75 + treeSeed / 200; // 0.75 … 1.25
+
     switch (type) {
       case 'wood': {
-        // Shadow
+        const th = Math.round(14 * sc);
+        const cr = Math.round(13 * sc);
         g.fillStyle(0x000000, 0.22);
-        g.fillEllipse(cx, base + 3, 22, 7);
-        // Trunk
+        g.fillEllipse(cx, base + 3, Math.round(22 * sc), Math.round(7 * sc));
         g.fillStyle(0x6b3a1f);
-        g.fillRect(cx - 3, base - 14, 6, 14);
+        g.fillRect(cx - Math.round(3 * sc), base - th, Math.round(6 * sc), th);
         g.fillStyle(0x4a2010, 0.5);
-        g.fillRect(cx - 1, base - 14, 2, 14);
-        // Canopy layers (extends ~1.5 tiles up)
+        g.fillRect(cx - Math.round(sc), base - th, Math.round(2 * sc), th);
         g.fillStyle(0x1a5c1a);
-        g.fillCircle(cx, base - 26, 13);
+        g.fillCircle(cx, base - th - 12, cr);
         g.fillStyle(0x2d8a2d, 0.9);
-        g.fillCircle(cx - 5, base - 32, 10);
-        g.fillCircle(cx + 5, base - 32, 10);
+        g.fillCircle(cx - Math.round(5 * sc), base - th - 18, Math.round(10 * sc));
+        g.fillCircle(cx + Math.round(5 * sc), base - th - 18, Math.round(10 * sc));
         g.fillStyle(0x3aad50, 0.8);
-        g.fillCircle(cx, base - 38, 9);
+        g.fillCircle(cx, base - th - 24, Math.round(9 * sc));
         g.fillStyle(0x4acc60, 0.4);
-        g.fillCircle(cx - 2, base - 40, 5);
+        g.fillCircle(cx - Math.round(2 * sc), base - th - 26, Math.round(5 * sc));
         break;
       }
       case 'stone': {
@@ -970,31 +1031,27 @@ export class GameManager {
         break;
       }
       case 'palm_tree': {
-        // Shadow
+        const th = Math.round(30 * sc);
         g.fillStyle(0x000000, 0.20);
-        g.fillEllipse(cx, base + 3, 18, 6);
-        // Thin trunk — leans slightly
+        g.fillEllipse(cx, base + 3, Math.round(18 * sc), Math.round(6 * sc));
         g.fillStyle(0x8b6914);
-        g.fillRect(cx - 2, base - 30, 5, 30);
+        g.fillRect(cx - Math.round(2 * sc), base - th, Math.round(5 * sc), th);
         g.fillStyle(0xa07820, 0.6);
-        g.fillRect(cx - 1, base - 30, 2, 30);
-        // Trunk segments
+        g.fillRect(cx - Math.round(sc), base - th, Math.round(2 * sc), th);
         g.fillStyle(0x6b5010, 0.4);
         for (let i = 0; i < 5; i++) {
-          g.fillRect(cx - 2, base - 6 - i * 6, 5, 2);
+          g.fillRect(cx - Math.round(2 * sc), base - Math.round(6 * sc) - i * Math.round(6 * sc), Math.round(5 * sc), 2);
         }
-        // Fan fronds — palm crown
         g.fillStyle(0x2a8c18, 0.9);
-        g.fillEllipse(cx,      base - 42, 28, 8);
-        g.fillEllipse(cx - 10, base - 36, 22, 7);
-        g.fillEllipse(cx + 10, base - 36, 22, 7);
+        g.fillEllipse(cx,                     base - th - 12, Math.round(28 * sc), Math.round(8 * sc));
+        g.fillEllipse(cx - Math.round(10*sc), base - th - 6,  Math.round(22 * sc), Math.round(7 * sc));
+        g.fillEllipse(cx + Math.round(10*sc), base - th - 6,  Math.round(22 * sc), Math.round(7 * sc));
         g.fillStyle(0x3aad28, 0.85);
-        g.fillEllipse(cx,      base - 46, 20, 6);
-        g.fillEllipse(cx - 13, base - 40, 18, 5);
-        g.fillEllipse(cx + 13, base - 40, 18, 5);
-        // Frond highlight
+        g.fillEllipse(cx,                     base - th - 16, Math.round(20 * sc), Math.round(6 * sc));
+        g.fillEllipse(cx - Math.round(13*sc), base - th - 10, Math.round(18 * sc), Math.round(5 * sc));
+        g.fillEllipse(cx + Math.round(13*sc), base - th - 10, Math.round(18 * sc), Math.round(5 * sc));
         g.fillStyle(0x4cc030, 0.5);
-        g.fillEllipse(cx - 2, base - 48, 10, 4);
+        g.fillEllipse(cx - Math.round(2*sc),  base - th - 18, Math.round(10 * sc), Math.round(4 * sc));
         break;
       }
       case 'spring': {
@@ -1215,23 +1272,195 @@ export class GameManager {
         break;
       }
       case 'resin_tree': {
-        // Dark-barked tree with amber resin drips
+        const th = Math.round(18 * sc);
         g.fillStyle(0x000000, 0.15);
-        g.fillEllipse(cx, base + 2, 22, 5);
-        // Trunk — dark reddish-brown
+        g.fillEllipse(cx, base + 2, Math.round(22 * sc), Math.round(5 * sc));
         g.fillStyle(0x4a2a10);
-        g.fillRect(cx - 4, base - 18, 8, 18);
-        // Resin drips — amber streaks on trunk
+        g.fillRect(cx - Math.round(4*sc), base - th, Math.round(8*sc), th);
         g.fillStyle(0xd4820a, 0.9);
-        g.fillRect(cx - 2, base - 14, 3, 6);
+        g.fillRect(cx - Math.round(2*sc), base - Math.round(14*sc), Math.round(3*sc), Math.round(6*sc));
         g.fillStyle(0xf0a020, 0.7);
-        g.fillRect(cx + 1, base - 10, 2, 4);
-        // Canopy — darker green than normal tree
+        g.fillRect(cx + Math.round(sc),   base - Math.round(10*sc), Math.round(2*sc), Math.round(4*sc));
         g.fillStyle(0x1e5010);
-        g.fillCircle(cx, base - 22, 9);
+        g.fillCircle(cx, base - th - 4, Math.round(9*sc));
         g.fillStyle(0x285c18, 0.8);
-        g.fillCircle(cx - 4, base - 18, 6);
-        g.fillCircle(cx + 4, base - 20, 6);
+        g.fillCircle(cx - Math.round(4*sc), base - th,     Math.round(6*sc));
+        g.fillCircle(cx + Math.round(4*sc), base - th - 2, Math.round(6*sc));
+        break;
+      }
+      case 'pandanus': {
+        // Pandanus (Schraubenpalme) — Stelzwurzeln, lange schmale Blätter
+        g.fillStyle(0x000000, 0.18);
+        g.fillEllipse(cx, base + 3, Math.round(28*sc), Math.round(7*sc));
+        // Stelzwurzeln — schräge Stützen, skaliert
+        g.lineStyle(Math.round(3*sc), 0x6b4a20, 0.9);
+        g.lineBetween(cx, base - Math.round(14*sc), cx - Math.round(10*sc), base + 2);
+        g.lineBetween(cx, base - Math.round(14*sc), cx + Math.round(9*sc),  base + 2);
+        g.lineBetween(cx, base - Math.round(14*sc), cx - Math.round(4*sc),  base + 3);
+        g.lineStyle(Math.round(2*sc), 0x8a6030, 0.7);
+        g.lineBetween(cx, base - Math.round(10*sc), cx + Math.round(5*sc),  base + 1);
+        // Hauptstamm
+        g.fillStyle(0x7a5228);
+        g.fillRect(cx - Math.round(4*sc), base - Math.round(32*sc), Math.round(8*sc), Math.round(20*sc));
+        g.fillStyle(0x9a6a38, 0.4);
+        g.fillRect(cx - Math.round(sc), base - Math.round(32*sc), Math.round(3*sc), Math.round(20*sc));
+        // Spiralförmig abstrahlende lange Blätter
+        const bladeColors = [0x2e7a1a, 0x388a20, 0x44a028, 0x3a9022];
+        const blades = [
+          { ax: 0, ay: -32, bx: -22, by: -44 },
+          { ax: 0, ay: -32, bx:  22, by: -44 },
+          { ax: 0, ay: -32, bx: -18, by: -50 },
+          { ax: 0, ay: -32, bx:  16, by: -50 },
+          { ax: 0, ay: -32, bx:  -8, by: -54 },
+          { ax: 0, ay: -32, bx:   6, by: -30 },
+          { ax: 0, ay: -32, bx:  -6, by: -30 },
+        ];
+        blades.forEach((b, i) => {
+          g.lineStyle(Math.round(2.5*sc), bladeColors[i % bladeColors.length], 0.88);
+          g.lineBetween(cx + b.ax*sc, base + b.ay*sc, cx + b.bx*sc, base + b.by*sc);
+          g.lineStyle(Math.round(sc), 0x1a5010, 0.5);
+          g.lineBetween(cx + b.ax*sc, base + b.ay*sc, cx + (b.bx*sc)*0.6, base + b.ay*sc + (b.by - b.ay)*sc*0.5);
+        });
+        g.fillStyle(0xe8a020, 0.9);
+        g.fillEllipse(cx - Math.round(6*sc), base - Math.round(36*sc), Math.round(6*sc), Math.round(10*sc));
+        g.fillStyle(0xf0b830, 0.7);
+        g.fillEllipse(cx - Math.round(6*sc), base - Math.round(37*sc), Math.round(4*sc), Math.round(7*sc));
+        break;
+      }
+      case 'breadfruit_tree': {
+        const th = Math.round(34 * sc);
+        g.fillStyle(0x000000, 0.2);
+        g.fillEllipse(cx, base + 3, Math.round(24*sc), Math.round(7*sc));
+        g.fillStyle(0x6a4a28);
+        g.fillRect(cx - Math.round(6*sc), base - th, Math.round(12*sc), th);
+        g.fillStyle(0x8a6038, 0.4);
+        g.fillRect(cx - Math.round(2*sc), base - th, Math.round(4*sc), th);
+        g.fillStyle(0x1a5c14, 0.95);
+        g.fillCircle(cx, base - th - 8, Math.round(18*sc));
+        g.fillStyle(0x247018, 0.9);
+        g.fillCircle(cx - Math.round(14*sc), base - th - 2,  Math.round(13*sc));
+        g.fillCircle(cx + Math.round(13*sc), base - th - 3,  Math.round(12*sc));
+        g.fillStyle(0x2e8420, 0.8);
+        g.fillCircle(cx - Math.round(6*sc),  base - th - 16, Math.round(10*sc));
+        g.fillCircle(cx + Math.round(7*sc),  base - th - 14, Math.round(10*sc));
+        g.fillStyle(0x389428, 0.65);
+        g.fillCircle(cx, base - th - 21, Math.round(8*sc));
+        g.lineStyle(1, 0x145010, 0.4);
+        g.lineBetween(cx - Math.round(14*sc), base - th - 2,  cx - Math.round(22*sc), base - th + 4);
+        g.lineBetween(cx + Math.round(13*sc), base - th - 3,  cx + Math.round(20*sc), base - th + 3);
+        const bfFruits = [
+          { x: cx - Math.round(10*sc), y: base - th },
+          { x: cx + Math.round(8*sc),  y: base - th + 2 },
+          { x: cx + Math.round(2*sc),  y: base - th - 10 },
+        ];
+        for (const f of bfFruits) {
+          const fr = Math.round(6*sc);
+          g.fillStyle(0x000000, 0.15);
+          g.fillCircle(f.x + 1, f.y + 2, fr);
+          g.fillStyle(0x4a8c18, 0.95);
+          g.fillCircle(f.x, f.y, fr);
+          g.lineStyle(0.8, 0x386010, 0.5);
+          g.lineBetween(f.x - fr, f.y, f.x + fr, f.y);
+          g.lineBetween(f.x, f.y - fr, f.x, f.y + fr);
+        }
+        break;
+      }
+      case 'bamboo': {
+        g.fillStyle(0x000000, 0.15);
+        g.fillEllipse(cx, base + 2, Math.round(22*sc), Math.round(5*sc));
+        const seed2 = (tx * 7 + ty * 13) % 5;
+        const halms = [
+          { ox: -6,  h: 38 + seed2 * 2,    w: 4 },
+          { ox:  4,  h: 34 + (seed2+1) * 2, w: 3.5 },
+          { ox: -1,  h: 42 + seed2,          w: 4 },
+          { ox:  9,  h: 28 + seed2 * 3,     w: 3 },
+          { ox: -10, h: 30 + seed2,          w: 3 },
+        ];
+        for (const h of halms) {
+          const hx = cx + Math.round(h.ox * sc);
+          const hh = Math.round(h.h * sc);
+          const hw = Math.max(2, Math.round(h.w * sc));
+          const segH = Math.round(8 * sc);
+          const segments = Math.floor(hh / segH);
+          g.fillStyle(0x4a9020, 0.92);
+          g.fillRect(hx - hw / 2, base - hh, hw, hh);
+          g.fillStyle(0x6ab830, 0.45);
+          g.fillRect(hx - hw / 2 + 0.5, base - hh, hw * 0.4, hh);
+          g.fillStyle(0x386010, 0.7);
+          for (let s = 1; s < segments; s++) {
+            g.fillRect(hx - hw / 2 - 1, base - s * segH, hw + 2, 1.5);
+          }
+          g.fillStyle(0x50a828, 0.85);
+          g.fillTriangle(hx, base - hh - Math.round(10*sc), hx - Math.round(8*sc), base - hh + Math.round(2*sc), hx + Math.round(2*sc), base - hh + Math.round(4*sc));
+          g.fillTriangle(hx, base - hh - Math.round(8*sc),  hx + Math.round(9*sc), base - hh + Math.round(3*sc), hx - Math.round(sc),    base - hh + Math.round(5*sc));
+          g.fillStyle(0x68c038, 0.6);
+          g.fillTriangle(hx - Math.round(2*sc), base - hh - Math.round(6*sc), hx - Math.round(10*sc), base - hh + Math.round(6*sc), hx + Math.round(2*sc), base - hh + Math.round(2*sc));
+        }
+        break;
+      }
+      case 'rubber_tree': {
+        const th = Math.round(36 * sc);
+        g.fillStyle(0x000000, 0.2);
+        g.fillEllipse(cx, base + 3, Math.round(26*sc), Math.round(8*sc));
+        g.fillStyle(0xc8a878);
+        g.fillRect(cx - Math.round(5*sc), base - th, Math.round(10*sc), th);
+        g.fillStyle(0xdec090, 0.5);
+        g.fillRect(cx - Math.round(2*sc), base - th, Math.round(4*sc), th);
+        g.lineStyle(1.5, 0x7a5a30, 0.9);
+        g.lineBetween(cx - Math.round(5*sc), base - Math.round(28*sc), cx + Math.round(5*sc), base - Math.round(22*sc));
+        g.lineBetween(cx - Math.round(5*sc), base - Math.round(20*sc), cx + Math.round(5*sc), base - Math.round(14*sc));
+        g.lineBetween(cx - Math.round(5*sc), base - Math.round(12*sc), cx + Math.round(5*sc), base - Math.round(6*sc));
+        g.fillStyle(0x5a3a15);
+        g.fillRect(cx + Math.round(4*sc), base - Math.round(9*sc), Math.round(4*sc), Math.round(3*sc));
+        g.fillStyle(0xf5f0e0, 0.92);
+        g.fillCircle(cx + Math.round(6*sc), base - Math.round(7*sc), Math.round(2*sc));
+        g.fillCircle(cx + Math.round(6*sc), base - Math.round(4*sc), Math.round(1.5*sc));
+        g.fillStyle(0x1a5215, 0.95);
+        g.fillCircle(cx, base - th - 8, Math.round(16*sc));
+        g.fillStyle(0x226a1a, 0.88);
+        g.fillCircle(cx - Math.round(12*sc), base - th - 4, Math.round(12*sc));
+        g.fillCircle(cx + Math.round(11*sc), base - th - 5, Math.round(11*sc));
+        g.fillStyle(0x2e8025, 0.75);
+        g.fillCircle(cx - Math.round(5*sc),  base - th - 16, Math.round(9*sc));
+        g.fillCircle(cx + Math.round(6*sc),  base - th - 14, Math.round(8*sc));
+        g.fillStyle(0x3a9430, 0.55);
+        g.fillCircle(cx, base - th - 19, Math.round(6*sc));
+        break;
+      }
+      case 'cacao_tree': {
+        const th = Math.round(28 * sc);
+        g.fillStyle(0x000000, 0.18);
+        g.fillEllipse(cx, base + 2, Math.round(20*sc), Math.round(6*sc));
+        g.fillStyle(0x5c3418);
+        g.fillRect(cx - Math.round(4*sc), base - th, Math.round(8*sc), th);
+        g.fillStyle(0x7a4a24, 0.45);
+        g.fillRect(cx - Math.round(sc),   base - th, Math.round(3*sc), th);
+        const fruits = [
+          { ox: -6, oy: -18, col: 0xc84a10 },
+          { ox:  5, oy: -14, col: 0xe05a18 },
+          { ox: -5, oy: -8,  col: 0xf07020 },
+        ];
+        for (const f of fruits) {
+          const fx = cx + Math.round(f.ox * sc);
+          const fy = base + Math.round(f.oy * sc);
+          g.fillStyle(0x000000, 0.2);
+          g.fillEllipse(fx, fy + Math.round(3*sc), Math.round(8*sc), Math.round(4*sc));
+          g.fillStyle(f.col, 0.95);
+          g.fillEllipse(fx, fy, Math.round(7*sc), Math.round(11*sc));
+          g.lineStyle(0.8, 0x000000, 0.25);
+          g.lineBetween(fx - Math.round(sc), fy - Math.round(4*sc), fx - Math.round(sc), fy + Math.round(4*sc));
+          g.lineBetween(fx + Math.round(sc), fy - Math.round(4*sc), fx + Math.round(sc), fy + Math.round(4*sc));
+          g.lineStyle(1, 0x5c3418, 0.9);
+          g.lineBetween(fx, fy - Math.round(5*sc), cx, fy - Math.round(5*sc));
+        }
+        g.fillStyle(0x1e5c18, 0.95);
+        g.fillCircle(cx, base - th - 8, Math.round(13*sc));
+        g.fillStyle(0x287020, 0.88);
+        g.fillCircle(cx - Math.round(10*sc), base - th - 4, Math.round(10*sc));
+        g.fillCircle(cx + Math.round(9*sc),  base - th - 5, Math.round(9*sc));
+        g.fillStyle(0x34882a, 0.7);
+        g.fillCircle(cx - Math.round(3*sc), base - th - 14, Math.round(7*sc));
+        g.fillCircle(cx + Math.round(4*sc), base - th - 12, Math.round(7*sc));
         break;
       }
       case 'coconut_shell': {
@@ -2278,12 +2507,20 @@ export class GameManager {
     g.clear();
     g.lineStyle(1, 0xadd8e6, alpha * 0.55);
 
+    const cam = this.scene!.cameras.main;
     const dt = delta / 16.67;
     for (const drop of this.rainDrops) {
       drop.y += drop.speed * dt;
       drop.x += drop.speed * cfg.diagonal * dt;
       if (drop.y > H + drop.len) { drop.y = -drop.len; drop.x = Math.random() * W; }
       if (drop.x > W + 10) drop.x -= W + 20;
+
+      // Skip drops that fall under jungle canopy
+      const worldX = drop.x + cam.worldView.x;
+      const worldY = drop.y + cam.worldView.y;
+      const tileKey = `${Math.floor(worldX / TS)},${Math.floor(worldY / TS)}`;
+      if (this.jungleCanopyCoveredTiles.has(tileKey)) continue;
+
       g.beginPath();
       g.moveTo(drop.x, drop.y);
       g.lineTo(drop.x - drop.len * cfg.diagonal, drop.y - drop.len);
@@ -2592,7 +2829,7 @@ export class GameManager {
     g.clear();
     g.setDepth(Math.floor(this.playerPy / TS) * 1000 + 3);
 
-    const SHAFT_LEN = 22;
+    // shaft base offset
     const baseX = playerCx - cos * 4;
     const baseY = playerCy - sin * 4;
     const headX  = playerCx + cos * ext;
@@ -3871,7 +4108,6 @@ export class GameManager {
     const world = useWorldStore.getState().world;
     if (!world) return;
 
-    const BOAR_MAX_HP    = 60;
     const AGGRO_RANGE    = 5 * TS;
     const LOSE_RANGE     = 12 * TS;
     const ATTACK_RANGE   = 1.8 * TS;

@@ -26,6 +26,11 @@ export const WORLD_CONFIG = {
     mushroom:     { frequency: 0.03,  minQuantity: 1, maxQuantity: 2, spawnOn: ['sparse_forest', 'dense_jungle', 'forest'] },
     exotic_fruit: { frequency: 0.012, minQuantity: 1, maxQuantity: 3, spawnOn: ['dense_jungle'] },
     vine:         { frequency: 0.04,  minQuantity: 1, maxQuantity: 2, spawnOn: ['dense_jungle', 'sparse_forest', 'forest'] },
+    rubber_tree:  { frequency: 0.0, minQuantity: 0, maxQuantity: 0, spawnOn: ['dense_jungle'] },
+    cacao_tree:   { frequency: 0.0, minQuantity: 0, maxQuantity: 0, spawnOn: ['dense_jungle'] },
+    pandanus:     { frequency: 0.0, minQuantity: 0, maxQuantity: 0, spawnOn: ['sparse_forest'] },
+    breadfruit_tree: { frequency: 0.0, minQuantity: 0, maxQuantity: 0, spawnOn: ['forest'] },
+    bamboo:       { frequency: 0.0, minQuantity: 0, maxQuantity: 0, spawnOn: ['forest'] },
   } as Record<string, ResourceSpawnConfig>,
 
   startX: 125,

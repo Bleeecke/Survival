@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useGameStore } from '../../store/gameStore';
 import { usePlayerStore } from '../../store/playerStore';
-import { useWorldStore } from '../../store/worldStore';
+
 
 const GIVE_ITEMS: { id: string; label: string; icon: string }[] = [
   { id: 'coconut',       label: 'Kokosnuss',     icon: '🥥' },

@@ -142,6 +142,27 @@ export const RESOURCE_TYPES: Record<string, ResourceTypeDef> = {
   },
 
   // ── Wildschwein drops ─────────────────────────────────────────────
+  pandanus: {
+    id: 'pandanus', name: 'Pandanus', spriteIndex: 32,
+    gatherTime: 0, maxStack: 1, regenerates: false,
+  },
+  breadfruit_tree: {
+    id: 'breadfruit_tree', name: 'Brotfruchtbaum', spriteIndex: 33,
+    gatherTime: 0, maxStack: 1, regenerates: false,
+  },
+  bamboo: {
+    id: 'bamboo', name: 'Bambus', spriteIndex: 34,
+    gatherTime: 0, maxStack: 1, regenerates: false,
+  },
+  rubber_tree: {
+    id: 'rubber_tree', name: 'Kautschukbaum', spriteIndex: 30,
+    gatherTime: 0, maxStack: 1, regenerates: false,
+  },
+  cacao_tree: {
+    id: 'cacao_tree', name: 'Kakaobaum', spriteIndex: 31,
+    gatherTime: 0, maxStack: 1, regenerates: false,
+  },
+
   boar_meat: {
     id: 'boar_meat', name: 'Wildschweinfleisch', spriteIndex: 29,
     gatherTime: 0, maxStack: 10, regenerates: false,

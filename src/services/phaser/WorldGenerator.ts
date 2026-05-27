@@ -244,6 +244,26 @@ export class WorldGenerator {
         clusterCount: 6, radius: 7, density: 0.18,
         spawnOn: ['sparse_forest', 'forest', 'dense_jungle'], minQ: 3, maxQ: 5, minDistFromSpawn: 35,
       },
+      rubber_tree: {
+        clusterCount: 4, radius: 6, density: 0.12,
+        spawnOn: ['dense_jungle'], minQ: 1, maxQ: 1, minDistFromSpawn: 60,
+      },
+      cacao_tree: {
+        clusterCount: 5, radius: 5, density: 0.14,
+        spawnOn: ['dense_jungle'], minQ: 1, maxQ: 1, minDistFromSpawn: 50,
+      },
+      pandanus: {
+        clusterCount: 8, radius: 6, density: 0.16,
+        spawnOn: ['sparse_forest'], minQ: 1, maxQ: 1, minDistFromSpawn: 15,
+      },
+      breadfruit_tree: {
+        clusterCount: 7, radius: 5, density: 0.15,
+        spawnOn: ['forest'], minQ: 1, maxQ: 1, minDistFromSpawn: 25,
+      },
+      bamboo: {
+        clusterCount: 8, radius: 4, density: 0.22,
+        spawnOn: ['forest'], minQ: 1, maxQ: 1, minDistFromSpawn: 20,
+      },
     };
 
     for (const [type, cfg] of Object.entries(configs)) {
