@@ -54,7 +54,7 @@ export default function TutorialPanel() {
             {/* Hint box */}
             <div className="bg-slate-700/60 border border-slate-600 rounded-lg px-2.5 py-1.5">
               <span className="text-yellow-400 text-xs">💡 </span>
-              <span className="text-slate-300 text-xs">{step.hint}</span>
+              <span className="text-slate-300 text-xs whitespace-pre-line">{step.hint}</span>
             </div>
           </div>
         </div>

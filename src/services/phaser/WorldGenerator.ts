@@ -238,7 +238,7 @@ export class WorldGenerator {
       },
       palm_tree: {
         clusterCount: 10, radius: 5, density: 0.28,
-        spawnOn: ['beach'], minQ: 4, maxQ: 6, minDistFromSpawn: 0,
+        spawnOn: ['beach'], minQ: 3, maxQ: 5, minDistFromSpawn: 0,
       },
       resin_tree: {
         clusterCount: 6, radius: 7, density: 0.18,
@@ -263,6 +263,14 @@ export class WorldGenerator {
       bamboo: {
         clusterCount: 8, radius: 4, density: 0.22,
         spawnOn: ['forest'], minQ: 1, maxQ: 1, minDistFromSpawn: 20,
+      },
+      obsidian: {
+        clusterCount: 3, radius: 5, density: 0.20,
+        spawnOn: ['mountain'], minQ: 1, maxQ: 2, minDistFromSpawn: 80,
+      },
+      granite: {
+        clusterCount: 5, radius: 8, density: 0.25,
+        spawnOn: ['mountain', 'hills'], minQ: 1, maxQ: 3, minDistFromSpawn: 60,
       },
     };
 

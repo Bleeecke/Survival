@@ -1,3 +1,6 @@
+import type { SkillId } from './skills';
+import type { KnowledgeFlag } from '../data/knowledge';
+
 export interface CraftingMaterial {
   resourceId: string;
   quantity: number;
@@ -19,6 +22,18 @@ export interface Recipe {
   requiresTool?: string;
   /** Tier-1 = always visible; higher tiers shown as ??? until player has any input */
   unlocked?: boolean;
+  /** Minimum skill level required to craft */
+  requiresSkill?: { skill: SkillId; level: number };
+  /** Skill XP awarded on successful craft */
+  grantsSkill?: { skill: SkillId; xp: number };
+  /** Knowledge flags required to see/craft this recipe */
+  requiredKnowledge?: KnowledgeFlag[];
+  /** Knowledge flags granted when this recipe is crafted */
+  grantsKnowledge?: KnowledgeFlag[];
+  /** Chance-based crafting: success probability depends on skill level.
+   *  chance = baseChance + (level - 1) * bonusPerLevel  (capped at 1.0)
+   *  On failure: inputs consumed, no output, no XP. */
+  skillBasedSuccess?: { skill: SkillId; baseChance: number; bonusPerLevel: number };
 }
 
 export interface CraftRequest {

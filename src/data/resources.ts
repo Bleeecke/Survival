@@ -48,7 +48,7 @@ export const RESOURCE_TYPES: Record<string, ResourceTypeDef> = {
   },
   palm_tree: {
     id: 'palm_tree', name: 'Palme', spriteIndex: 23,
-    gatherTime: 800, maxStack: 1, regenerates: true, regenerationTime: 150_000,
+    gatherTime: 800, maxStack: 5, regenerates: true, regenerationTime: 1_800_000,
   },
   fish: {
     id: 'fish', name: 'Fisch', spriteIndex: 12,
@@ -141,6 +141,20 @@ export const RESOURCE_TYPES: Record<string, ResourceTypeDef> = {
     gatherTime: 1200, maxStack: 5, regenerates: true, regenerationTime: 300_000,
   },
 
+  // ── Tier-Nebenprodukte ───────────────────────────────────────────────
+  bone: {
+    id: 'bone', name: 'Knochen', spriteIndex: 10,
+    gatherTime: 0, maxStack: 20, regenerates: false,
+  },
+  hide: {
+    id: 'hide', name: 'Tierhaut', spriteIndex: 29,
+    gatherTime: 0, maxStack: 10, regenerates: false,
+  },
+  fat: {
+    id: 'fat', name: 'Tierfett', spriteIndex: 25,
+    gatherTime: 0, maxStack: 10, regenerates: false,
+  },
+
   // ── Wildschwein drops ─────────────────────────────────────────────
   pandanus: {
     id: 'pandanus', name: 'Pandanus', spriteIndex: 32,
@@ -161,6 +175,60 @@ export const RESOURCE_TYPES: Record<string, ResourceTypeDef> = {
   cacao_tree: {
     id: 'cacao_tree', name: 'Kakaobaum', spriteIndex: 31,
     gatherTime: 0, maxStack: 1, regenerates: false,
+  },
+
+  // ── Medicine & First Aid ─────────────────────────────────────────────
+  bandage: {
+    id: 'bandage', name: 'Verband', spriteIndex: 19,
+    gatherTime: 0, maxStack: 10, regenerates: false,
+  },
+  fever_tea: {
+    id: 'fever_tea', name: 'Fiebertee', spriteIndex: 7,
+    gatherTime: 0, maxStack: 10, regenerates: false,
+  },
+  antiparasitic: {
+    id: 'antiparasitic', name: 'Parasitenmedizin', spriteIndex: 18,
+    gatherTime: 0, maxStack: 10, regenerates: false,
+  },
+
+  // ── Seltene Steine ───────────────────────────────────────────────────
+  obsidian: {
+    id: 'obsidian', name: 'Obsidian', spriteIndex: 6,
+    gatherTime: 3000, maxStack: 10, regenerates: true, regenerationTime: 900_000,
+  },
+  granite: {
+    id: 'granite', name: 'Granit', spriteIndex: 6,
+    gatherTime: 2500, maxStack: 30, regenerates: true, regenerationTime: 600_000,
+  },
+
+  // ── Preserved food ───────────────────────────────────────────────────
+  smoked_meat: {
+    id: 'smoked_meat', name: 'Geräuchertes Fleisch', spriteIndex: 29,
+    gatherTime: 0, maxStack: 10, regenerates: false,
+  },
+  dried_fish: {
+    id: 'dried_fish', name: 'Getrockneter Fisch', spriteIndex: 12,
+    gatherTime: 0, maxStack: 10, regenerates: false,
+  },
+  dried_fruit: {
+    id: 'dried_fruit', name: 'Getrocknete Frucht', spriteIndex: 21,
+    gatherTime: 0, maxStack: 10, regenerates: false,
+  },
+
+  // ── Shell tools ──────────────────────────────────────────────────────
+  shell_knife: {
+    id: 'shell_knife', name: 'Muschelklinge', spriteIndex: 16,
+    gatherTime: 0, maxStack: 5, regenerates: false,
+  },
+
+  // ── Intermediate crafting materials ──────────────────────────────────
+  sharp_flint: {
+    id: 'sharp_flint', name: 'Gespl. Feuerstein', spriteIndex: 14,
+    gatherTime: 0, maxStack: 20, regenerates: false,
+  },
+  hardened_stick: {
+    id: 'hardened_stick', name: 'Gehärteter Ast', spriteIndex: 9,
+    gatherTime: 0, maxStack: 10, regenerates: false,
   },
 
   boar_meat: {

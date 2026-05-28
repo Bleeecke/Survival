@@ -3,6 +3,7 @@ import GameCanvas from '../game/GameCanvas';
 import GameHUD from '../game/GameHUD';
 import InventoryPanel from '../game/InventoryPanel';
 import CraftingModal from '../game/CraftingModal';
+import BuildBar from '../game/BuildMenu';
 import CampfireModal from '../game/CampfireModal';
 import PalmShelterModal from '../game/PalmShelterModal';
 import SleepModal from '../game/SleepModal';
@@ -10,6 +11,9 @@ import StorageBoxModal from '../game/StorageBoxModal';
 import CharacterPanel from '../game/CharacterPanel';
 import IntroModal from '../game/IntroModal';
 import TutorialPanel from '../game/TutorialPanel';
+import SkillNotifications from '../game/SkillNotifications';
+import SkillsBar from '../game/SkillsBar';
+import StatsOverlay from '../game/StatsOverlay';
 import PauseMenu from './PauseMenu';
 import DevPanel from '../game/DevPanel';
 import HelpPanel from '../game/HelpPanel';
@@ -196,37 +200,58 @@ export default function GameScreen() {
           <CharacterPanel />
         </div>
 
-        {/* Day counter – top-center of canvas */}
-        <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10 pointer-events-none">
+        {/* Day counter – top-right of canvas */}
+        <div className="absolute top-3 right-3 z-10 pointer-events-none">
           <div className="bg-black/60 border border-amber-700/60 rounded-lg px-4 py-1 backdrop-blur-sm">
             <span className="text-amber-300 font-bold text-sm tracking-widest">Tag {currentDay}</span>
           </div>
         </div>
 
+        {/* Stats overlay – top-center of canvas */}
+        <StatsOverlay />
+
         {/* Help & controls panel – bottom-left of canvas */}
         <HelpPanel />
+
+        {/* RimWorld-style build bar – bottom of canvas */}
+        <BuildBar />
       </div>
 
       {/* Right Sidebar */}
       <div className="w-80 bg-slate-800 border-l border-slate-700 flex flex-col overflow-hidden">
-        {/* Crafting button — top of sidebar */}
-        <div className="px-3 pt-3 pb-2 border-b border-slate-700">
+        {/* Crafting + Menu buttons */}
+        <div className="px-3 pt-3 pb-2 border-b border-slate-700 flex gap-2">
           <button
             onClick={() => setCraftingOpen(true)}
-            className="w-full py-2 bg-amber-700 hover:bg-amber-600 text-white font-bold text-sm rounded-xl transition-colors flex items-center justify-center gap-2"
+            className="flex-1 py-1.5 bg-amber-700 hover:bg-amber-600 text-white font-bold text-xs rounded-lg transition-colors flex items-center justify-center gap-1.5"
           >
             <span>📖</span>
-            <span>Crafting Buch</span>
-            <span className="text-amber-300 text-xs font-normal">(C)</span>
+            <span>Crafting</span>
+            <span className="text-amber-300 font-normal">(C)</span>
+          </button>
+          <button
+            onClick={() => setPaused(true)}
+            className="flex-1 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200 font-bold text-xs rounded-lg transition-colors flex items-center justify-center gap-1.5"
+            title="Pause (Esc)"
+          >
+            <span>⏸</span>
+            <span>Menü</span>
           </button>
         </div>
 
-        {/* Tutorial panel — shown between crafting button and HUD */}
+        {/* Tutorial panel */}
         {!tutorialSkipped && tutorialStep > 0 && (
-          <div className="px-3 pt-3">
+          <div className="px-3 pt-2">
             <TutorialPanel />
           </div>
         )}
+
+        <SkillNotifications />
+
+        {/* Skills panel — moved from canvas */}
+        <div className="px-3 py-2 border-b border-slate-700">
+          <SkillsBar />
+        </div>
 
         <GameHUD />
         <div className="flex-1 overflow-y-auto min-h-0">

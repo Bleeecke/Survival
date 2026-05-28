@@ -5,11 +5,14 @@ import { usePlayerStore } from '../../store/playerStore';
 import { useWorldStore } from '../../store/worldStore';
 import { useGameStore } from '../../store/gameStore';
 import type { Recipe, RecipeCategory } from '../../types';
+import { SKILL_LABELS } from '../../types/skills';
+import { KNOWLEDGE_LABELS } from '../../data/knowledge';
+import { CUT_ON_KNAP_FAIL, WOUND_DURATION } from '../../data/diseases';
 
 // ── Constants ─────────────────────────────────────────────────────
 
 const STRUCTURE_IDS = new Set([
-  'campfire', 'palm_shelter', 'wooden_shelter', 'workbench', 'log_cabin', 'bed', 'farm_plot', 'furnace', 'storage_box', 'water_container',
+  'campfire', 'granite_campfire', 'palm_shelter', 'wooden_shelter', 'workbench', 'log_cabin', 'bed', 'farm_plot', 'furnace', 'storage_box',
 ]);
 
 // Structures that become construction sites first (type → days to build)
@@ -23,6 +26,7 @@ const ITEM_NAMES: Record<string, string> = {
   sticks: 'Äste', pebbles: 'Bruchstein',
   wood: 'Holz', stone: 'Stein', food: 'Beeren', water: 'Wasser',
   rope: 'Seil', plank: 'Holzbretter', iron_ore: 'Eisenerz', iron_bar: 'Eisenbarren',
+  sharp_flint: 'Gesp. Feuerstein', hardened_stick: 'Gehärteter Ast',
   // New materials
   flint: 'Feuerstein', driftwood: 'Treibholz', shells: 'Muscheln',
   palm_leaf: 'Palmenblatt', herbs: 'Kräuter', fiber: 'Fasern',
@@ -46,19 +50,10 @@ const ITEM_NAMES: Record<string, string> = {
   storage_box: 'Lagerbox',
 };
 
-const TIER_LABELS: Record<number, { label: string; bg: string; text: string }> = {
-  0: { label: 'Primitiv',      bg: 'bg-stone-700',   text: 'text-stone-200'  },
-  1: { label: 'Basis',         bg: 'bg-green-800',   text: 'text-green-200'  },
-  2: { label: 'Fortgeschr.',   bg: 'bg-blue-800',    text: 'text-blue-200'   },
-  3: { label: 'Erfahren',      bg: 'bg-purple-800',  text: 'text-purple-200' },
-  4: { label: 'Experte',       bg: 'bg-orange-800',  text: 'text-orange-200' },
-  5: { label: 'Meister',       bg: 'bg-yellow-700',  text: 'text-yellow-100' },
-};
 
 const CATEGORY_DEFS: { key: 'all' | RecipeCategory; label: string; icon: string }[] = [
   { key: 'all',      label: 'Alles',       icon: '★'  },
   { key: 'tool',     label: 'Werkzeuge',   icon: '🔨' },
-  { key: 'shelter',  label: 'Unterschlupf',icon: '🏠' },
   { key: 'food',     label: 'Nahrung',     icon: '🍖' },
   { key: 'weapon',   label: 'Waffen',      icon: '⚔️' },
   { key: 'utility',  label: 'Nützliches',  icon: '⚙️' },
@@ -71,17 +66,29 @@ export default function CraftingModal({ onClose }: { onClose: () => void }) {
   const [activeCategory, setActiveCategory] = useState<'all' | RecipeCategory>('all');
   const [craftingId, setCraftingId] = useState<string | null>(null);
   const [progress, setProgress] = useState(0);
+  const [failMessage, setFailMessage] = useState<string | null>(null);
   const craftStartRef = useRef<number | null>(null);
   const intervalRef   = useRef<number | null>(null);
+  const failTimerRef  = useRef<number | null>(null);
 
   const inventory = usePlayerStore(s => s.player.inventory);
 
-  const filtered = activeCategory === 'all'
-    ? RECIPES
-    : RECIPES.filter(r => r.category === activeCategory);
+  // Only show discovered recipes — filter out structures (those belong in BuildMenu)
+  const allFiltered = (activeCategory === 'all' ? RECIPES : RECIPES.filter(r => r.category === activeCategory))
+    .filter(r => craftingSystem.isDiscovered(r, inventory))
+    .filter(r => !STRUCTURE_IDS.has(r.id));
 
-  // Group by tier, sorted
-  const tiers = [...new Set(filtered.map(r => r.tier))].sort();
+  const discovered = allFiltered.sort((a, b) => {
+    const scoreA = (craftingSystem.canCraft(a.id, inventory) ? 4 : 0)
+                 + (craftingSystem.hasRequiredTool(a, inventory) ? 2 : 0)
+                 + (craftingSystem.hasRequiredSkill(a) ? 1 : 0)
+                 + (craftingSystem.hasRequiredKnowledge(a) ? 1 : 0);
+    const scoreB = (craftingSystem.canCraft(b.id, inventory) ? 4 : 0)
+                 + (craftingSystem.hasRequiredTool(b, inventory) ? 2 : 0)
+                 + (craftingSystem.hasRequiredSkill(b) ? 1 : 0)
+                 + (craftingSystem.hasRequiredKnowledge(b) ? 1 : 0);
+    return scoreB - scoreA || a.tier - b.tier;
+  });
 
   // ── Crafting logic ───────────────────────────────────────────────
 
@@ -91,6 +98,7 @@ export default function CraftingModal({ onClose }: { onClose: () => void }) {
     if (!craftingSystem.canCraft(recipeId, inv)) return;
     const recipe = RECIPES.find(r => r.id === recipeId)!;
     if (!craftingSystem.hasRequiredTool(recipe, inv)) return;
+    if (!craftingSystem.hasRequiredSkill(recipe)) return;
 
     // Structures → enter placement mode first, crafting happens on confirm
     if (STRUCTURE_IDS.has(recipeId)) {
@@ -102,10 +110,11 @@ export default function CraftingModal({ onClose }: { onClose: () => void }) {
     setCraftingId(recipeId);
     setProgress(0);
     craftStartRef.current = Date.now();
+    const effectiveTime = craftingSystem.getEffectiveCraftTime(recipe);
 
     intervalRef.current = window.setInterval(() => {
       const elapsed = Date.now() - craftStartRef.current!;
-      const pct = Math.min(100, (elapsed / recipe.craftingTime) * 100);
+      const pct = Math.min(100, (elapsed / effectiveTime) * 100);
       setProgress(pct);
       if (pct >= 100) {
         clearInterval(intervalRef.current!);
@@ -128,8 +137,29 @@ export default function CraftingModal({ onClose }: { onClose: () => void }) {
     const { player, addToInventory, removeResource } = usePlayerStore.getState();
     if (!craftingSystem.canCraft(recipeId, player.inventory)) { setCraftingId(null); return; }
 
+    // Skill-based success check — inputs are always consumed
     if (!useGameStore.getState().freeCraft) {
       for (const input of recipe.inputs) removeResource(input.resourceId, input.quantity);
+    }
+
+    const successChance = craftingSystem.getSuccessChance(recipe);
+    const succeeded = Math.random() < successChance;
+
+    if (!succeeded) {
+      // Fehlschlag: Materialien weg, kein Output, kleine XP-Gutschrift (Lernen durch Scheitern)
+      setFailMessage(recipe.name);
+      if (recipe.grantsSkill) {
+        usePlayerStore.getState().gainSkillXp(recipe.grantsSkill.skill, Math.ceil(recipe.grantsSkill.xp * 0.3));
+      }
+      // Feuerstein absplittern: Chance auf Schnittwunde bei Fehlschlag
+      if (recipe.id === 'knap_flint' && Math.random() < CUT_ON_KNAP_FAIL) {
+        usePlayerStore.getState().updateStats({ woundedUntil: Date.now() + WOUND_DURATION });
+        setFailMessage(`${recipe.name} – Schnittwunde! 🩹`);
+      }
+      setCraftingId(null);
+      setProgress(0);
+      craftStartRef.current = null;
+      return;
     }
 
     if (STRUCTURE_IDS.has(recipeId)) {
@@ -138,7 +168,9 @@ export default function CraftingModal({ onClose }: { onClose: () => void }) {
       if (constructionDays) {
         useWorldStore.getState().placeConstructionSite(recipeId, x, y, constructionDays);
       } else {
-        useWorldStore.getState().placeStructure(recipeId, x, y);
+        // Some recipes have a different structure type than their recipe id
+        const structureType = recipe.outputs[0]?.resourceId ?? recipeId;
+        useWorldStore.getState().placeStructure(structureType, x, y);
       }
       useGameStore.getState().addScore(200);
     } else {
@@ -151,6 +183,9 @@ export default function CraftingModal({ onClose }: { onClose: () => void }) {
       useGameStore.getState().addScore(100);
     }
 
+    craftingSystem.awardSkillXp(recipe);
+    craftingSystem.grantKnowledge(recipe);
+    craftingSystem.damageToolOnCraft(recipe);
     setCraftingId(null);
     setProgress(0);
     craftStartRef.current = null;
@@ -162,8 +197,15 @@ export default function CraftingModal({ onClose }: { onClose: () => void }) {
     return () => {
       window.removeEventListener('keydown', onKey);
       if (intervalRef.current) clearInterval(intervalRef.current);
+      if (failTimerRef.current) clearTimeout(failTimerRef.current);
     };
   }, [onClose]);
+
+  useEffect(() => {
+    if (!failMessage) return;
+    if (failTimerRef.current) clearTimeout(failTimerRef.current);
+    failTimerRef.current = window.setTimeout(() => setFailMessage(null), 2500);
+  }, [failMessage]);
 
   const activeName = craftingId ? RECIPES.find(r => r.id === craftingId)?.name : null;
 
@@ -181,7 +223,7 @@ export default function CraftingModal({ onClose }: { onClose: () => void }) {
           <div>
             <h2 className="text-xl font-bold text-white">Crafting Buch</h2>
             <p className="text-slate-400 text-xs mt-0.5">
-              {RECIPES.filter(r => craftingSystem.isDiscovered(r, inventory)).length} / {RECIPES.length} Rezepte entdeckt
+              {RECIPES.filter(r => !STRUCTURE_IDS.has(r.id) && craftingSystem.isDiscovered(r, inventory)).length} Rezepte entdeckt
             </p>
           </div>
           <button onClick={onClose}
@@ -189,6 +231,17 @@ export default function CraftingModal({ onClose }: { onClose: () => void }) {
             ✕
           </button>
         </div>
+
+        {/* ── Fehlschlag-Banner ──────────────────────────────────── */}
+        {failMessage && (
+          <div className="px-6 py-2.5 border-b border-red-800 bg-red-950/60 flex-shrink-0 flex items-center gap-2">
+            <span className="text-lg">💥</span>
+            <div>
+              <span className="text-red-300 font-semibold text-sm">Fehlschlag: {failMessage}</span>
+              <span className="text-red-400/70 text-xs ml-2">Materialien verloren – versuche es erneut</span>
+            </div>
+          </div>
+        )}
 
         {/* ── Active craft progress ───────────────────────────────── */}
         {craftingId && activeName && (
@@ -213,7 +266,8 @@ export default function CraftingModal({ onClose }: { onClose: () => void }) {
           <div className="w-36 border-r border-slate-700 p-3 space-y-1 flex-shrink-0 overflow-y-auto">
             {CATEGORY_DEFS.map(cat => {
               const count = (cat.key === 'all' ? RECIPES : RECIPES.filter(r => r.category === cat.key))
-                .filter(r => craftingSystem.isDiscovered(r, inventory)).length;
+                .filter(r => !STRUCTURE_IDS.has(r.id) && craftingSystem.isDiscovered(r, inventory)).length;
+
               return (
                 <button key={cat.key} onClick={() => setActiveCategory(cat.key)}
                   className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors flex items-center gap-2 ${
@@ -231,23 +285,26 @@ export default function CraftingModal({ onClose }: { onClose: () => void }) {
 
           {/* Recipe grid */}
           <div className="flex-1 overflow-y-auto p-5">
-            {tiers.map(tier => (
-              <div key={tier} className="mb-8">
-                <TierHeader tier={tier} />
-                <div className="grid grid-cols-2 gap-3 mt-3">
-                  {filtered.filter(r => r.tier === tier).map(recipe => (
-                    <RecipeCard
-                      key={recipe.id}
-                      recipe={recipe}
-                      inventory={inventory}
-                      craftingId={craftingId}
-                      progress={progress}
-                      onCraft={startCraft}
-                    />
-                  ))}
-                </div>
+            {discovered.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-48 text-center">
+                <div className="text-4xl mb-3 opacity-30">🌿</div>
+                <div className="text-slate-400 text-sm font-semibold">Noch keine Rezepte entdeckt</div>
+                <div className="text-slate-600 text-xs mt-1">Sammle Materialien um Rezepte freizuschalten</div>
               </div>
-            ))}
+            ) : (
+              <div className="grid grid-cols-2 gap-3">
+                {discovered.map(recipe => (
+                  <RecipeCard
+                    key={recipe.id}
+                    recipe={recipe}
+                    inventory={inventory}
+                    craftingId={craftingId}
+                    progress={progress}
+                    onCraft={startCraft}
+                  />
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
@@ -255,23 +312,9 @@ export default function CraftingModal({ onClose }: { onClose: () => void }) {
         <div className="px-6 py-2 border-t border-slate-700 flex-shrink-0 text-xs text-slate-500 flex gap-4">
           <span>Leertaste → sammeln</span>
           <span>C / Esc → schließen</span>
-          <span className="ml-auto text-slate-600">Neue Rezepte werden durch Sammeln entdeckt</span>
+          <span className="ml-auto text-slate-600">Rezepte erscheinen beim Entdecken von Materialien</span>
         </div>
       </div>
-    </div>
-  );
-}
-
-// ── TierHeader ────────────────────────────────────────────────────
-
-function TierHeader({ tier }: { tier: number }) {
-  const t = TIER_LABELS[tier] ?? { label: `Tier ${tier}`, bg: 'bg-slate-700', text: 'text-slate-300' };
-  return (
-    <div className="flex items-center gap-3">
-      <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${t.bg} ${t.text}`}>
-        Tier {tier}  –  {t.label}
-      </span>
-      <div className="flex-1 h-px bg-slate-700" />
     </div>
   );
 }
@@ -285,30 +328,18 @@ function RecipeCard({ recipe, inventory, craftingId, progress, onCraft }: {
   progress: number;
   onCraft: (id: string) => void;
 }) {
-  const discovered  = craftingSystem.isDiscovered(recipe, inventory);
-  const hasMats     = craftingSystem.canCraft(recipe.id, inventory);
-  const hasTool     = craftingSystem.hasRequiredTool(recipe, inventory);
-  const isActive    = craftingId === recipe.id;
+  const hasMats      = craftingSystem.canCraft(recipe.id, inventory);
+  const hasTool      = craftingSystem.hasRequiredTool(recipe, inventory);
+  const hasSkill     = craftingSystem.hasRequiredSkill(recipe);
+  const hasKnowledge = craftingSystem.hasRequiredKnowledge(recipe);
+  const knowledge    = usePlayerStore(s => s.knowledge);
+  const isActive     = craftingId === recipe.id;
   const busyCrafting = !!craftingId && !isActive;
-
-  if (!discovered) {
-    return (
-      <div className="border border-slate-700 rounded-xl p-4 bg-slate-800/40">
-        <div className="flex items-center gap-2 mb-2">
-          <span className="text-2xl opacity-30">❓</span>
-          <div>
-            <div className="text-slate-500 font-bold text-sm">Unbekanntes Rezept</div>
-            <div className="text-slate-600 text-xs">Sammle Materialien um es zu entdecken</div>
-          </div>
-        </div>
-        <div className="text-slate-700 text-xs italic">Tier {recipe.tier} · {recipe.category}</div>
-      </div>
-    );
-  }
+  const effectiveTime = craftingSystem.getEffectiveCraftTime(recipe);
 
   const borderClass = isActive
     ? 'border-amber-500 bg-amber-900/20'
-    : hasMats && hasTool
+    : hasMats && hasTool && hasSkill && hasKnowledge
       ? 'border-green-700 bg-slate-700/60'
       : 'border-slate-600 bg-slate-700/40';
 
@@ -356,28 +387,75 @@ function RecipeCard({ recipe, inventory, craftingId, progress, onCraft }: {
         </div>
       )}
 
+      {/* Skill requirement */}
+      {recipe.requiresSkill && (
+        <div className={`text-xs mb-2 flex items-center gap-1 ${hasSkill ? 'text-slate-500' : 'text-purple-400'}`}>
+          <span>{hasSkill ? '✓' : '📚'}</span>
+          <span>
+            {SKILL_LABELS[recipe.requiresSkill.skill]} Stufe {recipe.requiresSkill.level}
+            {!hasSkill && ' erforderlich'}
+          </span>
+        </div>
+      )}
+
+      {/* Knowledge requirements */}
+      {recipe.requiredKnowledge?.map(flag => {
+        const known = knowledge[flag];
+        return (
+          <div key={flag} className={`text-xs mb-2 flex items-center gap-1 ${known ? 'text-slate-500' : 'text-cyan-400'}`}>
+            <span>{known ? '✓' : '💡'}</span>
+            <span>{KNOWLEDGE_LABELS[flag]}{!known && ' (noch nicht verstanden)'}</span>
+          </div>
+        );
+      })}
+
+      {/* Success chance for skill-based recipes */}
+      {recipe.skillBasedSuccess && (
+        <div className="text-xs mb-2">
+          {(() => {
+            const chance = craftingSystem.getSuccessChance(recipe);
+            const pct = Math.round(chance * 100);
+            const color = pct >= 75 ? 'text-green-400' : pct >= 50 ? 'text-yellow-400' : 'text-red-400';
+            return (
+              <span className={`flex items-center gap-1 ${color}`}>
+                <span>🎲</span>
+                <span>Erfolgswahrscheinlichkeit: <strong>{pct}%</strong></span>
+                <span className="text-slate-600 ml-1">(bei Fehlschlag: Materialien verloren)</span>
+              </span>
+            );
+          })()}
+        </div>
+      )}
+
       {/* Outputs preview */}
       <div className="text-xs text-slate-500 mb-3">
         → {recipe.outputs.map(o => `${o.quantity}× ${ITEM_NAMES[o.resourceId] ?? o.resourceId}`).join(', ')}
-        <span className="ml-1 text-slate-600">({recipe.craftingTime / 1000}s)</span>
+        <span className="ml-1 text-slate-600">({(effectiveTime / 1000).toFixed(1)}s)</span>
+        {recipe.grantsSkill && (
+          <span className="ml-1 text-amber-600/70">· +{recipe.grantsSkill.xp} {SKILL_LABELS[recipe.grantsSkill.skill]}</span>
+        )}
       </div>
 
       {/* Button */}
       <button
         onClick={() => onCraft(recipe.id)}
-        disabled={!hasMats || !hasTool || busyCrafting}
+        disabled={!hasMats || !hasTool || !hasSkill || !hasKnowledge || busyCrafting}
         className={`w-full py-2 text-xs font-bold rounded-lg transition-colors ${
           isActive              ? 'bg-amber-700 text-amber-200 cursor-wait' :
+          !hasKnowledge         ? 'bg-slate-600 text-cyan-500 cursor-not-allowed' :
+          !hasSkill             ? 'bg-slate-600 text-purple-400 cursor-not-allowed' :
           !hasTool              ? 'bg-slate-600 text-orange-400 cursor-not-allowed' :
           !hasMats              ? 'bg-slate-600 text-slate-500 cursor-not-allowed' :
           busyCrafting          ? 'bg-slate-600 text-slate-500 cursor-not-allowed' :
                                   'bg-green-700 hover:bg-green-600 text-white'
         }`}
       >
-        {isActive     ? `Herstellung…  ${Math.round(progress)}%` :
-         !hasTool     ? 'Werkzeug fehlt' :
-         !hasMats     ? 'Materialien fehlen' :
-                        `Herstellen  (${recipe.craftingTime / 1000}s)`}
+        {isActive        ? `Herstellung…  ${Math.round(progress)}%` :
+         !hasKnowledge   ? `Erkenntnis fehlt` :
+         !hasSkill       ? `Skill fehlt: ${SKILL_LABELS[recipe.requiresSkill!.skill]} Stufe ${recipe.requiresSkill!.level}` :
+         !hasTool        ? 'Werkzeug fehlt' :
+         !hasMats        ? 'Materialien fehlen' :
+                           `Herstellen  (${(effectiveTime / 1000).toFixed(1)}s)`}
       </button>
     </div>
   );

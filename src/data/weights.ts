@@ -10,6 +10,8 @@ export const ITEM_WEIGHTS: Record<string, number> = {
   exotic_fruit:     0.2,
   vine:             0.2,
   flint:            0.3,
+  sharp_flint:      0.3,
+  hardened_stick:   0.3,
   herbal_remedy:    0.1,
   cooked_mushroom:  0.2,
   cooked_food:      0.2,
@@ -33,6 +35,14 @@ export const ITEM_WEIGHTS: Record<string, number> = {
   driftwood:        0.5,
   fishing_rod:      0.5,
 
+  shell_knife:      0.2,
+  obsidian:         1.0,
+  granite:          2.0,
+  // Medicine & first aid
+  bandage:          0.1,
+  fever_tea:        0.2,
+  antiparasitic:    0.2,
+
   // Medium – pebbles, planks, small tools
   pebbles:          0.5,
   plank:            0.8,
@@ -41,6 +51,18 @@ export const ITEM_WEIGHTS: Record<string, number> = {
   stone_pickaxe:    1.0,
   improved_axe:     1.2,
   improved_pickaxe: 1.3,
+
+  // Meat & animal byproducts
+  boar_meat:        0.6,
+  cooked_boar:      0.5,
+  bone:             0.4,
+  hide:             0.8,
+  fat:              0.3,
+
+  // Preserved food
+  smoked_meat:      0.4,
+  dried_fish:       0.2,
+  dried_fruit:      0.15,
 
   // Heavy – wood, stone, iron
   wood:             1.5,

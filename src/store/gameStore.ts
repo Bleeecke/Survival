@@ -10,7 +10,7 @@ interface GameStore {
   elapsedTime: number;
   score: number;
   showSleepMenu: boolean;
-  sleepQuality: 'cabin' | 'shelter' | 'outdoor';
+  sleepQuality: 'cabin' | 'shelter' | 'spot' | 'outdoor';
 
   // Gather interaction menu
   gatherMenuOpen: boolean;
@@ -74,7 +74,7 @@ interface GameStore {
   setDifficulty: (diff: Difficulty) => void;
   tickTime: (delta: number) => void;
   addScore: (points: number) => void;
-  setShowSleepMenu: (show: boolean, quality?: 'cabin' | 'shelter' | 'outdoor') => void;
+  setShowSleepMenu: (show: boolean, quality?: 'cabin' | 'shelter' | 'spot' | 'outdoor') => void;
   openGatherMenu: (resources: WorldResource[]) => void;
   closeGatherMenu: () => void;
   setPendingGather: (id: string | null, action?: string | null) => void;
@@ -91,7 +91,7 @@ export const useGameStore = create<GameStore>()(
       elapsedTime: 0,
       score: 0,
       showSleepMenu: false,
-      sleepQuality: 'outdoor' as 'cabin' | 'shelter' | 'outdoor',
+      sleepQuality: 'outdoor' as 'cabin' | 'shelter' | 'spot' | 'outdoor',
       gatherMenuOpen: false,
       nearbyResources: [],
       pendingGatherId: null,
@@ -158,7 +158,7 @@ export const useGameStore = create<GameStore>()(
           elapsedTime: 225_000,
           score: 0,
           showSleepMenu: false,
-          sleepQuality: 'outdoor' as 'cabin' | 'shelter' | 'outdoor',
+          sleepQuality: 'outdoor' as 'cabin' | 'shelter' | 'spot' | 'outdoor',
           gatherMenuOpen: false,
           nearbyResources: [],
           pendingGatherId: null,

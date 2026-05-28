@@ -1,8 +1,10 @@
 import { usePlayerStore } from '../../store/playerStore';
 import { useWorldStore } from '../../store/worldStore';
+import { useGameStore } from '../../store/gameStore';
 import type { PlayerStats } from '../../types';
 import { calcWeight, MAX_CARRY_KG } from '../../data/weights';
 import { getDefaultSlot } from './CharacterPanel';
+import { FOOD_SPOIL_TIME } from '../../data/foodDecay';
 
 // Items that can be used from the inventory
 export const USABLE: Record<string, {
@@ -82,8 +84,10 @@ export const USABLE: Record<string, {
     effect: s => ({
       health: Math.min(100, s.health + 35),
       fatigue: Math.max(0, (s.fatigue ?? 0) - 10),
+      poisonedUntil: 0,
+      woundedUntil: 0,
     }),
-    tooltip: 'Gesundheit +35, Müdigkeit -10',
+    tooltip: 'Gesundheit +35, Müdigkeit -10, heilt Vergiftung & Wunde',
   },
   turtle_meat: {
     label: '⚠️ Roh essen',
@@ -91,8 +95,9 @@ export const USABLE: Record<string, {
     effect: s => ({
       hunger: Math.max(0, s.hunger - 30),
       poisonedUntil: Date.now() + 3 * 60_000,
+      parasitesUntil: Math.random() < 0.35 ? Date.now() + 20 * 60_000 : s.parasitesUntil,
     }),
-    tooltip: '⚠️ Hunger -30 aber Vergiftung für 3 Min!',
+    tooltip: '⚠️ Hunger -30, Vergiftung + 35% Parasitenrisiko!',
   },
   cooked_turtle: {
     label: 'Essen',
@@ -128,8 +133,38 @@ export const USABLE: Record<string, {
     effect: s => ({
       hunger: Math.max(0, s.hunger - 30),
       poisonedUntil: Date.now() + 3 * 60_000,
+      parasitesUntil: Math.random() < 0.35 ? Date.now() + 20 * 60_000 : s.parasitesUntil,
     }),
-    tooltip: '⚠️ Hunger -30 aber Vergiftung für 3 Min!',
+    tooltip: '⚠️ Hunger -30, Vergiftung + 35% Parasitenrisiko!',
+  },
+  bandage: {
+    label: '🩹 Anlegen',
+    color: 'bg-rose-700 hover:bg-rose-600',
+    effect: s => ({
+      bleedingUntil: 0,
+      woundedUntil:  0,
+      health: Math.min(100, s.health + 5),
+    }),
+    tooltip: 'Stoppt Blutung & heilt Wunde',
+  },
+  fever_tea: {
+    label: 'Trinken',
+    color: 'bg-teal-700 hover:bg-teal-600',
+    effect: s => ({
+      health: Math.min(100, s.health + 10),
+      coldUntil:  0,
+      feverUntil: 0,
+    }),
+    tooltip: 'Heilt Erkältung & Fieber',
+  },
+  antiparasitic: {
+    label: 'Einnehmen',
+    color: 'bg-purple-700 hover:bg-purple-600',
+    effect: s => ({
+      parasitesUntil: 0,
+      health: Math.min(100, s.health + 5),
+    }),
+    tooltip: 'Heilt Parasiten',
   },
   cooked_boar: {
     label: 'Essen',
@@ -140,6 +175,35 @@ export const USABLE: Record<string, {
       stamina: Math.min(100, s.stamina + 20),
     }),
     tooltip: 'Hunger -55, Gesundheit +15, Ausdauer +20',
+  },
+  smoked_meat: {
+    label: 'Essen',
+    color: 'bg-amber-800 hover:bg-amber-700',
+    effect: s => ({
+      hunger: Math.max(0, s.hunger - 45),
+      health: Math.min(100, s.health + 10),
+      stamina: Math.min(100, s.stamina + 15),
+    }),
+    tooltip: 'Hunger -45, Gesundheit +10, Ausdauer +15',
+  },
+  dried_fish: {
+    label: 'Essen',
+    color: 'bg-blue-700 hover:bg-blue-600',
+    effect: s => ({
+      hunger: Math.max(0, s.hunger - 35),
+      health: Math.min(100, s.health + 8),
+      stamina: Math.min(100, s.stamina + 10),
+    }),
+    tooltip: 'Hunger -35, Gesundheit +8, Ausdauer +10',
+  },
+  dried_fruit: {
+    label: 'Essen',
+    color: 'bg-orange-700 hover:bg-orange-600',
+    effect: s => ({
+      hunger: Math.max(0, s.hunger - 25),
+      health: Math.min(100, s.health + 5),
+    }),
+    tooltip: 'Hunger -25, Gesundheit +5',
   },
 };
 
@@ -163,6 +227,11 @@ const ITEM_NAMES: Record<string, string> = {
   crab_meat: 'Krabbenfleisch', cooked_crab: 'Gek. Krabbe',
   boar_meat: 'Wildschweinfleisch', cooked_boar: 'Gek. Wildschwein',
   cooked_food: 'Gekochtes Essen', water_container: 'Wassercontainer',
+  fever_tea: 'Fiebertee', antiparasitic: 'Parasitenmedizin', bandage: 'Verband',
+  bone: 'Knochen', hide: 'Tierhaut', fat: 'Tierfett',
+  obsidian: 'Obsidian', granite: 'Granit',
+  shell_knife: 'Muschelklinge', sharp_flint: 'Gesp. Feuerstein', hardened_stick: 'Gehärt. Ast',
+  smoked_meat: 'Geräuch. Fleisch', dried_fish: 'Getr. Fisch', dried_fruit: 'Getr. Frucht',
   cooked_fish_meal: 'Gebratener Fisch', herbal_remedy: 'Kräutermittel',
   cooked_mushroom: 'Geb. Pilze', fish: 'Fisch',
   // Structures
@@ -186,7 +255,10 @@ const PASSIVE_DESC: Record<string, string> = {
   torch:            'Erhöht Sichtweite in der Nacht',
   storage_box:      'Struktur – lagert bis 150 kg; mit F öffnen',
   // Materials
-  turtle_shell: 'Material – für späteres Crafting',
+  turtle_shell: 'Material – Wasserbehälter & Crafting',
+  bone: 'Material – Werkzeuge & Nadeln',
+  hide: 'Material – Kleidung & Leder',
+  fat: 'Material – Fackel & Schmiermittel',
   wood: 'Material', stone: 'Material', sticks: 'Material', pebbles: 'Material',
   rope: 'Material', plank: 'Material', iron_ore: 'Erz',
   iron_bar: 'Material', flint: 'Material', driftwood: 'Material',
@@ -202,6 +274,7 @@ export default function InventoryPanel() {
   const removeResource = usePlayerStore(s => s.removeResource);
   const equip          = usePlayerStore(s => s.equip);
 
+  const elapsedTime = useGameStore(s => s.elapsedTime);
   const dropItem   = useWorldStore(s => s.dropItem);
   const playerX    = usePlayerStore(s => s.player.x);
   const playerY    = usePlayerStore(s => s.player.y);
@@ -284,6 +357,25 @@ export default function InventoryPanel() {
                   {passive && !usable && (
                     <div className="text-slate-500 text-xs">{passive}</div>
                   )}
+                  {/* Freshness bar for perishable items */}
+                  {item.addedAt !== undefined && (() => {
+                    const spoilTime = FOOD_SPOIL_TIME[item.resourceId];
+                    if (!spoilTime) return null;
+                    const age = elapsedTime - item.addedAt;
+                    const freshPct = Math.max(0, 1 - age / spoilTime);
+                    const color = freshPct > 0.6 ? 'bg-green-500' : freshPct > 0.25 ? 'bg-yellow-500' : 'bg-red-500';
+                    const label = freshPct > 0.6 ? 'Frisch' : freshPct > 0.25 ? 'Alt' : 'Fast verdorben';
+                    return (
+                      <div className="flex items-center gap-1 mt-0.5">
+                        <div className="flex-1 bg-slate-600 rounded-full overflow-hidden" style={{ height: '3px' }}>
+                          <div className={`h-full rounded-full ${color} transition-all duration-500`} style={{ width: `${freshPct * 100}%` }} />
+                        </div>
+                        <span className={`text-[9px] leading-none ${freshPct > 0.6 ? 'text-green-400' : freshPct > 0.25 ? 'text-yellow-400' : 'text-red-400 animate-pulse'}`}>
+                          {label}
+                        </span>
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 {/* Quantity */}
@@ -379,6 +471,11 @@ const ITEM_ICON: Record<string, string> = {
   cooked_fish_meal: '🍽️',
   cooked_mushroom:  '🥘',
   herbal_remedy:    '🩹',
+  smoked_meat:      '🥩',
+  dried_fish:       '🐟',
+  dried_fruit:      '🍊',
+  obsidian:         '⬛',
+  granite:          '🪨',
   // Werkzeuge
   flint_knife:      '🔪',
   stone_axe:        '🪓',

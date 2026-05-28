@@ -30,7 +30,9 @@ export default function CampfireModal() {
   const [done, setDone]         = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const sticks = inventory.find(i => i.resourceId === 'sticks')?.quantity ?? 0;
+  const sticks    = inventory.find(i => i.resourceId === 'sticks')?.quantity    ?? 0;
+  const driftwood = inventory.find(i => i.resourceId === 'driftwood')?.quantity ?? 0;
+  const wood      = inventory.find(i => i.resourceId === 'wood')?.quantity      ?? 0;
   const cookDef = cookSlot ? COOKABLE[cookSlot] : null;
 
   // Flame flicker animation
@@ -40,10 +42,11 @@ export default function CampfireModal() {
     return () => clearInterval(id);
   }, []);
 
-  function handleAddFuel() {
-    if (!campfire || sticks < 1) return;
-    removeResource('sticks', 1);
-    updateStructure(campfire.id, { fuel: fuel + 1 });
+  function handleAddFuel(type: 'sticks' | 'driftwood' | 'wood') {
+    if (!campfire) return;
+    const fuelAdded = type === 'sticks' ? 1 : type === 'driftwood' ? 2 : 3;
+    removeResource(type, 1);
+    updateStructure(campfire.id, { fuel: fuel + fuelAdded });
   }
 
   function handlePlaceCookable(resourceId: string) {
@@ -155,19 +158,21 @@ export default function CampfireModal() {
               <div className="text-slate-300 text-xs">{fuel} {fuel === 1 ? 'Tag' : 'Tage'}</div>
             </div>
 
-            {/* Add fuel button */}
-            <button
-              onClick={handleAddFuel}
-              disabled={sticks < 1}
-              className={`w-full py-2 rounded-lg text-sm font-semibold transition-colors ${
-                sticks > 0
-                  ? 'bg-amber-700 hover:bg-amber-600 text-white'
-                  : 'bg-slate-700 text-slate-500 cursor-not-allowed'
-              }`}
-            >
-              🪵 Ast nachlegen
-              {sticks > 0 && <span className="text-amber-300 ml-1 text-xs">({sticks})</span>}
-            </button>
+            {/* Add fuel buttons */}
+            <div className="flex flex-col gap-1 w-full">
+              <button onClick={() => handleAddFuel('sticks')} disabled={sticks < 1}
+                className={`w-full py-1.5 rounded-lg text-xs font-semibold transition-colors ${sticks > 0 ? 'bg-amber-700 hover:bg-amber-600 text-white' : 'bg-slate-700 text-slate-500 cursor-not-allowed'}`}>
+                🪵 Ast +1 {sticks > 0 && <span className="text-amber-300">({sticks})</span>}
+              </button>
+              <button onClick={() => handleAddFuel('driftwood')} disabled={driftwood < 1}
+                className={`w-full py-1.5 rounded-lg text-xs font-semibold transition-colors ${driftwood > 0 ? 'bg-stone-600 hover:bg-stone-500 text-white' : 'bg-slate-700 text-slate-500 cursor-not-allowed'}`}>
+                🪵 Treibholz +2 {driftwood > 0 && <span className="text-stone-300">({driftwood})</span>}
+              </button>
+              <button onClick={() => handleAddFuel('wood')} disabled={wood < 1}
+                className={`w-full py-1.5 rounded-lg text-xs font-semibold transition-colors ${wood > 0 ? 'bg-amber-900 hover:bg-amber-800 text-white' : 'bg-slate-700 text-slate-500 cursor-not-allowed'}`}>
+                🪵 Holz +3 {wood > 0 && <span className="text-amber-200">({wood})</span>}
+              </button>
+            </div>
           </div>
 
           {/* Divider */}
@@ -179,7 +184,7 @@ export default function CampfireModal() {
 
             {fuel < 1 && (
               <div className="text-orange-400 text-xs bg-orange-950 rounded-lg px-3 py-2">
-                Kein Brennstoff — lege zuerst Äste nach
+                Kein Brennstoff — lege Äste, Treibholz oder Holz nach
               </div>
             )}
 

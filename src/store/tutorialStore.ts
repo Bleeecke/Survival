@@ -27,16 +27,16 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
   {
     id: 3,
     icon: '🪨',
-    title: 'Feuersteine sammeln (×2)',
-    description: 'Du brauchst Feuersteine für ein Feuersteinmesser – dein erstes Werkzeug.',
-    hint: 'Feuersteine (glänzende Steine) findest du hauptsächlich am Strand zwischen Sand und Wasser.',
+    title: 'Feuersteine & Kieselsteine sammeln',
+    description: 'Du brauchst Feuersteine und Kieselsteine, um scharfe Steinklingen herzustellen.',
+    hint: 'Feuersteine (glänzende Steine) und Kieselsteine findest du am Strand. Sammle je 2 davon.',
   },
   {
     id: 4,
     icon: '🔪',
     title: 'Feuersteinmesser herstellen',
-    description: 'Öffne das Crafting-Menü und stelle ein Feuersteinmesser her.',
-    hint: 'Drücke C für das Crafting-Menü → Werkzeuge → Feuersteinmesser (2× Feuerstein + 1× Ast).',
+    description: 'Ein Messer entsteht in 3 Schritten: Klingen absplittern → Ast härten → Messer binden.',
+    hint: '① Crafting (C) → Feuerstein absplittern (Feuerstein + Kiesel) → scharfer Stein.\n② Lagerfeuer bauen, dann Ast im Feuer härten.\n③ Feuersteinmesser binden (scharfer Stein + gehärteter Ast + Pflanzenfaser).',
   },
   {
     id: 5,

@@ -16,26 +16,32 @@ const ITEM_ICON: Record<string, string> = {
   vine: '🌿', iron_ore: '🟤', spring: '💧', puddle: '💧', palm_tree: '🌴',
 };
 
-// Tools needed per resource — shown as hint when missing
+// Tools that HARD-BLOCK gathering (button disabled without them)
 const TOOL_REQUIRED: Record<string, string> = {
   wood:     'Axt',
   stone:    'Spitzhacke',
   iron_ore: 'Spitzhacke',
   fiber:    'Messer',
   vine:     'Messer',
+  fish:     'Angel oder Speer',
 };
 
 function hasToolFor(type: string, _inv: ReturnType<typeof usePlayerStore.getState>['player']['inventory'], eq: ReturnType<typeof usePlayerStore.getState>['player']['equipment']): boolean {
   const inHand = (id: string) => eq?.leftHand?.resourceId === id || eq?.rightHand?.resourceId === id;
   const anyAxe   = inHand('iron_axe')   || inHand('improved_axe')   || inHand('stone_axe');
   const anyPick  = inHand('iron_pickaxe') || inHand('improved_pickaxe') || inHand('stone_pickaxe');
-  const anyKnife = inHand('flint_knife') || anyAxe;
+  const anyKnife = inHand('flint_knife') || inHand('shell_knife') || anyAxe;
   switch (type) {
     case 'wood':     return anyAxe;
     case 'stone':    return anyPick;
     case 'iron_ore': return anyPick;
     case 'fiber':    return anyKnife;
     case 'vine':     return anyKnife;
+    case 'fish': {
+      const hasRod   = inHand('fishing_rod');
+      const hasSpear = inHand('stone_spear');
+      return hasRod || hasSpear;
+    }
     default:         return true;
   }
 }
@@ -78,8 +84,9 @@ export default function GatherMenu() {
             const hasAxeInInventory = inventory.items.some(i =>
               ['stone_axe','improved_axe','iron_axe'].includes(i.resourceId) && i.quantity > 0
             );
-            const showSticksOption = res.type === 'wood' && hasAxe;
+            const showSticksOption  = res.type === 'wood' && hasAxe;
             const showCoconutOption = res.type === 'palm_tree' && (hasAxe || hasAxeInInventory);
+            const showChopPalmOption = res.type === 'palm_tree' && hasAxe;
 
             return (
               <div
@@ -105,7 +112,7 @@ export default function GatherMenu() {
                         : 'bg-slate-700 text-slate-500 cursor-not-allowed'
                     }`}
                   >
-                    {res.type === 'wood' ? 'Holz' : 'Sammeln'}
+                    {res.type === 'wood' ? 'Holz' : res.type === 'palm_tree' ? 'Blätter' : 'Sammeln'}
                   </button>
                   {showSticksOption && (
                     <button
@@ -121,6 +128,14 @@ export default function GatherMenu() {
                       className="px-3 py-1 text-xs font-bold rounded-lg bg-yellow-800 hover:bg-yellow-700 text-white transition-colors"
                     >
                       Kokosnuss 🥥
+                    </button>
+                  )}
+                  {showChopPalmOption && (
+                    <button
+                      onClick={() => setPendingGather(res.id, 'chop')}
+                      className="px-3 py-1 text-xs font-bold rounded-lg bg-stone-700 hover:bg-stone-600 text-white transition-colors"
+                    >
+                      Palme 🪓
                     </button>
                   )}
                 </div>

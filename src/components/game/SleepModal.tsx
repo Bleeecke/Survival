@@ -5,19 +5,21 @@ import { DAY_DURATION_MS } from '../../data/worldConfig';
 
 const HOUR_MS = DAY_DURATION_MS / 24;
 
-type Quality = 'cabin' | 'shelter' | 'outdoor';
+type Quality = 'cabin' | 'shelter' | 'spot' | 'outdoor';
 type FadeState = 'idle' | 'fading-out' | 'black' | 'fading-in';
 
 const DURATIONS = [2, 4, 6, 8, 10] as const;
 
 const QUALITY_LABELS: Record<Quality, string> = {
-  outdoor: '🌿 Draußen',
+  outdoor: '🌿 Blanker Boden',
+  spot:    '🍃 Schlafplatz',
   shelter: '⛺ Palmendach',
   cabin:   '🏠 Unterkunft',
 };
 
 const QUALITY_COLORS: Record<Quality, string> = {
   outdoor: 'text-orange-400',
+  spot:    'text-lime-400',
   shelter: 'text-sky-400',
   cabin:   'text-emerald-400',
 };
@@ -29,6 +31,9 @@ function calcEffects(hours: number, quality: Quality, currentFatigue: number) {
   if (quality === 'outdoor') {
     newFatigue   = Math.max(10, currentFatigue - hours * 11);
     healthDelta  = -Math.min(10, hours);
+  } else if (quality === 'spot') {
+    newFatigue  = Math.max(8, currentFatigue - hours * 11.5);
+    healthDelta = 0;
   } else if (quality === 'shelter') {
     newFatigue  = Math.max(5, currentFatigue - Math.min(hours, 8) * 12);
     healthDelta = 0;

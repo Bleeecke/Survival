@@ -2,9 +2,20 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { Player, PlayerStats, Direction, Equipment, EquipSlot } from '../types';
 import { ITEM_WEIGHTS, MAX_CARRY_KG, calcWeight } from '../data/weights';
+import { DEFAULT_SKILLS, type SkillId } from '../types/skills';
+import { TOOL_MAX_DURABILITY } from '../data/toolDurability';
+import { PERISHABLE_IDS } from '../data/foodDecay';
+import { DEFAULT_KNOWLEDGE, MATERIAL_KNOWLEDGE_GRANTS, type KnowledgeFlag, KNOWLEDGE_INSIGHTS } from '../data/knowledge';
 
 interface PlayerStore {
   player: Player;
+  knownMaterials: string[];          // every resourceId ever picked up
+  learnMaterial: (id: string) => void;
+  knowledge: Record<KnowledgeFlag, boolean>;
+  learnKnowledge: (flag: KnowledgeFlag) => void;
+  craftCounts: Record<string, number>;  // recipeId → times crafted
+  recordCraft: (recipeId: string) => void;
+  getCraftXpMultiplier: (recipeId: string) => number;
 
   initPlayer: (name: string) => void;
   movePlayer: (x: number, y: number) => void;
@@ -17,6 +28,8 @@ interface PlayerStore {
   equip: (slot: EquipSlot, resourceId: string) => boolean;
   unequip: (slot: EquipSlot) => void;
   useBeltSlot: (index: 0 | 1 | 2) => string | null;
+  gainSkillXp: (skillId: SkillId, xp: number) => void;
+  damageTool: (resourceId: string, damage: number) => void;
   reset: () => void;
 }
 
@@ -44,12 +57,42 @@ const defaultPlayer: Player = {
     maxSlots: 20,
   },
   equipment: { ...defaultEquipment, belt: [null, null, null] },
+  skills: { ...DEFAULT_SKILLS },
 };
 
 export const usePlayerStore = create<PlayerStore>()(
   persist(
     (set, get) => ({
       player: defaultPlayer,
+      knownMaterials: [],
+      knowledge: { ...DEFAULT_KNOWLEDGE },
+      craftCounts: {},
+
+      learnMaterial: (id: string) => {
+        if (get().knownMaterials.includes(id)) return;
+        set(s => ({ knownMaterials: [...s.knownMaterials, id] }));
+        // Auto-grant knowledge from material pickup
+        const flag = MATERIAL_KNOWLEDGE_GRANTS[id];
+        if (flag) get().learnKnowledge(flag);
+      },
+
+      recordCraft: (recipeId: string) => {
+        set(s => ({ craftCounts: { ...s.craftCounts, [recipeId]: (s.craftCounts[recipeId] ?? 0) + 1 } }));
+      },
+
+      getCraftXpMultiplier: (recipeId: string) => {
+        const count = get().craftCounts[recipeId] ?? 0;
+        // 1st craft = 100%, then diminishes: 1/√n, floor at 10%
+        return Math.max(0.1, 1 / Math.sqrt(count + 1));
+      },
+
+      learnKnowledge: (flag: KnowledgeFlag) => {
+        if (get().knowledge[flag]) return;
+        set(s => ({ knowledge: { ...s.knowledge, [flag]: true } }));
+        import('../store/notificationStore').then(({ useNotificationStore }) => {
+          useNotificationStore.getState().addNotification(KNOWLEDGE_INSIGHTS[flag], 'levelup');
+        });
+      },
 
       initPlayer: (name: string) =>
         set((state) => ({
@@ -79,6 +122,7 @@ export const usePlayerStore = create<PlayerStore>()(
         })),
 
       addToInventory: (resourceId: string, quantity: number) => {
+        get().learnMaterial(resourceId);
         const state = get();
         const { items, maxSlots } = state.player.inventory;
 
@@ -93,11 +137,20 @@ export const usePlayerStore = create<PlayerStore>()(
           set((s) => ({ player: { ...s.player } }));
           return true;
         } else if (items.length < maxSlots) {
+          // Lazy-import gameStore to avoid circular dependency
+          const gameElapsed = (() => {
+            try {
+              // eslint-disable-next-line @typescript-eslint/no-var-requires
+              const { useGameStore } = require('../store/gameStore');
+              return useGameStore.getState().elapsedTime as number;
+            } catch { return 0; }
+          })();
           items.push({
             id: `${resourceId}-${Date.now()}`,
             resourceId,
             quantity,
             slot: items.length,
+            addedAt: PERISHABLE_IDS.has(resourceId) ? gameElapsed : undefined,
           });
           set((s) => ({ player: { ...s.player } }));
           return true;
@@ -166,12 +219,16 @@ export const usePlayerStore = create<PlayerStore>()(
             // Return to inventory handled outside — just clear for now
           }
 
-          // Set new slot
+          // Set new slot (include initial durability for tools)
+          const initialDurability = TOOL_MAX_DURABILITY[resourceId];
+          const newItem = initialDurability !== undefined
+            ? { resourceId, durability: initialDurability }
+            : { resourceId };
           if (slot.startsWith('belt')) {
             const idx = parseInt(slot.replace('belt', '')) as 0|1|2;
-            eq.belt[idx] = { resourceId };
+            eq.belt[idx] = newItem;
           } else {
-            (eq as any)[slot] = { resourceId };
+            (eq as any)[slot] = newItem;
           }
 
           // Remove 1 from inventory
@@ -236,10 +293,77 @@ export const usePlayerStore = create<PlayerStore>()(
         return item.resourceId;
       },
 
-      reset: () => set({ player: { ...defaultPlayer, equipment: { ...defaultEquipment, belt: [null, null, null] } } }),
+      gainSkillXp: (skillId, xp) => {
+        set((state) => {
+          const MAX_LEVEL = 10;
+          const skills = { ...state.player.skills } ?? { ...DEFAULT_SKILLS };
+          const skill = { ...skills[skillId] };
+          skill.xp += xp;
+          while (skill.level < MAX_LEVEL && skill.xp >= skill.level * 20) {
+            skill.xp -= skill.level * 20;
+            skill.level += 1;
+            // Lazy import to avoid circular dependency
+            import('../store/notificationStore').then(({ useNotificationStore }) => {
+              useNotificationStore.getState().addNotification(
+                `${skillId}:levelup:${skill.level}`,
+                'levelup'
+              );
+            });
+          }
+          if (skill.level >= MAX_LEVEL) skill.xp = Math.min(skill.xp, MAX_LEVEL * 20);
+          skills[skillId] = skill;
+          return { player: { ...state.player, skills } };
+        });
+      },
+
+      damageTool: (resourceId, damage) => {
+        set((state) => {
+          const eq = { ...state.player.equipment, belt: [...state.player.equipment.belt] as Equipment['belt'] };
+          let broke = false;
+          let brokenName = resourceId;
+
+          for (const slot of ['leftHand', 'rightHand'] as const) {
+            const item = eq[slot];
+            if (!item || item.resourceId !== resourceId || item.durability === undefined) continue;
+            const newDur = item.durability - damage;
+            if (newDur <= 0) {
+              eq[slot] = null;
+              broke = true;
+              brokenName = resourceId;
+            } else {
+              eq[slot] = { ...item, durability: newDur };
+            }
+            break;
+          }
+
+          if (broke) {
+            import('../store/notificationStore').then(({ useNotificationStore }) => {
+              useNotificationStore.getState().addNotification(`${brokenName} ist zerbrochen! ⚒️`, 'levelup');
+            });
+          }
+
+          return { player: { ...state.player, equipment: eq } };
+        });
+      },
+
+      reset: () => set({ player: { ...defaultPlayer, equipment: { ...defaultEquipment, belt: [null, null, null] }, skills: { ...DEFAULT_SKILLS } }, knownMaterials: [], knowledge: { ...DEFAULT_KNOWLEDGE }, craftCounts: {} }),
     }),
     {
       name: 'survival-player-save',
+      onRehydrateStorage: () => (state) => {
+        if (state?.player && !state.player.skills) {
+          state.player.skills = { ...DEFAULT_SKILLS };
+        }
+        if (state && !state.knownMaterials) {
+          state.knownMaterials = state.player?.inventory?.items?.map(i => i.resourceId) ?? [];
+        }
+        if (state && !state.knowledge) {
+          state.knowledge = { ...DEFAULT_KNOWLEDGE };
+        }
+        if (state && !state.craftCounts) {
+          state.craftCounts = {};
+        }
+      },
     }
   )
 );

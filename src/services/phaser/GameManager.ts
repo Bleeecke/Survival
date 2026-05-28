@@ -6,9 +6,18 @@ import { useWorldStore } from '../../store/worldStore';
 import { WORLD_CONFIG, DAY_DURATION_MS } from '../../data/worldConfig';
 import { WorldGenerator } from './WorldGenerator';
 import { RECIPES } from '../../data/recipes';
+import { BUILD_DEFINITIONS } from '../../data/buildDefinitions';
+import type { KnowledgeFlag } from '../../data/knowledge';
+import { RAIN_KNOWLEDGE_GRANTS } from '../../data/knowledge';
 import { useTutorialStore } from '../../store/tutorialStore';
 import { craftingSystem } from '../game/CraftingSystem';
 import { FootstepAudio } from '../game/FootstepAudio';
+import { GATHER_SKILL_XP } from '../../types/skills';
+import { TOOL_DAMAGE_ON_GATHER, SPEAR_DAMAGE_PER_HIT } from '../../data/toolDurability';
+import { calcWeight, MAX_CARRY_KG } from '../../data/weights';
+import { FOOD_SPOIL_TIME, FOOD_ITEM_NAMES } from '../../data/foodDecay';
+import { DISEASE_DRAIN, COLD_EXPOSURE_THRESHOLD, FEVER_FROM_COLD_CHANCE,
+         INJURY_DRAIN, BLEED_ON_BOAR_ATTACK, BLEED_DURATION, WOUND_DURATION } from '../../data/diseases';
 
 const TS = WORLD_CONFIG.tileSize; // 32px
 const SIGHT_DAY = 12;
@@ -161,6 +170,11 @@ export class GameManager {
 
   // Day tracking for campfire fuel drain
   private lastGameDay = -1;
+  private decayCheckTick = 0;
+  // Rain-fire extinguish accumulator (resets when rain stops)
+  private fireRainAccumulator = 0;
+  // Ticks spent in rain without shelter (for cold infection)
+  private coldExposureTicks = 0;
 
   constructor(container: HTMLElement) {
     this.initPhaser(container);
@@ -812,14 +826,15 @@ export class GameManager {
   private syncResources(world: any) {
     for (const res of world.resources) {
       const hasObj = this.resourceObjects.has(res.id);
-      const alwaysShow = res.type === 'berry_bush' || res.type === 'exotic_fruit';
+      const alwaysShow = res.type === 'berry_bush' || res.type === 'exotic_fruit' || res.type === 'palm_tree';
       if ((res.quantity > 0 || alwaysShow) && !hasObj) {
-        this.createResourceObject(res);            // regenerated
-      } else if (res.quantity <= 0 && hasObj && res.type !== 'berry_bush' && res.type !== 'exotic_fruit') {
+        this.createResourceObject(res);
+      } else if (res.quantity <= 0 && hasObj && !alwaysShow) {
         this.resourceObjects.get(res.id)!.destroy();
         this.resourceObjects.delete(res.id);
         this.resourceQuantities.delete(res.id);
-      } else if (hasObj && (res.type === 'berry_bush' || res.type === 'exotic_fruit')) {
+      } else if (hasObj && alwaysShow) {
+        // Redraw when quantity changes (leaves, berries, etc.)
         const prev = this.resourceQuantities.get(res.id);
         if (prev !== res.quantity) {
           const g = this.resourceObjects.get(res.id)!;
@@ -923,6 +938,7 @@ export class GameManager {
   private static DROP_COLORS: Record<string, number> = {
     wood: 0x8b5e3c, driftwood: 0x8b5e3c, sticks: 0x8b5e3c,
     stone: 0x7a7a7a, pebbles: 0x7a7a7a, iron_ore: 0x8b7355, flint: 0xc8a050,
+    obsidian: 0x1a1a2e, granite: 0x8a8a8a,
     food: 0xd44030, berry_bush: 0xd44030, exotic_fruit: 0xf5a623,
     mushroom: 0xa0522d, herbs: 0x4a9040, fiber: 0xc8c050, vine: 0x2e8b2e,
     shells: 0xf0e0c0, coconut: 0x8b6914, coconut_shell: 0x8b6914,
@@ -1032,8 +1048,10 @@ export class GameManager {
       }
       case 'palm_tree': {
         const th = Math.round(30 * sc);
+        // Shadow
         g.fillStyle(0x000000, 0.20);
         g.fillEllipse(cx, base + 3, Math.round(18 * sc), Math.round(6 * sc));
+        // Trunk
         g.fillStyle(0x8b6914);
         g.fillRect(cx - Math.round(2 * sc), base - th, Math.round(5 * sc), th);
         g.fillStyle(0xa07820, 0.6);
@@ -1042,16 +1060,69 @@ export class GameManager {
         for (let i = 0; i < 5; i++) {
           g.fillRect(cx - Math.round(2 * sc), base - Math.round(6 * sc) - i * Math.round(6 * sc), Math.round(5 * sc), 2);
         }
-        g.fillStyle(0x2a8c18, 0.9);
-        g.fillEllipse(cx,                     base - th - 12, Math.round(28 * sc), Math.round(8 * sc));
-        g.fillEllipse(cx - Math.round(10*sc), base - th - 6,  Math.round(22 * sc), Math.round(7 * sc));
-        g.fillEllipse(cx + Math.round(10*sc), base - th - 6,  Math.round(22 * sc), Math.round(7 * sc));
-        g.fillStyle(0x3aad28, 0.85);
-        g.fillEllipse(cx,                     base - th - 16, Math.round(20 * sc), Math.round(6 * sc));
-        g.fillEllipse(cx - Math.round(13*sc), base - th - 10, Math.round(18 * sc), Math.round(5 * sc));
-        g.fillEllipse(cx + Math.round(13*sc), base - th - 10, Math.round(18 * sc), Math.round(5 * sc));
-        g.fillStyle(0x4cc030, 0.5);
-        g.fillEllipse(cx - Math.round(2*sc),  base - th - 18, Math.round(10 * sc), Math.round(4 * sc));
+        // Fronds — smooth leaf polygons with quadratic droop
+        const top = base - th;
+        const fLen = Math.round(22 * sc);
+        // Draws a natural leaf shape: wide belly, tapers to 0 at both ends,
+        // with the tip pulled downward by `droop` pixels (quadratic gravity curve)
+        const drawFrond = (angleDeg: number, droop: number, color: number, alpha: number, lenMult = 1.0) => {
+          const rad = angleDeg * Math.PI / 180;
+          const len = fLen * lenMult;
+          const cosA = Math.cos(rad), sinA = Math.sin(rad);
+          // perpendicular to the frond axis (for width)
+          const nx = -sinA, ny = cosA;
+          const maxHW = 4.5 * sc;
+          const N = 10;
+          const pts: { x: number; y: number }[] = [];
+          // right side: base → tip
+          for (let i = 0; i <= N; i++) {
+            const t = i / N;
+            const sx = cx + cosA * len * t;
+            const sy = top + sinA * len * t + droop * sc * t * t; // quadratic droop
+            const hw = maxHW * Math.sin(t * Math.PI); // 0 at both ends, peak at midpoint
+            pts.push({ x: sx + nx * hw, y: sy + ny * hw });
+          }
+          // left side: tip → base
+          for (let i = N; i >= 0; i--) {
+            const t = i / N;
+            const sx = cx + cosA * len * t;
+            const sy = top + sinA * len * t + droop * sc * t * t;
+            const hw = maxHW * Math.sin(t * Math.PI);
+            pts.push({ x: sx - nx * hw, y: sy - ny * hw });
+          }
+          g.fillStyle(color, alpha);
+          g.fillPoints(pts, true);
+          // midrib: thin lighter strip along spine
+          const rib: { x: number; y: number }[] = [];
+          const rw = 0.8 * sc;
+          for (let i = 0; i <= N; i++) {
+            const t = i / N;
+            rib.push({ x: cx + cosA*len*t + nx*rw, y: top + sinA*len*t + droop*sc*t*t + ny*rw });
+          }
+          for (let i = N; i >= 0; i--) {
+            const t = i / N;
+            rib.push({ x: cx + cosA*len*t - nx*rw, y: top + sinA*len*t + droop*sc*t*t - ny*rw });
+          }
+          g.fillStyle(0x7ee830, alpha * 0.45);
+          g.fillPoints(rib, true);
+        };
+        // Crown knob
+        g.fillStyle(0x4a7a10, 1.0);
+        g.fillCircle(cx, top, Math.round(3 * sc));
+        // Always-visible: 3 upward fronds
+        drawFrond(-90,   2, 0x33b01e, 0.95);
+        drawFrond(-120,  6, 0x2ca01a, 0.92, 0.95);
+        drawFrond(-60,   6, 0x2ca01a, 0.92, 0.95);
+        // Mid fronds (qty >= 3): spread sideways, moderate droop
+        if (quantity >= 3) {
+          drawFrond(-150, 12, 0x259016, 0.85, 0.92);
+          drawFrond(-30,  12, 0x259016, 0.85, 0.92);
+        }
+        // Lower drooping fronds (qty >= 1): hang below crown
+        if (quantity >= 1) {
+          drawFrond(-170, 20, 0x1e7812, 0.78, 0.88);
+          drawFrond(-10,  20, 0x1e7812, 0.78, 0.88);
+        }
         break;
       }
       case 'spring': {
@@ -1128,6 +1199,42 @@ export class GameManager {
         g.fillEllipse(cx - 3, base - 10, 6, 4);
         g.fillStyle(0xd97706, 0.7);
         g.fillEllipse(cx + 4, base - 6, 4, 3);
+        break;
+      }
+
+      case 'obsidian': {
+        // Glassy black volcanic rock — sharp angular shards
+        g.fillStyle(0x000000, 0.25);
+        g.fillEllipse(cx, base + 2, 20, 6);
+        g.fillStyle(0x0d0d12);
+        g.fillEllipse(cx, base - 8, 20, 14);
+        g.fillStyle(0x1a1a2e, 0.9);
+        g.fillEllipse(cx - 3, base - 12, 8, 5);
+        // Glassy highlight
+        g.fillStyle(0x6060a0, 0.6);
+        g.fillRect(cx - 5, base - 14, 4, 2);
+        g.fillStyle(0x9090d0, 0.4);
+        g.fillRect(cx - 4, base - 15, 2, 1);
+        break;
+      }
+      case 'granite': {
+        // Grey speckled granite boulder
+        g.fillStyle(0x000000, 0.2);
+        g.fillEllipse(cx, base + 2, 24, 7);
+        g.fillStyle(0x8a8a8a);
+        g.fillEllipse(cx, base - 9, 24, 18);
+        g.fillStyle(0xb0b0b0, 0.5);
+        g.fillEllipse(cx - 5, base - 14, 12, 8);
+        // Pink feldspar specks
+        g.fillStyle(0xc89090, 0.5);
+        g.fillCircle(cx + 3, base - 8, 2);
+        g.fillCircle(cx - 6, base - 6, 2);
+        // Dark mica flecks
+        g.fillStyle(0x333333, 0.4);
+        g.fillCircle(cx + 6, base - 12, 1);
+        g.fillCircle(cx - 2, base - 5, 1);
+        g.fillStyle(0x606060, 0.4);
+        g.fillEllipse(cx + 5, base - 4, 8, 5);
         break;
       }
 
@@ -1482,7 +1589,56 @@ export class GameManager {
     const cx  = tx * TS + TS / 2;
     const base = ty * TS + TS - 2; // ground anchor
 
-    if (type === 'palm_shelter') {
+    if (type === 'storage_spot') {
+      const top = ty * TS + 4;
+      const left = tx * TS + 4;
+      const right = tx * TS + TS - 4;
+      const bot = ty * TS + TS - 4;
+      const cLen = 6; // corner line length
+      // Ground fill — subtle dirt patch
+      g.fillStyle(0x8b6b3d, 0.25);
+      g.fillRect(left, top, right - left, bot - top);
+      // Dashed border via corner markers
+      g.lineStyle(2, 0xc8a05a, 0.85);
+      // Top-left
+      g.lineBetween(left, top, left + cLen, top);
+      g.lineBetween(left, top, left, top + cLen);
+      // Top-right
+      g.lineBetween(right, top, right - cLen, top);
+      g.lineBetween(right, top, right, top + cLen);
+      // Bottom-left
+      g.lineBetween(left, bot, left + cLen, bot);
+      g.lineBetween(left, bot, left, bot - cLen);
+      // Bottom-right
+      g.lineBetween(right, bot, right - cLen, bot);
+      g.lineBetween(right, bot, right, bot - cLen);
+      // Center dot
+      g.fillStyle(0xc8a05a, 0.5);
+      g.fillCircle(cx, ty * TS + TS / 2, 2);
+
+    } else if (type === 'sleeping_spot') {
+      // Soft palm-leaf mat on the ground
+      const top  = ty * TS + 6;
+      const left = tx * TS + 3;
+      const w    = TS - 6;
+      const h    = TS - 10;
+      // Shadow
+      g.fillStyle(0x000000, 0.12);
+      g.fillEllipse(cx, base + 2, w + 4, 6);
+      // Mat base — warm sandy tone
+      g.fillStyle(0x8fba40, 0.55);
+      g.fillRoundedRect(left, top, w, h, 4);
+      // Leaf texture lines
+      g.lineStyle(1, 0x5a8a20, 0.6);
+      for (let i = 0; i < 4; i++) {
+        const lx = left + 4 + i * ((w - 8) / 3);
+        g.lineBetween(lx, top + 3, lx + 2, top + h - 3);
+      }
+      // Border
+      g.lineStyle(1, 0x6aaa30, 0.8);
+      g.strokeRoundedRect(left, top, w, h, 4);
+
+    } else if (type === 'palm_shelter') {
       // 2 tiles wide — cx is center of the full 2-tile span
       const w2 = TS; // half of 2-tile span = 1 tile
       // Shadow
@@ -2153,6 +2309,18 @@ export class GameManager {
           fg.fillCircle(smokeX, smokeY, 2 + phase * 3);
         }
 
+        // Steam when raining on burning fire
+        if (this.isRaining) {
+          for (let i = 0; i < 3; i++) {
+            const phase = (t / 700 + i * 0.33) % 1;
+            const sx2 = wx + Math.sin(t / 400 + i * 2.1) * 5;
+            const sy2 = wy - 12 - phase * 20;
+            const sa = phase < 0.3 ? phase / 0.3 * 0.35 : (1 - phase) / 0.7 * 0.35;
+            fg.fillStyle(0xccddff, sa);
+            fg.fillCircle(sx2, sy2, 2.5 + phase * 3);
+          }
+        }
+
       } else {
         // === NO FUEL: just glowing embers, no flames ===
         const glow = 0.3 + Math.sin(t / 800 + cf.x) * 0.15;
@@ -2162,6 +2330,31 @@ export class GameManager {
         fg.fillStyle(0xff6600, glow * 0.6);
         fg.fillCircle(wx,     wy - 5, 1.5);
       }
+    }
+  }
+
+  private checkFoodDecay(elapsedTime: number) {
+    const { player } = usePlayerStore.getState();
+    const items = player.inventory.items;
+    const spoiled: string[] = [];
+
+    for (const item of items) {
+      if (item.addedAt === undefined) continue;
+      const spoilTime = FOOD_SPOIL_TIME[item.resourceId];
+      if (!spoilTime) continue;
+      if (elapsedTime - item.addedAt >= spoilTime) {
+        spoiled.push(item.resourceId);
+      }
+    }
+
+    if (spoiled.length > 0) {
+      for (const id of spoiled) {
+        usePlayerStore.getState().removeResource(id, 999);
+      }
+      const names = [...new Set(spoiled.map(id => FOOD_ITEM_NAMES[id] ?? id))].join(', ');
+      import('../../store/notificationStore').then(({ useNotificationStore }) => {
+        useNotificationStore.getState().addNotification(`${names} ist verdorben! 🤢`, 'levelup');
+      });
     }
   }
 
@@ -2324,9 +2517,9 @@ export class GameManager {
 
     if (!awakening) {
       this.gatherResource();
+      this.interactStructure();
       if (tick) {
         this.onGameTick();
-        this.interactStructure();
         this.updateFishing(delta);
         this.updateFarmPlots(delta);
       }
@@ -2369,7 +2562,7 @@ export class GameManager {
     const { player, addToInventory } = usePlayerStore.getState();
     const eq = player.equipment;
     const handIds = [eq?.leftHand?.resourceId, eq?.rightHand?.resourceId].filter(Boolean) as string[];
-    const hasKnife = handIds.some(id => ['flint_knife','stone_axe','improved_axe','iron_axe'].includes(id));
+    const hasKnife = handIds.some(id => ['shell_knife','flint_knife','stone_axe','improved_axe','iron_axe'].includes(id));
     const hasSpear = handIds.some(id => id === 'stone_spear');
 
     const playerCx = this.playerPx + TS / 2;
@@ -2400,7 +2593,9 @@ export class GameManager {
         }
         addToInventory('turtle_meat', 2);
         addToInventory('turtle_shell', 1);
-        this.spawnFloatingText('🐢 Gefangen! Fleisch ×2 + Panzer ×1', Math.floor(turtle.px / TS), Math.floor(turtle.py / TS), '#86efac');
+        addToInventory('bone', 1);
+        if (Math.random() > 0.5) addToInventory('fat', 1);
+        this.spawnFloatingText('🐢 Gefangen! Fleisch ×2 + Panzer + Knochen', Math.floor(turtle.px / TS), Math.floor(turtle.py / TS), '#86efac');
         turtle.g.destroy();
         this.turtles = this.turtles.filter(t => t.id !== turtle.id);
         return;
@@ -2673,6 +2868,15 @@ export class GameManager {
     }
   }
 
+  private checkRainKnowledge() {
+    const { knownMaterials, learnKnowledge } = usePlayerStore.getState();
+    for (const grant of RAIN_KNOWLEDGE_GRANTS) {
+      if (grant.needsAny.some(m => knownMaterials.includes(m))) {
+        learnKnowledge(grant.flag);
+      }
+    }
+  }
+
   private stopRain() {
     this.rainGraphics?.clear();
     this.rainOverlay?.setAlpha(0);
@@ -2810,8 +3014,14 @@ export class GameManager {
           this.spawnFloatingText(`-${Math.round(dmg)}`, Math.floor(boar.px / TS), Math.floor(boar.py / TS), '#ff4444');
           if (boar.health <= 0) {
             const drops = 2 + (Math.random() > 0.4 ? 1 : 0);
-            useWorldStore.getState().dropItem('boar_meat', drops, Math.floor(boar.px / TS), Math.floor(boar.py / TS));
-            this.spawnFloatingText('🐗 Erlegt!', Math.floor(boar.px / TS), Math.floor(boar.py / TS) - 1, '#f97316');
+            const tx = Math.floor(boar.px / TS), ty = Math.floor(boar.py / TS);
+            useWorldStore.getState().dropItem('boar_meat', drops, tx, ty);
+            useWorldStore.getState().dropItem('bone', 1 + (Math.random() > 0.5 ? 1 : 0), tx, ty);
+            if (hasWeapon) { // only with a blade
+              useWorldStore.getState().dropItem('hide', 1, tx, ty);
+              if (Math.random() > 0.4) useWorldStore.getState().dropItem('fat', 1, tx, ty);
+            }
+            this.spawnFloatingText('🐗 Erlegt! Fleisch + Knochen', tx, ty - 1, '#f97316');
             boar.state = 'dead';
             boar.deadAt = Date.now();
             boar.g.clear();
@@ -3183,7 +3393,7 @@ export class GameManager {
             const { addToInventory } = usePlayerStore.getState();
             const freshEq = usePlayerStore.getState().player.equipment;
             const handIds = [freshEq?.leftHand?.resourceId, freshEq?.rightHand?.resourceId].filter(Boolean);
-            const hasKnife = handIds.some(id => ['flint_knife','stone_axe','improved_axe','iron_axe'].includes(id as string));
+            const hasKnife = handIds.some(id => ['shell_knife','flint_knife','stone_axe','improved_axe','iron_axe'].includes(id as string));
             addToInventory('crab_meat', hasKnife ? 2 : 1);
             this.spawnFloatingText(`🦀 Gefangen!${hasKnife ? ' ×2' : ''}`, Math.floor(crab.px / TS), Math.floor(crab.py / TS), '#f97316');
             crab.g.destroy();
@@ -3273,19 +3483,40 @@ export class GameManager {
     const { player, removeResource } = usePlayerStore.getState();
     const inv = player.inventory;
 
-    // Check & consume materials
+    // BuildDefinition path (no recipe needed — materials consumed directly)
+    const buildDef = BUILD_DEFINITIONS.find(d => d.id === recipeId);
+    if (buildDef) {
+      // Check materials
+      for (const m of buildDef.requiredMaterials) {
+        const have = inv.items.find(i => i.resourceId === m.item)?.quantity ?? 0;
+        if (have < m.amount) return;
+      }
+      for (const m of buildDef.requiredMaterials) removeResource(m.item, m.amount);
+      useWorldStore.getState().placeStructure(recipeId, tx, ty);
+      if (buildDef.grantsKnowledge) {
+        for (const flag of buildDef.grantsKnowledge) {
+          usePlayerStore.getState().learnKnowledge(flag as KnowledgeFlag);
+        }
+      }
+      useGameStore.getState().addScore(150);
+      useGameStore.getState().exitPlacementMode();
+      if (this.placementGraphics) this.placementGraphics.clear();
+      return;
+    }
+
+    // Recipe path (legacy — Crafting-Modal structures like campfire etc.)
     if (!craftingSystem.canCraft(recipeId, inv)) return;
     const recipe = RECIPES.find(r => r.id === recipeId);
     if (!recipe) return;
     for (const input of recipe.inputs) removeResource(input.resourceId, input.quantity);
 
-    // Place structure or construction site
     const CONSTRUCTION_DAYS: Record<string, number> = { wooden_shelter: 2, log_cabin: 4 };
+    const structureType = recipe.outputs[0]?.resourceId ?? recipeId;
     const days = CONSTRUCTION_DAYS[recipeId];
     if (days) {
-      useWorldStore.getState().placeConstructionSite(recipeId, tx, ty, days);
+      useWorldStore.getState().placeConstructionSite(structureType, tx, ty, days);
     } else {
-      useWorldStore.getState().placeStructure(recipeId, tx, ty);
+      useWorldStore.getState().placeStructure(structureType, tx, ty);
     }
 
     useGameStore.getState().addScore(200);
@@ -3377,6 +3608,13 @@ export class GameManager {
     if (fStage === 4) speedMult *= 0.65; // Sekundenschlaf
     if (fStage >= 5)  speedMult  = 0.0;  // Kollaps — Bewegung gesperrt
     if (stamina < 20) speedMult *= 0.80;
+    // Weight penalty — linear from 50% load (no penalty) to 100% load (–40% speed)
+    const carryWeight = calcWeight(player.inventory.items);
+    const loadRatio   = carryWeight / MAX_CARRY_KG;
+    if (loadRatio > 0.5) speedMult *= Math.max(0.25, 1.0 - (loadRatio - 0.5) * 0.8);
+    // Injury penalty
+    if (Date.now() < (player.stats.bleedingUntil ?? 0)) speedMult *= 0.85;
+    if (Date.now() < (player.stats.woundedUntil  ?? 0)) speedMult *= 0.90;
 
     const isSprinting = this.keys.SHIFT.isDown && stamina > 5 && fStage < 5;
     const SPEED = (isSprinting ? 128 : 72) * speedMult; // px/sec
@@ -3432,7 +3670,8 @@ export class GameManager {
     const newTileY = Math.floor(this.playerPy / TS);
     if (newTileX !== player.x || newTileY !== player.y) {
       movePlayer(newTileX, newTileY);
-      updateStats({ stamina: Math.max(0, player.stats.stamina - (isSprinting ? 1.0 : 0.5)) });
+      const weightStaminaCost = loadRatio > 0.7 ? (isSprinting ? 1.8 : 0.9) : (isSprinting ? 1.0 : 0.5);
+      updateStats({ stamina: Math.max(0, player.stats.stamina - weightStaminaCost) });
     }
 
     // Footstep sounds — trigger every STEP_DISTANCE px
@@ -3488,7 +3727,10 @@ export class GameManager {
     const hungerMult  = Math.max(0.25, 1 - newHunger / 100 * 0.75);
     const thirstMult  = Math.max(0.20, 1 - newThirst / 100 * 0.80);
     const regenBase   = this.isMoving ? 0.05 : 0.50;
-    const staminaRegen = regenBase * fatigueMult * hungerMult * thirstMult;
+    // Wound reduces stamina regen
+    const now = Date.now();
+    const woundMult = (now < (player.stats.woundedUntil ?? 0)) ? 0.5 : 1.0;
+    const staminaRegen = regenBase * fatigueMult * hungerMult * thirstMult * woundMult;
     const newStamina = Math.min(100, Math.max(0, stamina + staminaRegen));
 
     // ── Low-hunger timer: sustained hunger >80% → chronic damage
@@ -3504,12 +3746,67 @@ export class GameManager {
     else if (newThirst > 75)   healthDrain += 0.005;   // moderate dehydration
     if (fStage >= 5)           healthDrain += 0.008;   // Kollaps: Gesundheitsschaden
     else if (fStage === 4)     healthDrain += 0.003;   // Sekundenschlaf
-    // ── Poison drain
-    const poisonedUntil = player.stats.poisonedUntil ?? 0;
-    if (Date.now() < poisonedUntil) healthDrain += 0.025; // ~150 HP/day while poisoned
-    const newHealth = Math.max(0, health - healthDrain);
+    // ── Disease drains ────────────────────────────────────────────
+    // (now already declared above for woundMult check)
+    const poisonedUntil   = player.stats.poisonedUntil   ?? 0;
+    const coldUntil       = player.stats.coldUntil       ?? 0;
+    const feverUntil      = player.stats.feverUntil      ?? 0;
+    const parasitesUntil  = player.stats.parasitesUntil  ?? 0;
 
-    updateStats({ health: newHealth, hunger: newHunger, thirst: newThirst, stamina: newStamina, fatigue: newFatigue });
+    const isPoison    = now < poisonedUntil;
+    const isCold      = now < coldUntil;
+    const isFever     = now < feverUntil;
+    const isParasites = now < parasitesUntil;
+
+    const isBleeding = now < (player.stats.bleedingUntil ?? 0);
+    const isWounded  = now < (player.stats.woundedUntil  ?? 0);
+
+    if (isPoison)    healthDrain += DISEASE_DRAIN.poison.health;
+    if (isCold)      healthDrain += DISEASE_DRAIN.cold.health;
+    if (isFever)     healthDrain += DISEASE_DRAIN.fever.health;
+    if (isParasites) healthDrain += DISEASE_DRAIN.parasites.health;
+    if (isBleeding)  healthDrain += INJURY_DRAIN.bleeding.health;
+    if (isWounded)   healthDrain += INJURY_DRAIN.wounded.health;
+
+    let extraThirst = 0;
+    let extraHunger = 0;
+    if (isCold)      extraThirst += DISEASE_DRAIN.cold.thirst!;
+    if (isFever)     extraThirst += DISEASE_DRAIN.fever.thirst!;
+    if (isParasites) extraHunger += DISEASE_DRAIN.parasites.hunger!;
+
+    // ── Cold exposure: rain without shelter → catch cold ─────────
+    const hasShelter = useWorldStore.getState().world?.structures.some(s =>
+      ['palm_shelter','wooden_shelter','log_cabin'].includes(s.type) &&
+      Math.abs(s.x - player.x) <= 2 && Math.abs(s.y - player.y) <= 2
+    ) ?? false;
+
+    if (this.isRaining && !hasShelter) {
+      this.coldExposureTicks++;
+      if (this.coldExposureTicks >= COLD_EXPOSURE_THRESHOLD && !isCold) {
+        this.coldExposureTicks = 0;
+        const dur = 10 * 60_000;
+        usePlayerStore.getState().updateStats({ coldUntil: now + dur });
+        import('../../store/notificationStore').then(({ useNotificationStore }) => {
+          useNotificationStore.getState().addNotification('Du hast dich erkältet! 🤧', 'levelup');
+        });
+      }
+    } else {
+      this.coldExposureTicks = Math.max(0, this.coldExposureTicks - 2);
+    }
+
+    // ── Fever: can develop from untreated cold ────────────────────
+    if (isCold && !isFever && Math.random() < FEVER_FROM_COLD_CHANCE) {
+      usePlayerStore.getState().updateStats({ feverUntil: now + 15 * 60_000 });
+      import('../../store/notificationStore').then(({ useNotificationStore }) => {
+        useNotificationStore.getState().addNotification('Fieber! Du brauchst Ruhe & Fiebertee 🌡️', 'levelup');
+      });
+    }
+
+    const newHealth = Math.max(0, health - healthDrain);
+    const newThirstFinal = Math.min(100, newThirst + extraThirst);
+    const newHungerFinal = Math.min(100, newHunger + extraHunger);
+
+    updateStats({ health: newHealth, hunger: newHungerFinal, thirst: newThirstFinal, stamina: newStamina, fatigue: newFatigue });
 
     // ── Kollaps: erzwingt Schlaf wenn Müdigkeit 95%+
     if (fStage >= 5 && !gameState.showSleepMenu) {
@@ -3524,6 +3821,46 @@ export class GameManager {
 
     gameState.tickTime(100);
     gameState.addScore(0.1); // ~1 pt/sec survival
+
+    // ── Food decay check (every 200 ticks = 20s real) ─────────────
+    this.decayCheckTick++;
+    if (this.decayCheckTick >= 200) {
+      this.decayCheckTick = 0;
+      this.checkFoodDecay(gameState.elapsedTime);
+    }
+
+    // ── Rain extinguishes campfires ────────────────────────────────
+    if (this.isRaining) {
+      const rainDamage: Record<string, number> = {
+        drizzle: 0.08, shower: 0.25, rain: 0.50,
+        downpour: 0.85, storm: 1.60, long_rain: 0.35,
+      };
+      const dmg = rainDamage[this.rainType] ?? 0.5;
+      this.fireRainAccumulator += dmg;
+
+      if (this.fireRainAccumulator >= 50) {
+        this.fireRainAccumulator = 0;
+        const worldState = useWorldStore.getState();
+        const campfires = worldState.world?.structures.filter(
+          s => s.type === 'campfire' && (s.fuel ?? 0) > 0
+        ) ?? [];
+        const extinguished = campfires.filter(cf => {
+          const key = `${cf.x},${cf.y}`;
+          // Campfires under jungle canopy are protected
+          return !this.jungleCanopyCoveredTiles.has(key);
+        });
+        if (extinguished.length > 0) {
+          for (const cf of extinguished) {
+            worldState.updateStructure(cf.id, { fuel: 0 });
+          }
+          import('../../store/notificationStore').then(({ useNotificationStore }) => {
+            useNotificationStore.getState().addNotification('Lagerfeuer erloschen! 💧🔥', 'levelup');
+          });
+        }
+      }
+    } else {
+      this.fireRainAccumulator = 0;
+    }
 
     // Drain campfire fuel once per game day + rain scheduling
     const currentDay = Math.floor(gameState.elapsedTime / DAY_DURATION_MS);
@@ -3546,6 +3883,7 @@ export class GameManager {
         for (const c of containers) worldState.updateStructure(c.id, { fuel: 2 });
         if (GameManager.FIRE_EXTINGUISHING_TYPES.has(this.rainType)) this.extinguishCampfires();
         this.nextRainDay = currentDay + 3 + Math.floor(Math.random() * 4);
+        this.checkRainKnowledge();
       }
     }
     this.lastGameDay = currentDay;
@@ -3578,9 +3916,9 @@ export class GameManager {
       }
     }
 
-    const now = Date.now();
-    if (now - this.lastSaveTime > this.autoSaveInterval) {
-      this.lastSaveTime = now;
+    const saveNow = Date.now();
+    if (saveNow - this.lastSaveTime > this.autoSaveInterval) {
+      this.lastSaveTime = saveNow;
     }
   }
 
@@ -3629,7 +3967,7 @@ export class GameManager {
     // Tool bonus: only equipped hand slots count (Option B)
     const eq = freshPlayer.equipment ?? { leftHand: null, rightHand: null };
     const handIds = [eq.leftHand?.resourceId, eq.rightHand?.resourceId].filter(Boolean) as string[];
-    const hasFlintKnife  = handIds.includes('flint_knife');
+    const hasFlintKnife  = handIds.includes('flint_knife') || handIds.includes('shell_knife');
     const hasAxe         = handIds.includes('stone_axe');
     const hasImpAxe     = handIds.includes('improved_axe');
     const hasIronAxe    = handIds.includes('iron_axe');
@@ -3668,6 +4006,8 @@ export class GameManager {
         case 'wood':         return anyAxe   ? { stamina: 5,  time: T * 15 } : { stamina: 10, time: T * 40 };
         case 'stone':        return anyPick  ? { stamina: 6,  time: T * 20 } : { stamina: 12, time: T * 50 };
         case 'iron_ore':     return anyPick  ? { stamina: 8,  time: T * 30 } : { stamina: 15, time: T * 80 };
+        case 'granite':      return anyPick  ? { stamina: 7,  time: T * 25 } : { stamina: 14, time: T * 60 };
+        case 'obsidian':     return anyPick  ? { stamina: 10, time: T * 35 } : { stamina: 20, time: T * 100 };
         case 'resin_tree':   return anyAxe   ? { stamina: 6,  time: T * 20 } : { stamina: 12, time: T * 50 };
         case 'coconut_shell': return { stamina: 2, time: T * 3 };
         default:             return { stamina: 3, time: T * 5 };
@@ -3679,6 +4019,24 @@ export class GameManager {
 
     // iron_ore still requires a pickaxe
     if (resource.type === 'iron_ore' && !anyPick) return;
+
+    // fish: requires fishing_rod OR spear (spearfishing — 40% success chance)
+    if (resource.type === 'fish') {
+      const hasRod   = handIds.includes('fishing_rod');
+      const hasSpear = handIds.includes('stone_spear');
+      if (!hasRod && !hasSpear) {
+        this.spawnFloatingText('Benötigt Angel oder Speer 🎣', player.x, player.y, '#f97316');
+        return;
+      }
+      if (hasSpear && !hasRod && Math.random() > 0.40) {
+        this.spawnFloatingText('Danebengworfen! 🐟', player.x, player.y, '#94a3b8');
+        worldState.harvestResource(resource.id, 0);
+        useGameStore.getState().tickTime(cost.time);
+        usePlayerStore.getState().updateStats({ stamina: Math.max(0, currentStamina - cost.stamina) });
+        usePlayerStore.getState().damageTool('stone_spear', 1);
+        return;
+      }
+    }
 
     const timeCost    = cost.time;
     const staminaCost = cost.stamina;
@@ -3725,6 +4083,18 @@ export class GameManager {
       return;
     }
 
+    // Chop palm tree — gives wood, removes tree entirely
+    if (resource.type === 'palm_tree' && action === 'chop') {
+      const woodAmount = 3 + Math.floor(Math.random() * 3); // 3-5 wood
+      addToInventory('wood', woodAmount);
+      worldState.harvestResource(resource.id, resource.quantity); // deplete all leaves
+      useGameStore.getState().tickTime(timeCost * 3);
+      useGameStore.getState().addScore(20);
+      usePlayerStore.getState().updateStats({ stamina: Math.max(0, currentStamina - staminaCost * 2) });
+      this.spawnFloatingText(`+${woodAmount} Holz 🪵`, player.x, player.y);
+      return;
+    }
+
     // Determine what item to give
     const giveType = action === 'sticks'              ? 'sticks'
                    : action === 'coconut'             ? 'coconut'
@@ -3739,7 +4109,7 @@ export class GameManager {
     if (addToInventory(giveType, amount)) {
       if (resource.type !== 'spring') worldState.harvestResource(resource.id, amount);
 
-      // Bonus fiber from palm_tree with knife
+      // Bonus fiber from palm_tree with knife (axe chop only)
       if (resource.type === 'palm_tree' && anyKnife && action !== 'coconut') {
         addToInventory('fiber', 1);
       }
@@ -3755,6 +4125,28 @@ export class GameManager {
       usePlayerStore.getState().updateStats({
         stamina: Math.max(0, currentStamina - staminaCost),
       });
+      // Damage active tool based on resource type
+      const toolDamageMap = TOOL_DAMAGE_ON_GATHER[resource.type];
+      if (toolDamageMap) {
+        const { damageTool } = usePlayerStore.getState();
+        for (const [toolId, dmg] of Object.entries(toolDamageMap)) {
+          if (handIds.includes(toolId)) { damageTool(toolId, dmg); break; }
+        }
+      }
+
+      // Award gather skill XP
+      const gatherGrant = GATHER_SKILL_XP[giveType] ?? GATHER_SKILL_XP[resource.type];
+      if (gatherGrant) {
+        usePlayerStore.getState().gainSkillXp(gatherGrant.skill, gatherGrant.xp);
+        import('../../store/notificationStore').then(({ useNotificationStore }) => {
+          import('../../types/skills').then(({ SKILL_LABELS }) => {
+            useNotificationStore.getState().addNotification(
+              `+${gatherGrant.xp} ${SKILL_LABELS[gatherGrant.skill]}`,
+              'xp'
+            );
+          });
+        });
+      }
       const label = action === 'coconut'
         ? `+${amount} Kokosnuss 🥥`
         : resource.type === 'palm_tree'
@@ -3846,11 +4238,11 @@ export class GameManager {
       }
     }
 
-    // E key: sleep
+    // E key: sleep (always triggers regardless of other nearby structures)
     if (this.keyPressed.e) {
       this.keyPressed.e = false;
 
-      const onCabin   = structures.some(s =>
+      const onCabin = structures.some(s =>
         ['wooden_shelter', 'log_cabin'].includes(s.type) &&
         s.x === player.x && s.y === player.y
       );
@@ -3859,8 +4251,11 @@ export class GameManager {
         const w = s.width ?? 1;
         return s.y === player.y && player.x >= s.x && player.x < s.x + w;
       });
+      const onSpot = structures.some(s =>
+        s.type === 'sleeping_spot' && Math.abs(s.x - player.x) <= 1 && Math.abs(s.y - player.y) <= 1
+      );
 
-      const quality = onCabin ? 'cabin' : onShelter ? 'shelter' : 'outdoor';
+      const quality = onCabin ? 'cabin' : onShelter ? 'shelter' : onSpot ? 'spot' : 'outdoor';
       useGameStore.getState().setShowSleepMenu(true, quality);
     }
   }
@@ -4173,17 +4568,28 @@ export class GameManager {
       if (this.keyPressed.space && distToPlayer < ATTACK_RANGE && !gameState.gatherMenuOpen && !gameState.placementMode) {
         const atkEq = usePlayerStore.getState().player.equipment;
         const atkHands = [atkEq?.leftHand?.resourceId, atkEq?.rightHand?.resourceId].filter(Boolean) as string[];
-        const hasWeapon = atkHands.some(id => ['stone_spear','flint_knife','stone_axe','improved_axe','iron_axe'].includes(id));
+        const hasWeapon = atkHands.some(id => ['stone_spear','shell_knife','flint_knife','stone_axe','improved_axe','iron_axe'].includes(id));
         const dmg = hasWeapon ? (25 + Math.random() * 10) : (5 + Math.random() * 3);
         boar.health = Math.max(0, boar.health - dmg);
         boar.hitFlash = 250;
         this.spawnFloatingText(`-${Math.round(dmg)}`, Math.floor(boar.px / TS), Math.floor(boar.py / TS), '#ff4444');
+        // Damage weapon on hit
+        if (hasWeapon) {
+          const weaponId = atkHands.find(id => ['stone_spear','shell_knife','flint_knife','stone_axe','improved_axe','iron_axe'].includes(id));
+          if (weaponId) usePlayerStore.getState().damageTool(weaponId, SPEAR_DAMAGE_PER_HIT);
+        }
         this.keyPressed.space = false;
 
         if (boar.health <= 0) {
           const drops = 2 + (Math.random() > 0.4 ? 1 : 0);
-          useWorldStore.getState().dropItem('boar_meat', drops, Math.floor(boar.px / TS), Math.floor(boar.py / TS));
-          this.spawnFloatingText('🐗 Erlegt!', Math.floor(boar.px / TS), Math.floor(boar.py / TS) - 1, '#f97316');
+          const tx2 = Math.floor(boar.px / TS), ty2 = Math.floor(boar.py / TS);
+          useWorldStore.getState().dropItem('boar_meat', drops, tx2, ty2);
+          useWorldStore.getState().dropItem('bone', 1 + (Math.random() > 0.5 ? 1 : 0), tx2, ty2);
+          if (hasWeapon) {
+            useWorldStore.getState().dropItem('hide', 1, tx2, ty2);
+            if (Math.random() > 0.4) useWorldStore.getState().dropItem('fat', 1, tx2, ty2);
+          }
+          this.spawnFloatingText('🐗 Erlegt! Fleisch + Knochen', tx2, ty2 - 1, '#f97316');
           boar.state = 'dead';
           boar.deadAt = now;
           boar.g.clear();
@@ -4269,6 +4675,15 @@ export class GameManager {
           const { updateStats, player } = usePlayerStore.getState();
           updateStats({ health: Math.max(0, player.stats.health - ATTACK_DMG) });
           this.spawnFloatingText(`-${ATTACK_DMG} HP`, Math.floor(ppx / TS), Math.floor(ppy / TS), '#ff2222');
+          // Chance to cause bleeding
+          if (Math.random() < BLEED_ON_BOAR_ATTACK) {
+            const bleedEnd = Date.now() + BLEED_DURATION;
+            usePlayerStore.getState().updateStats({ bleedingUntil: bleedEnd });
+            this.spawnFloatingText('🩸 Blutung!', Math.floor(ppx / TS), Math.floor(ppy / TS) - 1, '#dc2626');
+            import('../../store/notificationStore').then(({ useNotificationStore }) => {
+              useNotificationStore.getState().addNotification('Du blutest! Verband anlegen! 🩸', 'levelup');
+            });
+          }
         }
       }
 
