@@ -6,6 +6,7 @@ import { DEFAULT_SKILLS, type SkillId } from '../types/skills';
 import { TOOL_MAX_DURABILITY } from '../data/toolDurability';
 import { PERISHABLE_IDS } from '../data/foodDecay';
 import { DEFAULT_KNOWLEDGE, MATERIAL_KNOWLEDGE_GRANTS, type KnowledgeFlag, KNOWLEDGE_INSIGHTS } from '../data/knowledge';
+import { IDEAS, getInsightsByFocus, INITIAL_FOCUSES, type ReflectionFocus } from '../data/ideas';
 
 interface PlayerStore {
   player: Player;
@@ -16,6 +17,13 @@ interface PlayerStore {
   craftCounts: Record<string, number>;  // recipeId → times crafted
   recordCraft: (recipeId: string) => void;
   getCraftXpMultiplier: (recipeId: string) => number;
+
+  // Grübel-System
+  reflectionFocus: ReflectionFocus | null;
+  collectedInsights: string[];       // insight IDs gathered so far
+  unlockedFocuses: ReflectionFocus[];
+  setReflectionFocus: (focus: ReflectionFocus | null) => void;
+  checkInsight: (materialId: string) => void; // call on material pickup
 
   initPlayer: (name: string) => void;
   movePlayer: (x: number, y: number) => void;
@@ -67,13 +75,56 @@ export const usePlayerStore = create<PlayerStore>()(
       knownMaterials: [],
       knowledge: { ...DEFAULT_KNOWLEDGE },
       craftCounts: {},
+      reflectionFocus: null,
+      collectedInsights: [],
+      unlockedFocuses: [...INITIAL_FOCUSES],
 
       learnMaterial: (id: string) => {
         if (get().knownMaterials.includes(id)) return;
         set(s => ({ knownMaterials: [...s.knownMaterials, id] }));
-        // Auto-grant knowledge from material pickup
         const flag = MATERIAL_KNOWLEDGE_GRANTS[id];
         if (flag) get().learnKnowledge(flag);
+        get().checkInsight(id);
+      },
+
+      setReflectionFocus: (focus) => set({ reflectionFocus: focus }),
+
+      checkInsight: (materialId: string) => {
+        const state = get();
+        if (!state.reflectionFocus) return;
+        const insightMap = getInsightsByFocus(state.reflectionFocus);
+        const entry = insightMap.get(materialId);
+        if (!entry) return;
+        const { idea, insight } = entry;
+        if (state.collectedInsights.includes(insight.id)) return;
+        // Check requiresKnowledge gate
+        if (idea.requiresKnowledge && !state.knowledge[idea.requiresKnowledge]) return;
+
+        const newInsights = [...state.collectedInsights, insight.id];
+        set({ collectedInsights: newInsights });
+
+        // Show insight toast
+        import('../store/notificationStore').then(({ useNotificationStore }) => {
+          const allCollected = idea.insights.every(i => newInsights.includes(i.id));
+          useNotificationStore.getState().addNotification(insight.text, 'xp');
+          if (allCollected) {
+            setTimeout(() => {
+              useNotificationStore.getState().addNotification(
+                `💡 Idee verstanden: ${idea.name}`,
+                'levelup'
+              );
+            }, 800);
+            for (const flag of idea.grantsKnowledge) {
+              get().learnKnowledge(flag);
+            }
+          } else {
+            const done = idea.insights.filter(i => newInsights.includes(i.id)).length;
+            useNotificationStore.getState().addNotification(
+              `Idee: ${idea.name} — ${done}/${idea.insights.length}`,
+              'xp'
+            );
+          }
+        });
       },
 
       recordCraft: (recipeId: string) => {
@@ -123,6 +174,8 @@ export const usePlayerStore = create<PlayerStore>()(
 
       addToInventory: (resourceId: string, quantity: number) => {
         get().learnMaterial(resourceId);
+        // checkInsight fires on every pickup (learnMaterial skips known materials)
+        if (get().knownMaterials.includes(resourceId)) get().checkInsight(resourceId);
         const state = get();
         const { items, maxSlots } = state.player.inventory;
 
@@ -131,20 +184,25 @@ export const usePlayerStore = create<PlayerStore>()(
         const currentWeight = calcWeight(items);
         if (currentWeight + addedWeight > MAX_CARRY_KG) return false;
 
+        // Lazy-import gameStore to avoid circular dependency
+        const gameElapsed = (() => {
+          try {
+            // eslint-disable-next-line @typescript-eslint/no-var-requires
+            const { useGameStore } = require('../store/gameStore');
+            return useGameStore.getState().elapsedTime as number;
+          } catch { return 0; }
+        })();
+
         const existing = items.find((item) => item.resourceId === resourceId);
         if (existing) {
           existing.quantity += quantity;
+          // Refresh addedAt when stacking perishables so new items don't inherit an old timestamp
+          if (PERISHABLE_IDS.has(resourceId) && existing.addedAt !== undefined) {
+            existing.addedAt = gameElapsed;
+          }
           set((s) => ({ player: { ...s.player } }));
           return true;
         } else if (items.length < maxSlots) {
-          // Lazy-import gameStore to avoid circular dependency
-          const gameElapsed = (() => {
-            try {
-              // eslint-disable-next-line @typescript-eslint/no-var-requires
-              const { useGameStore } = require('../store/gameStore');
-              return useGameStore.getState().elapsedTime as number;
-            } catch { return 0; }
-          })();
           items.push({
             id: `${resourceId}-${Date.now()}`,
             resourceId,
@@ -346,7 +404,7 @@ export const usePlayerStore = create<PlayerStore>()(
         });
       },
 
-      reset: () => set({ player: { ...defaultPlayer, equipment: { ...defaultEquipment, belt: [null, null, null] }, skills: { ...DEFAULT_SKILLS } }, knownMaterials: [], knowledge: { ...DEFAULT_KNOWLEDGE }, craftCounts: {} }),
+      reset: () => set({ player: { ...defaultPlayer, equipment: { ...defaultEquipment, belt: [null, null, null] }, skills: { ...DEFAULT_SKILLS } }, knownMaterials: [], knowledge: { ...DEFAULT_KNOWLEDGE }, craftCounts: {}, reflectionFocus: null, collectedInsights: [], unlockedFocuses: [...INITIAL_FOCUSES] }),
     }),
     {
       name: 'survival-player-save',
@@ -362,6 +420,12 @@ export const usePlayerStore = create<PlayerStore>()(
         }
         if (state && !state.craftCounts) {
           state.craftCounts = {};
+        }
+        if (state && !state.collectedInsights) {
+          state.collectedInsights = [];
+        }
+        if (state && !state.unlockedFocuses) {
+          state.unlockedFocuses = [...INITIAL_FOCUSES];
         }
       },
     }

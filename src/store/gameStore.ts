@@ -11,6 +11,8 @@ interface GameStore {
   score: number;
   showSleepMenu: boolean;
   sleepQuality: 'cabin' | 'shelter' | 'spot' | 'outdoor';
+  campfireNear: boolean;
+  setCampfireNear: (v: boolean) => void;
 
   // Gather interaction menu
   gatherMenuOpen: boolean;
@@ -92,6 +94,8 @@ export const useGameStore = create<GameStore>()(
       score: 0,
       showSleepMenu: false,
       sleepQuality: 'outdoor' as 'cabin' | 'shelter' | 'spot' | 'outdoor',
+      campfireNear: false,
+      setCampfireNear: (v) => set({ campfireNear: v }),
       gatherMenuOpen: false,
       nearbyResources: [],
       pendingGatherId: null,

@@ -4256,6 +4256,11 @@ export class GameManager {
       );
 
       const quality = onCabin ? 'cabin' : onShelter ? 'shelter' : onSpot ? 'spot' : 'outdoor';
+      const campfireNear = structures.some(s =>
+        s.type === 'campfire' && s.fuel > 0 &&
+        Math.abs(s.x - player.x) <= 4 && Math.abs(s.y - player.y) <= 4
+      );
+      useGameStore.getState().setCampfireNear(campfireNear);
       useGameStore.getState().setShowSleepMenu(true, quality);
     }
   }

@@ -109,6 +109,7 @@ export const RECIPES: Recipe[] = [
     inputs: [{ resourceId: 'turtle_shell', quantity: 1 }, { resourceId: 'vine', quantity: 2 }],
     outputs: [{ resourceId: 'water_container', quantity: 1 }],
     craftingTime: 3000,
+    requiredKnowledge: ['knows_rain_collection'],
     grantsSkill: { skill: 'shelterbuilding', xp: 8 },
   },
   {
@@ -122,6 +123,7 @@ export const RECIPES: Recipe[] = [
     outputs: [{ resourceId: 'coconut_shell', quantity: 2 }],
     craftingTime: 1500,
     requiresTool: 'any_axe',
+    requiredKnowledge: ['knows_rain_collection'],
   },
   {
     id: 'torch',
@@ -137,6 +139,7 @@ export const RECIPES: Recipe[] = [
     ],
     outputs: [{ resourceId: 'torch', quantity: 2 }],
     craftingTime: 3000,
+    requiredKnowledge: ['knows_fire'],
   },
   {
     id: 'stone_axe',
@@ -166,6 +169,7 @@ export const RECIPES: Recipe[] = [
     inputs: [{ resourceId: 'sticks', quantity: 2 }, { resourceId: 'pebbles', quantity: 6 }],
     outputs: [{ resourceId: 'stone_pickaxe', quantity: 1 }],
     craftingTime: 5000,
+    requiredKnowledge: ['knows_tool_binding'],
     grantsSkill: { skill: 'flintknapping', xp: 20 },
   },
   {
@@ -198,6 +202,7 @@ export const RECIPES: Recipe[] = [
     outputs: [{ resourceId: 'cooked_food', quantity: 2 }],
     craftingTime: 3000,
     requiresTool: 'campfire_near',
+    requiredKnowledge: ['knows_cooking'],
     grantsSkill: { skill: 'cooking', xp: 10 },
     grantsKnowledge: ['knows_cooking'],
   },
@@ -211,6 +216,7 @@ export const RECIPES: Recipe[] = [
     inputs: [{ resourceId: 'herbs', quantity: 3 }],
     outputs: [{ resourceId: 'herbal_remedy', quantity: 1 }],
     craftingTime: 2000,
+    requiredKnowledge: ['knows_medicine'],
     grantsSkill: { skill: 'foraging', xp: 10 },
     grantsKnowledge: ['knows_medicine'],
   },
@@ -224,6 +230,7 @@ export const RECIPES: Recipe[] = [
     inputs: [{ resourceId: 'driftwood', quantity: 1 }],
     outputs: [{ resourceId: 'sticks', quantity: 2 }],
     craftingTime: 2000,
+    requiredKnowledge: ['knows_basic_fire'],
   },
   {
     id: 'palm_leaf_to_fiber',
@@ -235,6 +242,7 @@ export const RECIPES: Recipe[] = [
     inputs: [{ resourceId: 'palm_leaf', quantity: 3 }],
     outputs: [{ resourceId: 'fiber', quantity: 1 }],
     craftingTime: 4000,
+    requiredKnowledge: ['knows_basic_shelter'],
     grantsSkill: { skill: 'cordage', xp: 5 },
   },
   {
@@ -247,6 +255,7 @@ export const RECIPES: Recipe[] = [
     inputs: [{ resourceId: 'shells', quantity: 3 }, { resourceId: 'sticks', quantity: 1 }, { resourceId: 'fiber', quantity: 1 }],
     outputs: [{ resourceId: 'shell_knife', quantity: 1 }],
     craftingTime: 2000,
+    requiredKnowledge: ['knows_sharp_edges'],
     grantsSkill: { skill: 'flintknapping', xp: 8 },
   },
   {
@@ -259,6 +268,7 @@ export const RECIPES: Recipe[] = [
     inputs: [{ resourceId: 'fiber', quantity: 2 }, { resourceId: 'palm_leaf', quantity: 1 }],
     outputs: [{ resourceId: 'bandage', quantity: 1 }],
     craftingTime: 2000,
+    requiredKnowledge: ['knows_medicine'],
     grantsSkill: { skill: 'foraging', xp: 5 },
   },
   {
@@ -272,6 +282,7 @@ export const RECIPES: Recipe[] = [
     outputs: [{ resourceId: 'fever_tea', quantity: 1 }],
     craftingTime: 3000,
     requiresTool: 'campfire_near',
+    requiredKnowledge: ['knows_medicine'],
     grantsSkill: { skill: 'foraging', xp: 8 },
   },
   {
@@ -284,6 +295,7 @@ export const RECIPES: Recipe[] = [
     inputs: [{ resourceId: 'herbs', quantity: 4 }, { resourceId: 'tree_resin', quantity: 1 }],
     outputs: [{ resourceId: 'antiparasitic', quantity: 1 }],
     craftingTime: 4000,
+    requiredKnowledge: ['knows_medicine'],
     grantsSkill: { skill: 'foraging', xp: 12 },
   },
   {
@@ -297,6 +309,7 @@ export const RECIPES: Recipe[] = [
     outputs: [{ resourceId: 'cooked_mushroom', quantity: 2 }],
     craftingTime: 2500,
     requiresTool: 'campfire_near',
+    requiredKnowledge: ['knows_cooking'],
     grantsSkill: { skill: 'cooking', xp: 10 },
   },
 
@@ -315,6 +328,7 @@ export const RECIPES: Recipe[] = [
     outputs: [{ resourceId: 'wooden_shelter', quantity: 1 }],
     craftingTime: 8000,
     requiresTool: 'stone_axe',
+    requiredKnowledge: ['knows_construction'],
   },
   {
     id: 'storage_box',
@@ -327,6 +341,7 @@ export const RECIPES: Recipe[] = [
     outputs: [{ resourceId: 'storage_box', quantity: 1 }],
     craftingTime: 5000,
     requiresTool: 'stone_axe',
+    requiredKnowledge: ['knows_construction'],
   },
   {
     id: 'workbench',
@@ -339,6 +354,7 @@ export const RECIPES: Recipe[] = [
     outputs: [{ resourceId: 'workbench', quantity: 1 }],
     craftingTime: 6000,
     requiresTool: 'stone_axe',
+    requiredKnowledge: ['knows_construction'],
   },
   {
     id: 'rope_fiber',
@@ -377,6 +393,7 @@ export const RECIPES: Recipe[] = [
     outputs: [{ resourceId: 'improved_axe', quantity: 1 }],
     craftingTime: 8000,
     requiresTool: 'stone_axe',
+    requiredKnowledge: ['knows_construction'],
   },
   {
     id: 'improved_pickaxe',
@@ -389,6 +406,7 @@ export const RECIPES: Recipe[] = [
     outputs: [{ resourceId: 'improved_pickaxe', quantity: 1 }],
     craftingTime: 8000,
     requiresTool: 'stone_pickaxe',
+    requiredKnowledge: ['knows_construction'],
   },
 
   // ════════════════════════════════════════════════════
@@ -406,6 +424,7 @@ export const RECIPES: Recipe[] = [
     outputs: [{ resourceId: 'plank', quantity: 5 }],
     craftingTime: 4000,
     requiresTool: 'workbench_near',
+    requiredKnowledge: ['knows_construction'],
   },
   {
     id: 'log_cabin',
@@ -422,6 +441,7 @@ export const RECIPES: Recipe[] = [
     outputs: [{ resourceId: 'log_cabin', quantity: 1 }],
     craftingTime: 20000,
     requiresTool: 'workbench_near',
+    requiredKnowledge: ['knows_construction'],
   },
   {
     id: 'bed',
@@ -434,6 +454,7 @@ export const RECIPES: Recipe[] = [
     outputs: [{ resourceId: 'bed', quantity: 1 }],
     craftingTime: 6000,
     requiresTool: 'workbench_near',
+    requiredKnowledge: ['knows_construction'],
   },
   {
     id: 'fishing_rod',
@@ -446,6 +467,7 @@ export const RECIPES: Recipe[] = [
     outputs: [{ resourceId: 'fishing_rod', quantity: 1 }],
     craftingTime: 4000,
     requiresTool: 'any_knife',
+    requiredKnowledge: ['knows_basic_weapon'],
     grantsSkill: { skill: 'hunting', xp: 10 },
   },
   // ── Konservierung (am Lagerfeuer) ────────────────────────────────────
@@ -460,6 +482,7 @@ export const RECIPES: Recipe[] = [
     outputs: [{ resourceId: 'smoked_meat', quantity: 2 }],
     craftingTime: 8000,
     requiresTool: 'campfire_near',
+    requiredKnowledge: ['knows_preservation'],
     grantsSkill: { skill: 'cooking', xp: 15 },
     grantsKnowledge: ['knows_preservation'],
   },
@@ -474,6 +497,7 @@ export const RECIPES: Recipe[] = [
     outputs: [{ resourceId: 'dried_fish', quantity: 2 }],
     craftingTime: 10000,
     requiresTool: 'campfire_near',
+    requiredKnowledge: ['knows_preservation'],
     grantsSkill: { skill: 'cooking', xp: 12 },
   },
   {
@@ -487,6 +511,7 @@ export const RECIPES: Recipe[] = [
     outputs: [{ resourceId: 'dried_fruit', quantity: 3 }],
     craftingTime: 8000,
     requiresTool: 'campfire_near',
+    requiredKnowledge: ['knows_preservation'],
     grantsSkill: { skill: 'cooking', xp: 10 },
   },
 
@@ -501,6 +526,7 @@ export const RECIPES: Recipe[] = [
     outputs: [{ resourceId: 'cooked_turtle', quantity: 2 }],
     craftingTime: 6000,
     requiresTool: 'campfire_near',
+    requiredKnowledge: ['knows_cooking'],
   },
   {
     id: 'cooked_boar',
@@ -513,6 +539,7 @@ export const RECIPES: Recipe[] = [
     outputs: [{ resourceId: 'cooked_boar', quantity: 2 }],
     craftingTime: 5000,
     requiresTool: 'campfire_near',
+    requiredKnowledge: ['knows_cooking'],
   },
   {
     id: 'cooked_crab',
@@ -525,6 +552,7 @@ export const RECIPES: Recipe[] = [
     outputs: [{ resourceId: 'cooked_crab', quantity: 2 }],
     craftingTime: 4000,
     requiresTool: 'campfire_near',
+    requiredKnowledge: ['knows_cooking'],
   },
   {
     id: 'cooked_fish',
@@ -537,6 +565,7 @@ export const RECIPES: Recipe[] = [
     outputs: [{ resourceId: 'cooked_fish_meal', quantity: 2 }],
     craftingTime: 4000,
     requiresTool: 'campfire_near',
+    requiredKnowledge: ['knows_cooking'],
   },
   {
     id: 'farm_plot',
@@ -549,6 +578,7 @@ export const RECIPES: Recipe[] = [
     outputs: [{ resourceId: 'farm_plot', quantity: 1 }],
     craftingTime: 10000,
     requiresTool: 'workbench_near',
+    requiredKnowledge: ['knows_construction'],
   },
   {
     id: 'furnace',
@@ -561,6 +591,7 @@ export const RECIPES: Recipe[] = [
     outputs: [{ resourceId: 'furnace', quantity: 1 }],
     craftingTime: 15000,
     requiresTool: 'workbench_near',
+    requiredKnowledge: ['knows_metal'],
   },
 
   // ════════════════════════════════════════════════════
@@ -582,6 +613,7 @@ export const RECIPES: Recipe[] = [
     outputs: [{ resourceId: 'flint_knife', quantity: 1 }],
     craftingTime: 6000,
     requiresSkill: { skill: 'flintknapping', level: 3 },
+    requiredKnowledge: ['knows_sharp_edges'],
     grantsSkill: { skill: 'flintknapping', xp: 30 },
   },
   {
@@ -598,6 +630,7 @@ export const RECIPES: Recipe[] = [
     outputs: [{ resourceId: 'stone', quantity: 8 }],
     craftingTime: 5000,
     requiresTool: 'stone_pickaxe',
+    requiredKnowledge: ['knows_construction'],
     grantsSkill: { skill: 'shelterbuilding', xp: 20 },
   },
   {
@@ -614,6 +647,7 @@ export const RECIPES: Recipe[] = [
     outputs: [{ resourceId: 'campfire', quantity: 1 }],
     craftingTime: 6000,
     requiresTool: 'stone_pickaxe',
+    requiredKnowledge: ['knows_fire'],
     grantsSkill: { skill: 'firemaking', xp: 15 },
   },
 
@@ -632,6 +666,7 @@ export const RECIPES: Recipe[] = [
     outputs: [{ resourceId: 'iron_bar', quantity: 1 }],
     craftingTime: 15000,
     requiresTool: 'furnace_near',
+    requiredKnowledge: ['knows_metal'],
     grantsKnowledge: ['knows_metal'],
   },
   {
@@ -645,6 +680,7 @@ export const RECIPES: Recipe[] = [
     outputs: [{ resourceId: 'iron_axe', quantity: 1 }],
     craftingTime: 10000,
     requiresTool: 'furnace_near',
+    requiredKnowledge: ['knows_metal'],
   },
   {
     id: 'iron_pickaxe',
@@ -657,6 +693,7 @@ export const RECIPES: Recipe[] = [
     outputs: [{ resourceId: 'iron_pickaxe', quantity: 1 }],
     craftingTime: 10000,
     requiresTool: 'furnace_near',
+    requiredKnowledge: ['knows_metal'],
   },
 ];
 
