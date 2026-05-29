@@ -1,15 +1,8 @@
-import { useEffect, useState } from 'react';
 import { useNotificationStore } from '../../store/notificationStore';
 import { SKILL_LABELS, type SkillId } from '../../types/skills';
 
 export default function SkillNotifications() {
   const notifications = useNotificationStore((s) => s.notifications);
-  const [visible, setVisible] = useState<Set<string>>(new Set());
-
-  useEffect(() => {
-    const ids = new Set(notifications.map((n) => n.id));
-    setVisible(ids);
-  }, [notifications]);
 
   if (notifications.length === 0) return null;
 

@@ -10,7 +10,21 @@
       "Bash(git commit -m ' *)",
       "Bash(awk -F: '$2>=2027 && $2<=2120')",
       "Bash(curl -s http://localhost:5174)",
-      "Bash(git commit *)"
+      "Bash(git commit *)",
+      "Bash(git push *)",
+      "Bash(cat)",
+      "Read(//tmp/**)",
+      "Bash(node /tmp/check_missing_resources.js)",
+      "Bash(netlify --version)",
+      "Bash(netlify status *)",
+      "Bash(grep -v \"^$\")",
+      "Bash(sed -n '3018,3022p' src/services/phaser/GameManager.ts)",
+      "Bash(sed -n '4131,4135p' src/services/phaser/GameManager.ts)",
+      "Bash(sed -n '4258,4262p' src/services/phaser/GameManager.ts)",
+      "Bash(sed -n '351,355p' src/store/playerStore.ts)",
+      "Bash(sed -n '100,108p' src/components/game/CharacterPanel.tsx)",
+      "Bash(sed -n '5,10p' src/components/game/SkillNotifications.tsx)",
+      "Bash(sed -n '18,22p' src/services/phaser/GameManager.ts)"
     ]
   }
 }

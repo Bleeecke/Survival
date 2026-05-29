@@ -1,12 +1,13 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { useGameStore } from './gameStore';
 import type { Player, PlayerStats, Direction, Equipment, EquipSlot } from '../types';
 import { ITEM_WEIGHTS, MAX_CARRY_KG, calcWeight } from '../data/weights';
 import { DEFAULT_SKILLS, type SkillId } from '../types/skills';
 import { TOOL_MAX_DURABILITY } from '../data/toolDurability';
 import { PERISHABLE_IDS } from '../data/foodDecay';
 import { DEFAULT_KNOWLEDGE, MATERIAL_KNOWLEDGE_GRANTS, type KnowledgeFlag, KNOWLEDGE_INSIGHTS } from '../data/knowledge';
-import { IDEAS, getInsightsByFocus, INITIAL_FOCUSES, type ReflectionFocus } from '../data/ideas';
+import { getInsightsByFocus, INITIAL_FOCUSES, type ReflectionFocus } from '../data/ideas';
 
 interface PlayerStore {
   player: Player;
@@ -184,13 +185,8 @@ export const usePlayerStore = create<PlayerStore>()(
         const currentWeight = calcWeight(items);
         if (currentWeight + addedWeight > MAX_CARRY_KG) return false;
 
-        // Lazy-import gameStore to avoid circular dependency
         const gameElapsed = (() => {
-          try {
-            // eslint-disable-next-line @typescript-eslint/no-var-requires
-            const { useGameStore } = require('../store/gameStore');
-            return useGameStore.getState().elapsedTime as number;
-          } catch { return 0; }
+          try { return useGameStore.getState().elapsedTime; } catch { return 0; }
         })();
 
         const existing = items.find((item) => item.resourceId === resourceId);
@@ -354,7 +350,7 @@ export const usePlayerStore = create<PlayerStore>()(
       gainSkillXp: (skillId, xp) => {
         set((state) => {
           const MAX_LEVEL = 10;
-          const skills = { ...state.player.skills } ?? { ...DEFAULT_SKILLS };
+          const skills = { ...(state.player.skills ?? DEFAULT_SKILLS) };
           const skill = { ...skills[skillId] };
           skill.xp += xp;
           while (skill.level < MAX_LEVEL && skill.xp >= skill.level * 20) {

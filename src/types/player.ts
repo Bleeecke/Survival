@@ -1,4 +1,5 @@
-import { Skills, DEFAULT_SKILLS } from './skills';
+import type { Skills } from './skills';
+import { DEFAULT_SKILLS } from './skills';
 export type { Skills, SkillId, Skill } from './skills';
 
 export type Direction = 'up' | 'down' | 'left' | 'right';

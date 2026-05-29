@@ -17,7 +17,7 @@ import { TOOL_DAMAGE_ON_GATHER, SPEAR_DAMAGE_PER_HIT } from '../../data/toolDura
 import { calcWeight, MAX_CARRY_KG } from '../../data/weights';
 import { FOOD_SPOIL_TIME, FOOD_ITEM_NAMES } from '../../data/foodDecay';
 import { DISEASE_DRAIN, COLD_EXPOSURE_THRESHOLD, FEVER_FROM_COLD_CHANCE,
-         INJURY_DRAIN, BLEED_ON_BOAR_ATTACK, BLEED_DURATION, WOUND_DURATION } from '../../data/diseases';
+         INJURY_DRAIN, BLEED_ON_BOAR_ATTACK, BLEED_DURATION } from '../../data/diseases';
 
 const TS = WORLD_CONFIG.tileSize; // 32px
 const SIGHT_DAY = 12;
@@ -1091,7 +1091,7 @@ export class GameManager {
             pts.push({ x: sx - nx * hw, y: sy - ny * hw });
           }
           g.fillStyle(color, alpha);
-          g.fillPoints(pts, true);
+          g.fillPoints(pts as Phaser.Math.Vector2[], true);
           // midrib: thin lighter strip along spine
           const rib: { x: number; y: number }[] = [];
           const rw = 0.8 * sc;
@@ -1104,7 +1104,7 @@ export class GameManager {
             rib.push({ x: cx + cosA*len*t - nx*rw, y: top + sinA*len*t + droop*sc*t*t - ny*rw });
           }
           g.fillStyle(0x7ee830, alpha * 0.45);
-          g.fillPoints(rib, true);
+          g.fillPoints(rib as Phaser.Math.Vector2[], true);
         };
         // Crown knob
         g.fillStyle(0x4a7a10, 1.0);
@@ -3017,7 +3017,7 @@ export class GameManager {
             const tx = Math.floor(boar.px / TS), ty = Math.floor(boar.py / TS);
             useWorldStore.getState().dropItem('boar_meat', drops, tx, ty);
             useWorldStore.getState().dropItem('bone', 1 + (Math.random() > 0.5 ? 1 : 0), tx, ty);
-            if (hasWeapon) { // only with a blade
+            {
               useWorldStore.getState().dropItem('hide', 1, tx, ty);
               if (Math.random() > 0.4) useWorldStore.getState().dropItem('fat', 1, tx, ty);
             }
@@ -4130,7 +4130,7 @@ export class GameManager {
       if (toolDamageMap) {
         const { damageTool } = usePlayerStore.getState();
         for (const [toolId, dmg] of Object.entries(toolDamageMap)) {
-          if (handIds.includes(toolId)) { damageTool(toolId, dmg); break; }
+          if (handIds.includes(toolId)) { damageTool(toolId, dmg ?? 0); break; }
         }
       }
 
@@ -4257,7 +4257,7 @@ export class GameManager {
 
       const quality = onCabin ? 'cabin' : onShelter ? 'shelter' : onSpot ? 'spot' : 'outdoor';
       const campfireNear = structures.some(s =>
-        s.type === 'campfire' && s.fuel > 0 &&
+        s.type === 'campfire' && (s.fuel ?? 0) > 0 &&
         Math.abs(s.x - player.x) <= 4 && Math.abs(s.y - player.y) <= 4
       );
       useGameStore.getState().setCampfireNear(campfireNear);

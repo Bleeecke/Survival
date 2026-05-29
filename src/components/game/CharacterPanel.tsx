@@ -69,7 +69,7 @@ function SlotBox({
   onUnequip,
 }: {
   label: string;
-  item: { resourceId: string } | null;
+  item: { resourceId: string; durability?: number } | null;
   slotKey: EquipSlot;
   keybind?: string;
   locked?: boolean;
