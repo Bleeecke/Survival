@@ -71,3 +71,5 @@ export default defineConfig([
   },
 ])
 ```
+
+<!-- vercel deploy test: 2026-05-30 -->
