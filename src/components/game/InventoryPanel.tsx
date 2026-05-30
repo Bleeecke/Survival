@@ -40,6 +40,15 @@ export const USABLE: Record<string, {
     }),
     tooltip: 'Durst -30, Ausdauer +10',
   },
+  coconut_water: {
+    label: 'Trinken',
+    color: 'bg-sky-700 hover:bg-sky-600',
+    effect: s => ({
+      thirst:  Math.max(0, (s.thirst ?? 0) - 20),
+      stamina: Math.min(100, s.stamina + 8),
+    }),
+    tooltip: 'Durst -20, Ausdauer +8',
+  },
   cooked_fish_meal: {
     label: 'Essen',
     color: 'bg-green-700 hover:bg-green-600',
@@ -226,7 +235,7 @@ const ITEM_NAMES: Record<string, string> = {
   turtle_meat: 'Schildkrötenfleisch', turtle_shell: 'Schildkrötenpanzer', cooked_turtle: 'Gek. Schildkröte',
   crab_meat: 'Krabbenfleisch', cooked_crab: 'Gek. Krabbe',
   boar_meat: 'Wildschweinfleisch', cooked_boar: 'Gek. Wildschwein',
-  cooked_food: 'Gekochtes Essen', water_container: 'Wassercontainer',
+  cooked_food: 'Gekochtes Essen', water_container: 'Wassercontainer', coconut_water: 'Kokoswasser',
   fever_tea: 'Fiebertee', antiparasitic: 'Parasitenmedizin', bandage: 'Verband',
   bone: 'Knochen', hide: 'Tierhaut', fat: 'Tierfett',
   obsidian: 'Obsidian', granite: 'Granit',
@@ -453,6 +462,7 @@ const ITEM_ICON: Record<string, string> = {
   tree_resin:       '🫙',
   coconut:          '🥥',
   coconut_shell:    '🥥',
+  coconut_water:    '🥤',
   // Essen & Trinken
   food:             '🫐',
   water:            '💧',

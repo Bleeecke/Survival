@@ -1,34 +1,17 @@
 import { usePlayerStore } from '../../store/playerStore';
 import { useGameStore } from '../../store/gameStore';
-import { useJournalStore } from '../../store/journalStore';
 import { DAY_DURATION_MS } from '../../data/worldConfig';
 import type { PlayerStats } from '../../types';
 import ClockWidget from './ClockWidget';
 
 export default function GameHUD() {
-  const stats        = usePlayerStore(s => s.player.stats);
-  const elapsedTime  = useGameStore(s => s.elapsedTime);
-  const day          = Math.floor(elapsedTime / DAY_DURATION_MS) + 1;
-  const pendingCount = useJournalStore(s => s.pending.length);
-  const openJournal  = useJournalStore(s => s.openJournal);
+  const stats       = usePlayerStore(s => s.player.stats);
+  const elapsedTime = useGameStore(s => s.elapsedTime);
+  const day         = Math.floor(elapsedTime / DAY_DURATION_MS) + 1;
 
   return (
     <div className="flex-shrink-0 px-3 py-2 border-b border-slate-700 space-y-2">
-      <div className="flex items-center justify-between">
-        <ClockWidget elapsedMs={elapsedTime} day={day} />
-        <button
-          onClick={openJournal}
-          className="relative flex items-center gap-1.5 px-2.5 py-1 bg-amber-950/60 hover:bg-amber-900/60 border border-amber-800/40 rounded-lg text-amber-300 text-xs font-semibold transition-colors"
-        >
-          <span>📖</span>
-          <span className="hidden sm:inline">Journal</span>
-          {pendingCount > 0 && (
-            <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-red-600 rounded-full text-[9px] text-white font-bold flex items-center justify-center animate-pulse">
-              {pendingCount}
-            </span>
-          )}
-        </button>
-      </div>
+      <ClockWidget elapsedMs={elapsedTime} day={day} />
       <DiseasePanel stats={stats} />
     </div>
   );

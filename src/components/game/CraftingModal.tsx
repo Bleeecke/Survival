@@ -7,7 +7,7 @@ import { useGameStore } from '../../store/gameStore';
 import type { Recipe, RecipeCategory } from '../../types';
 import { SKILL_LABELS } from '../../types/skills';
 import { KNOWLEDGE_LABELS } from '../../data/knowledge';
-import { CUT_ON_KNAP_FAIL, WOUND_DURATION } from '../../data/diseases';
+import { useNotificationStore } from '../../store/notificationStore';
 
 // ── Constants ─────────────────────────────────────────────────────
 
@@ -137,29 +137,9 @@ export default function CraftingModal({ onClose }: { onClose: () => void }) {
     const { player, addToInventory, removeResource } = usePlayerStore.getState();
     if (!craftingSystem.canCraft(recipeId, player.inventory)) { setCraftingId(null); return; }
 
-    // Skill-based success check — inputs are always consumed
+    // Immer erfolgreich — Materialien verbrauchen
     if (!useGameStore.getState().freeCraft) {
       for (const input of recipe.inputs) removeResource(input.resourceId, input.quantity);
-    }
-
-    const successChance = craftingSystem.getSuccessChance(recipe);
-    const succeeded = Math.random() < successChance;
-
-    if (!succeeded) {
-      // Fehlschlag: Materialien weg, kein Output, kleine XP-Gutschrift (Lernen durch Scheitern)
-      setFailMessage(recipe.name);
-      if (recipe.grantsSkill) {
-        usePlayerStore.getState().gainSkillXp(recipe.grantsSkill.skill, Math.ceil(recipe.grantsSkill.xp * 0.3));
-      }
-      // Feuerstein absplittern: Chance auf Schnittwunde bei Fehlschlag
-      if (recipe.id === 'knap_flint' && Math.random() < CUT_ON_KNAP_FAIL) {
-        usePlayerStore.getState().updateStats({ woundedUntil: Date.now() + WOUND_DURATION });
-        setFailMessage(`${recipe.name} – Schnittwunde! 🩹`);
-      }
-      setCraftingId(null);
-      setProgress(0);
-      craftStartRef.current = null;
-      return;
     }
 
     if (STRUCTURE_IDS.has(recipeId)) {
@@ -174,11 +154,22 @@ export default function CraftingModal({ onClose }: { onClose: () => void }) {
       }
       useGameStore.getState().addScore(200);
     } else {
-      for (const output of recipe.outputs) addToInventory(output.resourceId, output.quantity);
-      // Kokosnuss öffnen: Kokoswasser direkt trinken
-      if (recipeId === 'coconut_shell') {
+      for (const output of recipe.outputs) {
+        if (recipeId === 'coconut_open' && output.resourceId === 'coconut_water') continue;
+        addToInventory(output.resourceId, output.quantity);
+      }
+      if (recipeId === 'coconut_open') {
         const stats = usePlayerStore.getState().player.stats;
-        usePlayerStore.getState().updateStats({ thirst: Math.max(0, (stats.thirst ?? 0) - 20) });
+        usePlayerStore.getState().updateStats({
+          thirst:  Math.max(0, (stats.thirst ?? 0) - 20),
+          stamina: Math.min(100, (stats.stamina ?? 100) + 8),
+        });
+        const isFirst = !usePlayerStore.getState().knownMaterials.includes('coconut_water');
+        if (isFirst) {
+          usePlayerStore.getState().learnMaterial('coconut_water');
+        } else {
+          useNotificationStore.getState().addNotification('💧 Kokoswasser getrunken — Durst -20', 'xp');
+        }
       }
       useGameStore.getState().addScore(100);
     }
@@ -409,28 +400,10 @@ function RecipeCard({ recipe, inventory, craftingId, progress, onCraft }: {
         );
       })}
 
-      {/* Success chance for skill-based recipes */}
-      {recipe.skillBasedSuccess && (
-        <div className="text-xs mb-2">
-          {(() => {
-            const chance = craftingSystem.getSuccessChance(recipe);
-            const pct = Math.round(chance * 100);
-            const color = pct >= 75 ? 'text-green-400' : pct >= 50 ? 'text-yellow-400' : 'text-red-400';
-            return (
-              <span className={`flex items-center gap-1 ${color}`}>
-                <span>🎲</span>
-                <span>Erfolgswahrscheinlichkeit: <strong>{pct}%</strong></span>
-                <span className="text-slate-600 ml-1">(bei Fehlschlag: Materialien verloren)</span>
-              </span>
-            );
-          })()}
-        </div>
-      )}
 
       {/* Outputs preview */}
       <div className="text-xs text-slate-500 mb-3">
         → {recipe.outputs.map(o => `${o.quantity}× ${ITEM_NAMES[o.resourceId] ?? o.resourceId}`).join(', ')}
-        <span className="ml-1 text-slate-600">({(effectiveTime / 1000).toFixed(1)}s)</span>
         {recipe.grantsSkill && (
           <span className="ml-1 text-amber-600/70">· +{recipe.grantsSkill.xp} {SKILL_LABELS[recipe.grantsSkill.skill]}</span>
         )}
@@ -455,7 +428,7 @@ function RecipeCard({ recipe, inventory, craftingId, progress, onCraft }: {
          !hasSkill       ? `Skill fehlt: ${SKILL_LABELS[recipe.requiresSkill!.skill]} Stufe ${recipe.requiresSkill!.level}` :
          !hasTool        ? 'Werkzeug fehlt' :
          !hasMats        ? 'Materialien fehlen' :
-                           `Herstellen  (${(effectiveTime / 1000).toFixed(1)}s)`}
+                           'Herstellen'}
       </button>
     </div>
   );

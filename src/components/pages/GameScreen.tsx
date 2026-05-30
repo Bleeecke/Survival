@@ -11,7 +11,7 @@ import StorageBoxModal from '../game/StorageBoxModal';
 import CharacterPanel from '../game/CharacterPanel';
 import IntroModal from '../game/IntroModal';
 import TutorialPanel from '../game/TutorialPanel';
-import SkillNotifications from '../game/SkillNotifications';
+import ToastStack from '../game/ToastStack';
 import JournalModal from '../game/JournalModal';
 import SkillsBar from '../game/SkillsBar';
 import StatsOverlay from '../game/StatsOverlay';
@@ -24,6 +24,7 @@ import { usePlayerStore } from '../../store/playerStore';
 import { DAY_DURATION_MS } from '../../data/worldConfig';
 import { useTutorialStore } from '../../store/tutorialStore';
 import { useWorldStore } from '../../store/worldStore';
+import { useJournalStore } from '../../store/journalStore';
 import { USABLE } from '../game/InventoryPanel';
 
 export default function GameScreen() {
@@ -196,9 +197,13 @@ export default function GameScreen() {
         }}
       >
         <GameCanvas />
-        {/* Character panel overlay – top-left of canvas */}
-        <div className="absolute top-3 left-3 z-10 pointer-events-auto">
-          <CharacterPanel />
+        {/* Character panel + action buttons – top-left of canvas */}
+        <div className="absolute top-3 left-3 z-10 pointer-events-auto flex flex-col items-start gap-1">
+          <div className="flex items-start gap-1">
+            <CharacterPanel />
+            <HelpPanel />
+          </div>
+          <JournalButton />
         </div>
 
         {/* Day counter – top-right of canvas */}
@@ -210,9 +215,9 @@ export default function GameScreen() {
 
         {/* Stats overlay – top-center of canvas */}
         <StatsOverlay />
+        <ToastStack />
 
-        {/* Help & controls panel – bottom-left of canvas */}
-        <HelpPanel />
+        {/* HelpPanel moved to top-left next to CharacterPanel */}
 
         {/* RimWorld-style build bar – bottom of canvas */}
         <BuildBar />
@@ -247,7 +252,6 @@ export default function GameScreen() {
           </div>
         )}
 
-        <SkillNotifications />
         <JournalModal />
 
         {/* Skills panel — moved from canvas */}
@@ -345,6 +349,25 @@ export default function GameScreen() {
         </div>
       )}
     </div>
+  );
+}
+
+function JournalButton() {
+  const pendingCount = useJournalStore(s => s.pending.length);
+  const openJournal  = useJournalStore(s => s.openJournal);
+  return (
+    <button
+      onClick={openJournal}
+      className="relative flex items-center gap-1.5 px-2.5 py-1 bg-amber-950/80 hover:bg-amber-900/80 border border-amber-700/50 rounded-lg text-amber-300 text-xs font-semibold shadow-lg transition-colors"
+    >
+      <span>📖</span>
+      <span>Journal</span>
+      {pendingCount > 0 && (
+        <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-red-600 rounded-full text-[9px] text-white font-bold flex items-center justify-center animate-pulse">
+          {pendingCount}
+        </span>
+      )}
+    </button>
   );
 }
 

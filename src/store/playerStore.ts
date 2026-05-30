@@ -80,7 +80,10 @@ export const usePlayerStore = create<PlayerStore>()(
         const toastText = (rawMaterialToasts as Record<string, string>)[id];
         if (toastText) {
           import('../store/notificationStore').then(({ useNotificationStore }) => {
-            useNotificationStore.getState().addNotification(toastText, 'xp');
+            useNotificationStore.getState().addMaterialNotification(id, toastText);
+          });
+          import('../store/journalStore').then(({ useJournalStore }) => {
+            useJournalStore.getState().addDiscovery(id, toastText);
           });
         }
       },

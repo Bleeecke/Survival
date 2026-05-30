@@ -37,15 +37,14 @@
     "category": "resource", "tier": 0, "craftingTime": 4000,
     "inputs": [{ "resourceId": "palm_leaf", "quantity": 3 }],
     "outputs": [{ "resourceId": "fiber", "quantity": 1 }],
-    "requiredKnowledge": ["knows_basic_shelter"],
     "grantsSkill": { "skill": "crafting", "xp": 5 }
   },
   {
-    "id": "coconut_open", "name": "Kokosschale öffnen", "icon": "🥥",
-    "description": "Kokosnuss mit der Axt öffnen – ergibt 2 Schalen.",
+    "id": "coconut_open", "name": "Kokosnuss öffnen", "icon": "🥥",
+    "description": "Kokosnuss mit der Axt öffnen – ergibt 2 Schalen und Kokoswasser.",
     "category": "resource", "tier": 0, "craftingTime": 1500,
     "inputs": [{ "resourceId": "coconut", "quantity": 1 }],
-    "outputs": [{ "resourceId": "coconut_shell", "quantity": 2 }],
+    "outputs": [{ "resourceId": "coconut_shell", "quantity": 2 }, { "resourceId": "coconut_water", "quantity": 1 }],
     "requiresTool": "any_axe",
     "requiredKnowledge": ["knows_rain_collection"]
   },

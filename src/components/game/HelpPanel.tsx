@@ -52,18 +52,18 @@ export default function HelpPanel() {
   const [tab, setTab]   = useState<'controls' | 'guide'>('controls');
 
   return (
-    <div className="absolute bottom-4 left-4 z-[800] pointer-events-auto">
+    <div className="relative z-[800] pointer-events-auto">
       {/* Toggle button */}
       <button
         onClick={() => setOpen(o => !o)}
-        className="w-9 h-9 rounded-full bg-slate-700/90 hover:bg-slate-600 border border-slate-500 text-white font-bold text-base shadow-lg flex items-center justify-center"
+        className="w-8 h-8 rounded-full bg-slate-700/90 hover:bg-slate-600 border border-slate-500 text-white font-bold text-sm shadow-lg flex items-center justify-center"
         title="Hilfe & Steuerung"
       >
         ?
       </button>
 
       {open && (
-        <div className="absolute bottom-11 left-0 w-80 bg-slate-900/97 border border-slate-600 rounded-2xl shadow-2xl overflow-hidden">
+        <div className="absolute top-9 left-0 w-80 bg-slate-900/97 border border-slate-600 rounded-2xl shadow-2xl overflow-hidden">
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-slate-700">
             <div className="flex gap-1">

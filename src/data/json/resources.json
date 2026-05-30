@@ -24,6 +24,7 @@
   { "id": "tree_resin",     "name": "Baumharz",             "spriteIndex": 25, "gatherTime": 0,    "maxStack": 20, "regenerates": false, "regenerationTime": 0      },
   { "id": "coconut",        "name": "Kokosnuss",            "spriteIndex": 26, "gatherTime": 1200, "maxStack": 5,  "regenerates": true,  "regenerationTime": 300000 },
   { "id": "coconut_shell",  "name": "Kokosschale",          "spriteIndex": 26, "gatherTime": 800,  "maxStack": 10, "regenerates": true,  "regenerationTime": 200000 },
+  { "id": "coconut_water",  "name": "Kokoswasser",          "spriteIndex": 7,  "gatherTime": 0,    "maxStack": 5,  "regenerates": false, "regenerationTime": 0      },
   { "id": "obsidian",       "name": "Obsidian",             "spriteIndex": 6,  "gatherTime": 3000, "maxStack": 10, "regenerates": true,  "regenerationTime": 900000 },
   { "id": "granite",        "name": "Granit",               "spriteIndex": 6,  "gatherTime": 2500, "maxStack": 30, "regenerates": true,  "regenerationTime": 600000 },
   { "id": "turtle_meat",    "name": "Schildkrötenfleisch",  "spriteIndex": 29, "gatherTime": 0,    "maxStack": 20, "regenerates": false, "regenerationTime": 0      },
