@@ -24,6 +24,8 @@
   { "id": "tree_resin",     "name": "Baumharz",             "spriteIndex": 25, "gatherTime": 0,    "maxStack": 20, "regenerates": false, "regenerationTime": 0      },
   { "id": "coconut",        "name": "Kokosnuss",            "spriteIndex": 26, "gatherTime": 1200, "maxStack": 5,  "regenerates": true,  "regenerationTime": 300000 },
   { "id": "coconut_shell",  "name": "Kokosschale",          "spriteIndex": 26, "gatherTime": 800,  "maxStack": 10, "regenerates": true,  "regenerationTime": 200000 },
+  { "id": "fern",           "name": "Farn",                 "spriteIndex": 18, "gatherTime": 800,  "maxStack": 1,  "regenerates": true,  "regenerationTime": 600000 },
+  { "id": "dew_water",     "name": "Tauschale",            "spriteIndex": 7,  "gatherTime": 0,    "maxStack": 10, "regenerates": false, "regenerationTime": 0      },
   { "id": "coconut_water",  "name": "Kokoswasser",          "spriteIndex": 7,  "gatherTime": 0,    "maxStack": 5,  "regenerates": false, "regenerationTime": 0      },
   { "id": "obsidian",       "name": "Obsidian",             "spriteIndex": 6,  "gatherTime": 3000, "maxStack": 10, "regenerates": true,  "regenerationTime": 900000 },
   { "id": "granite",        "name": "Granit",               "spriteIndex": 6,  "gatherTime": 2500, "maxStack": 30, "regenerates": true,  "regenerationTime": 600000 },
@@ -43,7 +45,6 @@
   { "id": "rope",           "name": "Seil",                 "spriteIndex": 19, "gatherTime": 0,    "maxStack": 30, "regenerates": false, "regenerationTime": 0      },
   { "id": "plank",          "name": "Holzbrett",            "spriteIndex": 5,  "gatherTime": 0,    "maxStack": 50, "regenerates": false, "regenerationTime": 0      },
   { "id": "iron_bar",       "name": "Eisenbarren",          "spriteIndex": 13, "gatherTime": 0,    "maxStack": 20, "regenerates": false, "regenerationTime": 0      },
-  { "id": "shell_knife",    "name": "Muschelklinge",        "spriteIndex": 16, "gatherTime": 0,    "maxStack": 5,  "regenerates": false, "regenerationTime": 0      },
   { "id": "bandage",        "name": "Verband",              "spriteIndex": 19, "gatherTime": 0,    "maxStack": 10, "regenerates": false, "regenerationTime": 0      },
   { "id": "fever_tea",      "name": "Fiebertee",            "spriteIndex": 7,  "gatherTime": 0,    "maxStack": 10, "regenerates": false, "regenerationTime": 0      },
   { "id": "antiparasitic",  "name": "Parasitenmedizin",     "spriteIndex": 18, "gatherTime": 0,    "maxStack": 10, "regenerates": false, "regenerationTime": 0      },
@@ -53,5 +54,7 @@
   { "id": "dried_fruit",    "name": "Getrocknete Frucht",   "spriteIndex": 21, "gatherTime": 0,    "maxStack": 10, "regenerates": false, "regenerationTime": 0      },
   { "id": "cooked_food",    "name": "Gekochtes Essen",      "spriteIndex": 8,  "gatherTime": 0,    "maxStack": 20, "regenerates": false, "regenerationTime": 0      },
   { "id": "cooked_mushroom","name": "Geb. Pilze",           "spriteIndex": 20, "gatherTime": 0,    "maxStack": 20, "regenerates": false, "regenerationTime": 0      },
-  { "id": "cooked_fish_meal","name":"Gebratener Fisch",     "spriteIndex": 12, "gatherTime": 0,    "maxStack": 20, "regenerates": false, "regenerationTime": 0      }
+  { "id": "cooked_fish_meal","name":"Gebratener Fisch",     "spriteIndex": 12, "gatherTime": 0,    "maxStack": 20, "regenerates": false, "regenerationTime": 0      },
+  { "id": "large_tree",     "name": "Großer Baum",          "spriteIndex": 0,  "gatherTime": 20000,"maxStack": 1,  "regenerates": false, "regenerationTime": 0      },
+  { "id": "banyan_tree",    "name": "Banyanbaum",           "spriteIndex": 0,  "gatherTime": 25000,"maxStack": 1,  "regenerates": false, "regenerationTime": 0      }
 ]

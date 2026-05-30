@@ -739,7 +739,11 @@ export class GameManager {
   private createResourceObject(res: any) {
     if (!this.scene) return;
     const g = this.scene.add.graphics();
-    g.setDepth(this.objectDepth(res.x, res.y));
+    // Large trees need depth offset so canopy renders correctly relative to nearby objects
+    const depthTy = (res.type === 'large_tree' || res.type === 'banyan_tree')
+      ? res.y + 1  // sort as if they're 1 tile further south (canopy appears in front)
+      : res.y;
+    g.setDepth(this.objectDepth(res.x, depthTy));
     this.drawResource(g, res.type, res.x, res.y, res.quantity);
     this.resourceQuantities.set(res.id, res.quantity);
     this.resourceObjects.set(res.id, g);
@@ -1792,7 +1796,6 @@ export class GameManager {
         break;
       }
       case 'coconut_shell': {
-        // Half coconut shell on the ground
         g.fillStyle(0x000000, 0.12);
         g.fillEllipse(cx, base + 1, 14, 4);
         g.fillStyle(0x5c3a18);
@@ -1801,6 +1804,134 @@ export class GameManager {
         g.fillEllipse(cx - 1, base - 4, 8, 5);
         g.fillStyle(0xc8a870, 0.5);
         g.fillEllipse(cx, base - 2, 6, 3);
+        break;
+      }
+
+      case 'large_tree': {
+        // Deterministic variation per tree
+        const lseed = (tx * 491 + ty * 863) % 100;
+        const lsc   = 0.88 + lseed / 200; // 0.88–1.38
+
+        // Ground shadow — large, offset SE
+        g.fillStyle(0x000000, 0.22);
+        g.fillEllipse(cx + Math.round(18*lsc), base + Math.round(12*lsc), Math.round(130*lsc), Math.round(44*lsc));
+
+        // Buttress roots — thick flared base
+        const rootAngles = [-55, -20, 20, 55, 90];
+        for (const ang of rootAngles) {
+          const rad = ang * Math.PI / 180;
+          const rx = cx + Math.cos(rad) * Math.round(18*lsc);
+          const ry = base + Math.sin(rad) * Math.round(8*lsc);
+          g.lineStyle(Math.round((6 - Math.abs(ang) / 30)*lsc), 0x4a3018, 0.85);
+          g.lineBetween(cx, base - Math.round(10*lsc), rx, ry);
+        }
+
+        // Main trunk — wide, dark
+        g.fillStyle(0x3e2810);
+        g.fillRect(cx - Math.round(9*lsc), base - Math.round(58*lsc), Math.round(18*lsc), Math.round(60*lsc));
+        // Trunk highlight (bark texture)
+        g.fillStyle(0x5a3c1c, 0.45);
+        g.fillRect(cx - Math.round(4*lsc), base - Math.round(58*lsc), Math.round(4*lsc), Math.round(58*lsc));
+        g.fillStyle(0x2a1c0c, 0.5);
+        g.fillRect(cx + Math.round(3*lsc), base - Math.round(58*lsc), Math.round(3*lsc), Math.round(58*lsc));
+
+        // Outer canopy — darkest, widest
+        g.fillStyle(0x0f4a0f, 0.92);
+        g.fillEllipse(cx - Math.round(4*lsc), base - Math.round(88*lsc), Math.round(110*lsc), Math.round(72*lsc));
+
+        // Mid canopy
+        g.fillStyle(0x1a6e1a, 0.88);
+        g.fillEllipse(cx + Math.round(6*lsc), base - Math.round(98*lsc), Math.round(88*lsc), Math.round(60*lsc));
+
+        // Side bulges — natural irregular canopy
+        g.fillStyle(0x145c14, 0.82);
+        g.fillEllipse(cx - Math.round(38*lsc), base - Math.round(78*lsc), Math.round(52*lsc), Math.round(42*lsc));
+        g.fillEllipse(cx + Math.round(36*lsc), base - Math.round(74*lsc), Math.round(48*lsc), Math.round(40*lsc));
+
+        // Inner canopy — brighter, top
+        g.fillStyle(0x2a8e2a, 0.85);
+        g.fillEllipse(cx - Math.round(2*lsc), base - Math.round(108*lsc), Math.round(65*lsc), Math.round(46*lsc));
+
+        // Top highlight — sunlit crown
+        g.fillStyle(0x44b844, 0.60);
+        g.fillEllipse(cx + Math.round(8*lsc), base - Math.round(118*lsc), Math.round(38*lsc), Math.round(26*lsc));
+        g.fillStyle(0x66d466, 0.30);
+        g.fillEllipse(cx + Math.round(10*lsc), base - Math.round(124*lsc), Math.round(20*lsc), Math.round(14*lsc));
+        break;
+      }
+
+      case 'banyan_tree': {
+        const bseed = (tx * 613 + ty * 397) % 100;
+        const bsc   = 0.90 + bseed / 160; // 0.90–1.53
+
+        // Ground shadow — very wide, flat (low canopy)
+        g.fillStyle(0x000000, 0.26);
+        g.fillEllipse(cx + Math.round(14*bsc), base + Math.round(10*bsc), Math.round(160*bsc), Math.round(52*bsc));
+
+        // Aerial roots — thin hanging columns from canopy edges
+        const aerialRoots = [
+          { ox: -52, topY: -50, groundY: 0 },
+          { ox: -38, topY: -60, groundY: 0 },
+          { ox:  40, topY: -52, groundY: 0 },
+          { ox:  55, topY: -48, groundY: 0 },
+          { ox: -18, topY: -65, groundY: 0 },
+          { ox:  22, topY: -62, groundY: 0 },
+        ];
+        for (const r of aerialRoots) {
+          const rx = cx + Math.round(r.ox * bsc);
+          g.lineStyle(Math.round(2*bsc), 0x5a3e1a, 0.75);
+          g.lineBetween(rx, base + Math.round(r.topY * bsc), rx + Math.round(3*bsc), base - 2);
+          // Root spread at ground
+          g.lineStyle(Math.round(bsc), 0x4a3010, 0.55);
+          g.lineBetween(rx, base - 2, rx - Math.round(5*bsc), base + 1);
+          g.lineBetween(rx, base - 2, rx + Math.round(4*bsc), base + 1);
+        }
+
+        // Main trunks — banyan has multiple merged trunks
+        const trunks = [
+          { ox: 0, w: 16, h: 48 },
+          { ox: -18, w: 9, h: 36 },
+          { ox: 20, w: 8, h: 34 },
+        ];
+        for (const t of trunks) {
+          g.fillStyle(0x3a2610);
+          g.fillRect(cx + Math.round(t.ox*bsc) - Math.round(t.w/2*bsc), base - Math.round(t.h*bsc), Math.round(t.w*bsc), Math.round(t.h*bsc));
+          g.fillStyle(0x5a3c1c, 0.35);
+          g.fillRect(cx + Math.round(t.ox*bsc) - Math.round(t.w/4*bsc), base - Math.round(t.h*bsc), Math.round(t.w/4*bsc), Math.round(t.h*bsc));
+        }
+
+        // Wide spreading canopy — lower profile than large_tree
+        g.fillStyle(0x0d4010, 0.93);
+        g.fillEllipse(cx, base - Math.round(70*bsc), Math.round(140*bsc), Math.round(62*bsc));
+
+        g.fillStyle(0x175e17, 0.88);
+        g.fillEllipse(cx - Math.round(10*bsc), base - Math.round(78*bsc), Math.round(115*bsc), Math.round(52*bsc));
+
+        // Outer edge lobes — uneven organic shape
+        g.fillStyle(0x0f4e12, 0.80);
+        g.fillEllipse(cx - Math.round(50*bsc), base - Math.round(62*bsc), Math.round(55*bsc), Math.round(40*bsc));
+        g.fillEllipse(cx + Math.round(48*bsc), base - Math.round(58*bsc), Math.round(58*bsc), Math.round(42*bsc));
+        g.fillEllipse(cx - Math.round(20*bsc), base - Math.round(84*bsc), Math.round(50*bsc), Math.round(36*bsc));
+        g.fillEllipse(cx + Math.round(25*bsc), base - Math.round(82*bsc), Math.round(46*bsc), Math.round(34*bsc));
+
+        // Inner canopy — brighter mid-zone
+        g.fillStyle(0x228022, 0.80);
+        g.fillEllipse(cx + Math.round(4*bsc), base - Math.round(84*bsc), Math.round(80*bsc), Math.round(44*bsc));
+
+        // Sunlit top patches
+        g.fillStyle(0x38a838, 0.55);
+        g.fillEllipse(cx - Math.round(12*bsc), base - Math.round(92*bsc), Math.round(44*bsc), Math.round(28*bsc));
+        g.fillEllipse(cx + Math.round(20*bsc), base - Math.round(88*bsc), Math.round(36*bsc), Math.round(22*bsc));
+        g.fillStyle(0x54c454, 0.25);
+        g.fillEllipse(cx + Math.round(5*bsc), base - Math.round(98*bsc), Math.round(24*bsc), Math.round(16*bsc));
+
+        // Hanging moss threads from canopy edge
+        g.lineStyle(1, 0x1a6018, 0.40);
+        for (let m = 0; m < 8; m++) {
+          const mx = cx + Math.round((-60 + m * 18) * bsc);
+          const my = base - Math.round((58 + (m % 3) * 6) * bsc);
+          g.lineBetween(mx, my, mx + Math.round(2*bsc), my + Math.round(12*bsc));
+        }
         break;
       }
     }
@@ -4249,6 +4380,8 @@ export class GameManager {
         case 'granite':      return anyPick  ? { stamina: 7,  time: T * 25 } : { stamina: 14, time: T * 60 };
         case 'obsidian':     return anyPick  ? { stamina: 10, time: T * 35 } : { stamina: 20, time: T * 100 };
         case 'resin_tree':   return anyAxe   ? { stamina: 6,  time: T * 20 } : { stamina: 12, time: T * 50 };
+        case 'large_tree':   return anyAxe   ? { stamina: 15, time: T * 60 } : null as any; // axe required
+        case 'banyan_tree':  return anyAxe   ? { stamina: 18, time: T * 80 } : null as any; // axe required
         case 'coconut_shell': return { stamina: 2, time: T * 3 };
         default:             return { stamina: 3, time: T * 5 };
       }
@@ -4282,6 +4415,10 @@ export class GameManager {
     const staminaCost = cost.stamina;
 
     // Hard tool gates
+    if ((resource.type === 'large_tree' || resource.type === 'banyan_tree') && !anyAxe) {
+      this.spawnFloatingText('Benötigt Axt 🪓', player.x, player.y, '#f97316');
+      return;
+    }
     if (resource.type === 'wood' && !anyAxe) {
       this.spawnFloatingText('Benötigt Axt 🪓', player.x, player.y, '#f97316');
       return;
@@ -4346,6 +4483,26 @@ export class GameManager {
       useGameStore.getState().tickTime(timeCost);
       usePlayerStore.getState().updateStats({ stamina: Math.max(0, currentStamina - staminaCost) });
       this.spawnFloatingText('💧 Tau gesammelt! +1 Tauschale', player.x, player.y, '#38bdf8');
+      return;
+    }
+
+    // Fell large trees — gives lots of wood + vines, removes tree
+    if (resource.type === 'large_tree' || resource.type === 'banyan_tree') {
+      const woodAmount = resource.type === 'banyan_tree'
+        ? 7 + Math.floor(Math.random() * 4)  // 7–10 wood
+        : 5 + Math.floor(Math.random() * 4); // 5–8 wood
+      const vineAmount = resource.type === 'banyan_tree' ? 3 : 1;
+      addToInventory('wood', woodAmount);
+      if (vineAmount > 0) addToInventory('vine', vineAmount);
+      worldState.harvestResource(resource.id, resource.quantity);
+      useGameStore.getState().tickTime(timeCost);
+      useGameStore.getState().addScore(resource.type === 'banyan_tree' ? 50 : 35);
+      usePlayerStore.getState().updateStats({ stamina: Math.max(0, currentStamina - staminaCost) });
+      usePlayerStore.getState().damageTool('stone_axe', 3);
+      usePlayerStore.getState().damageTool('improved_axe', 2);
+      usePlayerStore.getState().damageTool('iron_axe', 1);
+      const label = resource.type === 'banyan_tree' ? 'Banyan gefällt' : 'Baum gefällt';
+      this.spawnFloatingText(`🪓 ${label}! +${woodAmount} Holz`, player.x, player.y, '#a3e635');
       return;
     }
 

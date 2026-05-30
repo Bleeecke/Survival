@@ -47,6 +47,7 @@ export class WorldGenerator {
     const resources = this.generateScattered(tileMap, rng);
     this.generateClusters(resources, tileMap, rng, spawnX, spawnY);
     this.generateSticks(resources, tileMap, rng);
+    this.generateLargeTrees(resources, tileMap, rng, spawnX, spawnY);
 
     const puddles = this.placePuddles(tileMap, spawnX, spawnY, rng);
     resources.push(...puddles);
@@ -365,6 +366,65 @@ export class WorldGenerator {
         });
       }
     }
+  }
+
+  // ── Large trees (large_tree + banyan_tree) ───────────────────────────
+
+  private generateLargeTrees(
+    resources: WorldResource[],
+    tileMap: Tile[][],
+    rng: SeededRandom,
+    spawnX: number,
+    spawnY: number,
+  ) {
+    const placements: { x: number; y: number }[] = [];
+    const MIN_SPACING = 14; // tiles between any two large trees
+    const MIN_DIST_SPAWN = 25;
+
+    const tryPlace = (type: 'large_tree' | 'banyan_tree', validBiomes: string[], count: number) => {
+      const def = RESOURCE_TYPES[type];
+      if (!def) return;
+
+      const candidates: { x: number; y: number }[] = [];
+      for (let y = 8; y < WORLD_CONFIG.height - 8; y++) {
+        for (let x = 8; x < WORLD_CONFIG.width - 8; x++) {
+          const tile = tileMap[y]?.[x];
+          if (!tile?.walkable || !validBiomes.includes(tile.type)) continue;
+          if (Math.hypot(x - spawnX, y - spawnY) < MIN_DIST_SPAWN) continue;
+          candidates.push({ x, y });
+        }
+      }
+
+      let pool = [...candidates];
+      let placed = 0;
+      while (placed < count && pool.length > 0) {
+        const idx = Math.floor(rng.next() * pool.length);
+        const { x, y } = pool[idx];
+
+        // Ensure min spacing from all other large trees
+        const tooClose = placements.some(p => Math.hypot(p.x - x, p.y - y) < MIN_SPACING);
+        if (!tooClose) {
+          placements.push({ x, y });
+          // Clear a 2-tile radius of existing small resources so they don't overlap the trunk
+          for (let i = resources.length - 1; i >= 0; i--) {
+            if (Math.hypot(resources[i].x - x, resources[i].y - y) < 2) {
+              resources.splice(i, 1);
+            }
+          }
+          resources.push({
+            id: `resource-${type}-${x}-${y}`,
+            type, x, y,
+            quantity: 1, maxQuantity: 1,
+            regenerationTime: 0, lastHarvestedAt: undefined,
+          });
+          placed++;
+        }
+        pool = pool.filter(p => Math.hypot(p.x - x, p.y - y) > MIN_SPACING / 2);
+      }
+    };
+
+    tryPlace('large_tree', ['sparse_forest', 'forest', 'dense_jungle'], 18);
+    tryPlace('banyan_tree', ['dense_jungle', 'forest'], 10);
   }
 
   // ── Puddles ──────────────────────────────────────────────────────────
