@@ -6,6 +6,30 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '1.6',
+    date: '30.05.2026',
+    changes: [
+      'Toasts gebündelt: Skill-XP, Level-Up & Materialentdeckungen oben mittig im Canvas',
+      'Journal: neuer Tab "Entdeckungen" mit allen erstmals aufgehobenen Materialien',
+      'Materialentdeckungs-Meldungen 10 Sekunden sichtbar, danach sanftes Ausblenden',
+      'Kokosnuss öffnen: Kokoswasser wird sofort getrunken (Durst -20, Ausdauer +8)',
+      'Erstes Kokoswasser: atmosphärischer Toast + Journal-Eintrag als Erinnerung',
+      'Hunger/Durst/Müdigkeit-Balken invertiert: voll = gut, leer = kritisch',
+    ],
+  },
+  {
+    version: '1.5',
+    date: '29.05.2026',
+    changes: [
+      'Eingebungs-Journal: Skill-Level-Ups schalten Rezept-Eingebungen frei statt Schlaf-Gate',
+      'Knowledge-System: Eingebungen annehmen gewährt Wissen und entsperrt Rezepte',
+      'Crafting immer erfolgreich — kein Zufallsfaktor mehr',
+      'Journal-Button links unter dem Ausrüstungsbild, Hilfe-Button oben rechts',
+      'DevPanel: +6 Stunden überspringen mit realistischer Stat-Abnahme',
+      'Obsidian-Klinge setzt knows_tool_binding voraus (erst nach Feuersteinmesser sichtbar)',
+    ],
+  },
+  {
     version: '1.4',
     date: '28.05.2026',
     changes: [
