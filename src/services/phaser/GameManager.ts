@@ -463,7 +463,7 @@ export class GameManager {
   private drawCliffSouth(g: Phaser.GameObjects.Graphics, tx: number, ty: number, diff: number) {
     const x = tx * TS;
     const y = ty * TS;
-    const faceH = Math.min(4 + diff * 10, 26); // 14–26px
+    const faceH = 14;
     const hash  = (tx * 7 + ty * 13) % 8;
     const fy    = y + TS - 2; // starts just inside bottom of high tile
 
@@ -494,7 +494,7 @@ export class GameManager {
   private drawCliffEast(g: Phaser.GameObjects.Graphics, tx: number, ty: number, diff: number) {
     const x = tx * TS;
     const y = ty * TS;
-    const faceW = Math.min(3 + diff * 6, 16);
+    const faceW = 10;
 
     // Side wall — thin strip on right edge of high tile + slight overhang into lower tile
     g.fillStyle(0x5a4c38);
@@ -512,7 +512,7 @@ export class GameManager {
   private drawCliffWest(g: Phaser.GameObjects.Graphics, tx: number, ty: number, diff: number) {
     const x = tx * TS;
     const y = ty * TS;
-    const faceW = Math.min(3 + diff * 6, 16);
+    const faceW = 10;
 
     g.fillStyle(0x5a4c38);
     g.fillRect(x - faceW + 2, y, faceW, TS);
