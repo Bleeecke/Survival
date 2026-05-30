@@ -1,0 +1,488 @@
+[
+  {
+    "id": "campfire", "name": "Lagerfeuer", "icon": "🔥",
+    "description": "Wärmt in der Nacht und kocht Nahrung",
+    "category": "utility", "tier": 0, "craftingTime": 3000,
+    "inputs": [{ "resourceId": "sticks", "quantity": 5 }, { "resourceId": "pebbles", "quantity": 3 }],
+    "outputs": [{ "resourceId": "campfire", "quantity": 1 }],
+    "requiredKnowledge": ["knows_basic_fire"],
+    "grantsSkill": { "skill": "survival", "xp": 20 },
+    "grantsKnowledge": ["knows_fire"]
+  },
+  {
+    "id": "knap_flint", "name": "Feuerstein absplittern", "icon": "🪨",
+    "description": "Schlage Feuerstein gegen einen Kiesel. Bei Fehlschlag sind die Materialien verloren.",
+    "category": "resource", "tier": 0, "craftingTime": 3000,
+    "inputs": [{ "resourceId": "flint", "quantity": 1 }, { "resourceId": "pebbles", "quantity": 1 }],
+    "outputs": [{ "resourceId": "sharp_flint", "quantity": 1 }],
+    "requiredKnowledge": ["knows_sharp_edges"],
+    "grantsSkill": { "skill": "crafting", "xp": 15 },
+    "grantsKnowledge": ["knows_sharp_edges"],
+    "skillBasedSuccess": { "skill": "crafting", "baseChance": 0.35, "bonusPerLevel": 0.06 }
+  },
+  {
+    "id": "harden_stick", "name": "Ast in Feuer härten", "icon": "🌿",
+    "description": "Halte einen frischen Ast in die Glut – das Holz wird hart und zäh",
+    "category": "resource", "tier": 0, "craftingTime": 4000,
+    "inputs": [{ "resourceId": "sticks", "quantity": 2 }],
+    "outputs": [{ "resourceId": "hardened_stick", "quantity": 1 }],
+    "requiresTool": "campfire_near",
+    "requiresSkill": { "skill": "survival", "level": 1 },
+    "requiredKnowledge": ["knows_fire"],
+    "grantsSkill": { "skill": "crafting", "xp": 10 },
+    "grantsKnowledge": ["knows_hardened_wood"]
+  },
+  {
+    "id": "flint_knife", "name": "Feuersteinmesser", "icon": "🔪",
+    "description": "Binde eine gespaltene Klinge mit Fasern an einen gehärteten Ast",
+    "category": "tool", "tier": 0, "craftingTime": 5000,
+    "inputs": [
+      { "resourceId": "sharp_flint", "quantity": 1 },
+      { "resourceId": "hardened_stick", "quantity": 1 },
+      { "resourceId": "fiber", "quantity": 3 }
+    ],
+    "outputs": [{ "resourceId": "flint_knife", "quantity": 1 }],
+    "requiresSkill": { "skill": "crafting", "level": 1 },
+    "requiredKnowledge": ["knows_sharp_edges", "knows_binding"],
+    "grantsSkill": { "skill": "crafting", "xp": 25 },
+    "grantsKnowledge": ["knows_tool_binding"]
+  },
+  {
+    "id": "palm_shelter", "name": "Palmendach", "icon": "🌴",
+    "description": "Einfachster Unterschlupf aus Strandmaterialien",
+    "category": "shelter", "tier": 0, "craftingTime": 3000,
+    "inputs": [
+      { "resourceId": "sticks", "quantity": 8 },
+      { "resourceId": "palm_leaf", "quantity": 6 },
+      { "resourceId": "vine", "quantity": 3 }
+    ],
+    "outputs": [{ "resourceId": "palm_shelter", "quantity": 1 }],
+    "requiredKnowledge": ["knows_basic_shelter"],
+    "grantsSkill": { "skill": "building", "xp": 15 },
+    "grantsKnowledge": ["knows_construction"]
+  },
+  {
+    "id": "water_container", "name": "Regensammler", "icon": "🥥",
+    "description": "Kokosschale + Palmenblatt – platzieren und auf Regen warten. Sammelt 2 Schluck Regenwasser.",
+    "category": "utility", "tier": 0, "craftingTime": 2000,
+    "inputs": [{ "resourceId": "coconut_shell", "quantity": 1 }, { "resourceId": "palm_leaf", "quantity": 1 }],
+    "outputs": [{ "resourceId": "water_container", "quantity": 1 }],
+    "requiredKnowledge": ["knows_rain_collection"]
+  },
+  {
+    "id": "turtle_shell_bowl", "name": "Schildkrötenschale (Behälter)", "icon": "🐢",
+    "description": "Schildkrötenpanzer als Trinkschale – hält mehr Wasser als eine Kokosschale",
+    "category": "utility", "tier": 1, "craftingTime": 3000,
+    "inputs": [{ "resourceId": "turtle_shell", "quantity": 1 }, { "resourceId": "vine", "quantity": 2 }],
+    "outputs": [{ "resourceId": "water_container", "quantity": 1 }],
+    "requiredKnowledge": ["knows_rain_collection"],
+    "grantsSkill": { "skill": "building", "xp": 8 }
+  },
+  {
+    "id": "coconut_shell", "name": "Kokosschale öffnen", "icon": "🥥",
+    "description": "Kokosnuss mit der Axt öffnen – ergibt 2 Schalen",
+    "category": "resource", "tier": 0, "craftingTime": 1500,
+    "inputs": [{ "resourceId": "coconut", "quantity": 1 }],
+    "outputs": [{ "resourceId": "coconut_shell", "quantity": 2 }],
+    "requiresTool": "any_axe",
+    "requiredKnowledge": ["knows_rain_collection"]
+  },
+  {
+    "id": "torch", "name": "Fackel", "icon": "🔦",
+    "description": "In der Hand tragen – erhellt die Dunkelheit (+3 Sichtweite)",
+    "category": "utility", "tier": 1, "craftingTime": 3000,
+    "inputs": [
+      { "resourceId": "sticks", "quantity": 2 },
+      { "resourceId": "rope", "quantity": 1 },
+      { "resourceId": "tree_resin", "quantity": 2 }
+    ],
+    "outputs": [{ "resourceId": "torch", "quantity": 2 }],
+    "requiredKnowledge": ["knows_fire"]
+  },
+  {
+    "id": "stone_axe", "name": "Primitive Axt", "icon": "🪓",
+    "description": "Scharfer Stein am gehärteten Ast – fällt Bäume, öffnet Kokosnüsse",
+    "category": "tool", "tier": 1, "craftingTime": 5000,
+    "inputs": [
+      { "resourceId": "hardened_stick", "quantity": 1 },
+      { "resourceId": "sharp_flint", "quantity": 1 },
+      { "resourceId": "fiber", "quantity": 3 }
+    ],
+    "outputs": [{ "resourceId": "stone_axe", "quantity": 1 }],
+    "requiresSkill": { "skill": "crafting", "level": 1 },
+    "requiredKnowledge": ["knows_tool_binding"],
+    "grantsSkill": { "skill": "crafting", "xp": 20 }
+  },
+  {
+    "id": "stone_pickaxe", "name": "Steinspitzhacke", "icon": "⛏️",
+    "description": "Bricht Steine schneller und effizienter",
+    "category": "tool", "tier": 1, "craftingTime": 5000,
+    "inputs": [{ "resourceId": "sticks", "quantity": 2 }, { "resourceId": "pebbles", "quantity": 6 }],
+    "outputs": [{ "resourceId": "stone_pickaxe", "quantity": 1 }],
+    "requiredKnowledge": ["knows_tool_binding"],
+    "grantsSkill": { "skill": "crafting", "xp": 20 }
+  },
+  {
+    "id": "stone_spear", "name": "Steinspeer", "icon": "🗡️",
+    "description": "Scharfer Stein am gehärteten Ast – Jagd und Verteidigung",
+    "category": "weapon", "tier": 1, "craftingTime": 4000,
+    "inputs": [
+      { "resourceId": "hardened_stick", "quantity": 1 },
+      { "resourceId": "sharp_flint", "quantity": 1 },
+      { "resourceId": "fiber", "quantity": 2 }
+    ],
+    "outputs": [{ "resourceId": "stone_spear", "quantity": 1 }],
+    "requiresSkill": { "skill": "hunting", "level": 1 },
+    "requiredKnowledge": ["knows_hardened_wood", "knows_sharp_edges"],
+    "grantsSkill": { "skill": "hunting", "xp": 15 },
+    "grantsKnowledge": ["knows_basic_weapon"]
+  },
+  {
+    "id": "shell_knife", "name": "Muschelklinge", "icon": "🐚",
+    "description": "Scharfe Muschel am Ast befestigt – primitives Schneidwerkzeug, zerbrechlich",
+    "category": "tool", "tier": 0, "craftingTime": 2000,
+    "inputs": [
+      { "resourceId": "shells", "quantity": 3 },
+      { "resourceId": "sticks", "quantity": 1 },
+      { "resourceId": "fiber", "quantity": 1 }
+    ],
+    "outputs": [{ "resourceId": "shell_knife", "quantity": 1 }],
+    "requiredKnowledge": ["knows_sharp_edges"],
+    "grantsSkill": { "skill": "crafting", "xp": 8 }
+  },
+  {
+    "id": "rope_fiber", "name": "Seil flechten", "icon": "🪢",
+    "description": "Fasern und Lianen zu einem stabilen Seil drehen",
+    "category": "resource", "tier": 1, "craftingTime": 3000,
+    "inputs": [{ "resourceId": "fiber", "quantity": 4 }, { "resourceId": "vine", "quantity": 2 }],
+    "outputs": [{ "resourceId": "rope", "quantity": 2 }],
+    "requiresTool": "any_knife",
+    "requiredKnowledge": ["knows_binding"],
+    "grantsSkill": { "skill": "crafting", "xp": 10 }
+  },
+  {
+    "id": "driftwood_to_sticks", "name": "Treibholz zerbrechen", "icon": "🪵",
+    "description": "Treibholz über das Knie brechen – ergibt grobe Äste",
+    "category": "resource", "tier": 0, "craftingTime": 2000,
+    "inputs": [{ "resourceId": "driftwood", "quantity": 1 }],
+    "outputs": [{ "resourceId": "sticks", "quantity": 2 }],
+    "requiredKnowledge": ["knows_basic_fire"]
+  },
+  {
+    "id": "palm_leaf_to_fiber", "name": "Palmenblätter zerreißen", "icon": "🌿",
+    "description": "Palmenblätter längs aufreißen und die Fasern herausziehen",
+    "category": "resource", "tier": 0, "craftingTime": 4000,
+    "inputs": [{ "resourceId": "palm_leaf", "quantity": 3 }],
+    "outputs": [{ "resourceId": "fiber", "quantity": 1 }],
+    "requiredKnowledge": ["knows_basic_shelter"],
+    "grantsSkill": { "skill": "crafting", "xp": 5 }
+  },
+  {
+    "id": "bandage", "name": "Verband", "icon": "🩹",
+    "description": "Fasern und Palmenblatt als Wundverband – stoppt Blutungen",
+    "category": "food", "tier": 0, "craftingTime": 2000,
+    "inputs": [{ "resourceId": "fiber", "quantity": 2 }, { "resourceId": "palm_leaf", "quantity": 1 }],
+    "outputs": [{ "resourceId": "bandage", "quantity": 1 }],
+    "requiredKnowledge": ["knows_medicine"],
+    "grantsSkill": { "skill": "naturelore", "xp": 5 }
+  },
+  {
+    "id": "herbal_remedy", "name": "Kräutermittel", "icon": "🌿",
+    "description": "Heilt Wunden und stellt Gesundheit wieder her",
+    "category": "food", "tier": 1, "craftingTime": 2000,
+    "inputs": [{ "resourceId": "herbs", "quantity": 3 }],
+    "outputs": [{ "resourceId": "herbal_remedy", "quantity": 1 }],
+    "requiredKnowledge": ["knows_medicine"],
+    "grantsSkill": { "skill": "naturelore", "xp": 10 },
+    "grantsKnowledge": ["knows_medicine"]
+  },
+  {
+    "id": "fever_tea", "name": "Fiebertee", "icon": "🍵",
+    "description": "Kräutertee gegen Erkältung und Fieber – am Lagerfeuer kochen",
+    "category": "food", "tier": 1, "craftingTime": 3000,
+    "inputs": [{ "resourceId": "herbs", "quantity": 2 }, { "resourceId": "water", "quantity": 1 }],
+    "outputs": [{ "resourceId": "fever_tea", "quantity": 1 }],
+    "requiresTool": "campfire_near",
+    "requiredKnowledge": ["knows_medicine"],
+    "grantsSkill": { "skill": "naturelore", "xp": 8 }
+  },
+  {
+    "id": "antiparasitic", "name": "Parasitenmedizin", "icon": "🧪",
+    "description": "Aus Kräutern und Baumharz – vertreibt Parasiten",
+    "category": "food", "tier": 1, "craftingTime": 4000,
+    "inputs": [{ "resourceId": "herbs", "quantity": 4 }, { "resourceId": "tree_resin", "quantity": 1 }],
+    "outputs": [{ "resourceId": "antiparasitic", "quantity": 1 }],
+    "requiredKnowledge": ["knows_medicine"],
+    "grantsSkill": { "skill": "naturelore", "xp": 12 }
+  },
+  {
+    "id": "cooked_food", "name": "Gekochtes Essen", "icon": "🍖",
+    "description": "Über dem Feuer gegartes Essen – nahrhafter",
+    "category": "food", "tier": 1, "craftingTime": 3000,
+    "inputs": [{ "resourceId": "food", "quantity": 2 }],
+    "outputs": [{ "resourceId": "cooked_food", "quantity": 2 }],
+    "requiresTool": "campfire_near",
+    "requiredKnowledge": ["knows_cooking"],
+    "grantsSkill": { "skill": "cooking", "xp": 10 },
+    "grantsKnowledge": ["knows_cooking"]
+  },
+  {
+    "id": "cooked_mushroom", "name": "Gebratene Pilze", "icon": "🥘",
+    "description": "Nahrhafte Pilze – sicherer als roh",
+    "category": "food", "tier": 1, "craftingTime": 2500,
+    "inputs": [{ "resourceId": "mushroom", "quantity": 2 }],
+    "outputs": [{ "resourceId": "cooked_mushroom", "quantity": 2 }],
+    "requiresTool": "campfire_near",
+    "requiredKnowledge": ["knows_cooking"],
+    "grantsSkill": { "skill": "cooking", "xp": 10 }
+  },
+  {
+    "id": "cooked_boar", "name": "Gebratenes Wildschwein", "icon": "🥩",
+    "description": "Am Feuer gegartes Wildschweinfleisch – sehr sättigend",
+    "category": "food", "tier": 1, "craftingTime": 5000,
+    "inputs": [{ "resourceId": "boar_meat", "quantity": 2 }],
+    "outputs": [{ "resourceId": "cooked_boar", "quantity": 2 }],
+    "requiresTool": "campfire_near",
+    "requiredKnowledge": ["knows_cooking"]
+  },
+  {
+    "id": "cooked_fish", "name": "Gebratener Fisch", "icon": "🐟",
+    "description": "Am Feuer gegartes Fisch – sehr nahrhaft",
+    "category": "food", "tier": 1, "craftingTime": 4000,
+    "inputs": [{ "resourceId": "fish", "quantity": 2 }],
+    "outputs": [{ "resourceId": "cooked_fish_meal", "quantity": 2 }],
+    "requiresTool": "campfire_near",
+    "requiredKnowledge": ["knows_cooking"]
+  },
+  {
+    "id": "cooked_crab", "name": "Gekochte Krabbe", "icon": "🦀",
+    "description": "Am Feuer gegartes Krabbenfleisch – sehr nahrhaft",
+    "category": "food", "tier": 1, "craftingTime": 4000,
+    "inputs": [{ "resourceId": "crab_meat", "quantity": 2 }],
+    "outputs": [{ "resourceId": "cooked_crab", "quantity": 2 }],
+    "requiresTool": "campfire_near",
+    "requiredKnowledge": ["knows_cooking"]
+  },
+  {
+    "id": "cooked_turtle", "name": "Gegarte Schildkröte", "icon": "🐢",
+    "description": "Muss unbedingt gegart werden – roh gefährlich",
+    "category": "food", "tier": 1, "craftingTime": 6000,
+    "inputs": [{ "resourceId": "turtle_meat", "quantity": 2 }],
+    "outputs": [{ "resourceId": "cooked_turtle", "quantity": 2 }],
+    "requiresTool": "campfire_near",
+    "requiredKnowledge": ["knows_cooking"]
+  },
+  {
+    "id": "smoked_meat", "name": "Fleisch räuchern", "icon": "🥩",
+    "description": "Langsam über dem Feuer geräuchert – hält bis zu 7 Tage",
+    "category": "food", "tier": 1, "craftingTime": 8000,
+    "inputs": [{ "resourceId": "boar_meat", "quantity": 2 }, { "resourceId": "sticks", "quantity": 2 }],
+    "outputs": [{ "resourceId": "smoked_meat", "quantity": 2 }],
+    "requiresTool": "campfire_near",
+    "requiredKnowledge": ["knows_preservation"],
+    "grantsSkill": { "skill": "cooking", "xp": 15 },
+    "grantsKnowledge": ["knows_preservation"]
+  },
+  {
+    "id": "dried_fish", "name": "Fisch trocknen", "icon": "🐟",
+    "description": "In der Sonne getrocknet – hält bis zu 7 Tage",
+    "category": "food", "tier": 1, "craftingTime": 10000,
+    "inputs": [{ "resourceId": "fish", "quantity": 2 }],
+    "outputs": [{ "resourceId": "dried_fish", "quantity": 2 }],
+    "requiresTool": "campfire_near",
+    "requiredKnowledge": ["knows_preservation"],
+    "grantsSkill": { "skill": "cooking", "xp": 12 }
+  },
+  {
+    "id": "dried_fruit", "name": "Früchte trocknen", "icon": "🍊",
+    "description": "Getrocknete Früchte – leicht, lange haltbar (10 Tage)",
+    "category": "food", "tier": 1, "craftingTime": 8000,
+    "inputs": [{ "resourceId": "exotic_fruit", "quantity": 2 }],
+    "outputs": [{ "resourceId": "dried_fruit", "quantity": 3 }],
+    "requiresTool": "campfire_near",
+    "requiredKnowledge": ["knows_preservation"],
+    "grantsSkill": { "skill": "cooking", "xp": 10 }
+  },
+  {
+    "id": "fishing_rod", "name": "Angelrute", "icon": "🎣",
+    "description": "Langer Stock mit Schnur – zum Angeln an Gewässern",
+    "category": "tool", "tier": 1, "craftingTime": 4000,
+    "inputs": [
+      { "resourceId": "sticks", "quantity": 3 },
+      { "resourceId": "rope", "quantity": 1 },
+      { "resourceId": "vine", "quantity": 1 }
+    ],
+    "outputs": [{ "resourceId": "fishing_rod", "quantity": 1 }],
+    "requiresTool": "any_knife",
+    "requiredKnowledge": ["knows_basic_weapon"],
+    "grantsSkill": { "skill": "hunting", "xp": 10 }
+  },
+  {
+    "id": "wooden_shelter", "name": "Holzunterkunft", "icon": "🏠",
+    "description": "Stabilere Unterkunft – Baustelle, 2 Tage Arbeit (E)",
+    "category": "shelter", "tier": 2, "craftingTime": 8000,
+    "inputs": [{ "resourceId": "wood", "quantity": 20 }, { "resourceId": "stone", "quantity": 5 }],
+    "outputs": [{ "resourceId": "wooden_shelter", "quantity": 1 }],
+    "requiresTool": "stone_axe",
+    "requiredKnowledge": ["knows_construction"]
+  },
+  {
+    "id": "storage_box", "name": "Lagerbox", "icon": "📦",
+    "description": "Lagert Materialien – bis 150 kg Kapazität; mit E öffnen",
+    "category": "utility", "tier": 2, "craftingTime": 5000,
+    "inputs": [{ "resourceId": "wood", "quantity": 8 }, { "resourceId": "rope", "quantity": 2 }],
+    "outputs": [{ "resourceId": "storage_box", "quantity": 1 }],
+    "requiresTool": "stone_axe",
+    "requiredKnowledge": ["knows_construction"]
+  },
+  {
+    "id": "workbench", "name": "Werkbank", "icon": "🪚",
+    "description": "Schaltet fortgeschrittenes Crafting frei",
+    "category": "utility", "tier": 2, "craftingTime": 6000,
+    "inputs": [{ "resourceId": "wood", "quantity": 15 }, { "resourceId": "stone", "quantity": 10 }],
+    "outputs": [{ "resourceId": "workbench", "quantity": 1 }],
+    "requiresTool": "stone_axe",
+    "requiredKnowledge": ["knows_construction"]
+  },
+  {
+    "id": "wood_to_sticks", "name": "Holz zu Ästen", "icon": "🌿",
+    "description": "Holz in handliche Äste hacken",
+    "category": "resource", "tier": 2, "craftingTime": 2000,
+    "inputs": [{ "resourceId": "wood", "quantity": 1 }],
+    "outputs": [{ "resourceId": "sticks", "quantity": 3 }],
+    "requiresTool": "stone_axe"
+  },
+  {
+    "id": "improved_axe", "name": "Verbesserte Axt", "icon": "🪓",
+    "description": "3× Wood-Ertrag; kann große Bäume fällen",
+    "category": "tool", "tier": 2, "craftingTime": 8000,
+    "inputs": [{ "resourceId": "wood", "quantity": 5 }, { "resourceId": "stone", "quantity": 10 }],
+    "outputs": [{ "resourceId": "improved_axe", "quantity": 1 }],
+    "requiresTool": "stone_axe",
+    "requiredKnowledge": ["knows_construction"]
+  },
+  {
+    "id": "improved_pickaxe", "name": "Verbesserte Spitzhacke", "icon": "⛏️",
+    "description": "3× Stone-Ertrag; knackt größere Felsen",
+    "category": "tool", "tier": 2, "craftingTime": 8000,
+    "inputs": [{ "resourceId": "wood", "quantity": 5 }, { "resourceId": "stone", "quantity": 12 }],
+    "outputs": [{ "resourceId": "improved_pickaxe", "quantity": 1 }],
+    "requiresTool": "stone_pickaxe",
+    "requiredKnowledge": ["knows_construction"]
+  },
+  {
+    "id": "obsidian_blade", "name": "Obsidianklinge", "icon": "🗡️",
+    "description": "Natürlich scharfes Vulkanglas – schärfer als Feuerstein, aber spröde",
+    "category": "tool", "tier": 2, "craftingTime": 6000,
+    "inputs": [
+      { "resourceId": "obsidian", "quantity": 2 },
+      { "resourceId": "hardened_stick", "quantity": 1 },
+      { "resourceId": "fiber", "quantity": 3 }
+    ],
+    "outputs": [{ "resourceId": "flint_knife", "quantity": 1 }],
+    "requiresSkill": { "skill": "crafting", "level": 3 },
+    "requiredKnowledge": ["knows_sharp_edges"],
+    "grantsSkill": { "skill": "crafting", "xp": 30 }
+  },
+  {
+    "id": "granite_foundation", "name": "Granitfundament", "icon": "🪨",
+    "description": "Stabiles Fundament aus Granit – Basis für bessere Unterkünfte",
+    "category": "utility", "tier": 2, "craftingTime": 5000,
+    "inputs": [{ "resourceId": "granite", "quantity": 5 }, { "resourceId": "stone", "quantity": 3 }],
+    "outputs": [{ "resourceId": "stone", "quantity": 8 }],
+    "requiresTool": "stone_pickaxe",
+    "requiredKnowledge": ["knows_construction"],
+    "grantsSkill": { "skill": "building", "xp": 20 }
+  },
+  {
+    "id": "granite_campfire", "name": "Granit-Feuerstelle", "icon": "🔥",
+    "description": "Feuerstelle aus Granit – hält doppelt so lange wie ein normales Lagerfeuer",
+    "category": "utility", "tier": 2, "craftingTime": 6000,
+    "inputs": [{ "resourceId": "granite", "quantity": 6 }, { "resourceId": "sticks", "quantity": 4 }],
+    "outputs": [{ "resourceId": "campfire", "quantity": 1 }],
+    "requiresTool": "stone_pickaxe",
+    "requiredKnowledge": ["knows_fire"],
+    "grantsSkill": { "skill": "survival", "xp": 15 }
+  },
+  {
+    "id": "plank", "name": "Holzbretter", "icon": "🪵",
+    "description": "Verarbeitetes Holz für bessere Strukturen",
+    "category": "resource", "tier": 3, "craftingTime": 4000,
+    "inputs": [{ "resourceId": "wood", "quantity": 10 }],
+    "outputs": [{ "resourceId": "plank", "quantity": 5 }],
+    "requiresTool": "workbench_near",
+    "requiredKnowledge": ["knows_construction"]
+  },
+  {
+    "id": "log_cabin", "name": "Blockhütte", "icon": "🏡",
+    "description": "Feste Unterkunft – Baustelle, 4 Tage Arbeit (E)",
+    "category": "shelter", "tier": 3, "craftingTime": 20000,
+    "inputs": [
+      { "resourceId": "wood", "quantity": 40 },
+      { "resourceId": "stone", "quantity": 20 },
+      { "resourceId": "plank", "quantity": 10 }
+    ],
+    "outputs": [{ "resourceId": "log_cabin", "quantity": 1 }],
+    "requiresTool": "workbench_near",
+    "requiredKnowledge": ["knows_construction"]
+  },
+  {
+    "id": "bed", "name": "Bett", "icon": "🛏️",
+    "description": "Legt einen Schlafpunkt fest; stellt Ausdauer schneller wieder her",
+    "category": "utility", "tier": 3, "craftingTime": 6000,
+    "inputs": [{ "resourceId": "plank", "quantity": 8 }, { "resourceId": "palm_leaf", "quantity": 10 }],
+    "outputs": [{ "resourceId": "bed", "quantity": 1 }],
+    "requiresTool": "workbench_near",
+    "requiredKnowledge": ["knows_construction"]
+  },
+  {
+    "id": "farm_plot", "name": "Ackerbeet", "icon": "🌾",
+    "description": "Produziert passiv alle 40 Sekunden Nahrung",
+    "category": "utility", "tier": 4, "craftingTime": 10000,
+    "inputs": [{ "resourceId": "plank", "quantity": 10 }, { "resourceId": "stone", "quantity": 5 }],
+    "outputs": [{ "resourceId": "farm_plot", "quantity": 1 }],
+    "requiresTool": "workbench_near",
+    "requiredKnowledge": ["knows_construction"]
+  },
+  {
+    "id": "furnace", "name": "Schmelzofen", "icon": "🏭",
+    "description": "Schmilzt Eisenerz zu Eisenbarren",
+    "category": "utility", "tier": 4, "craftingTime": 15000,
+    "inputs": [
+      { "resourceId": "wood", "quantity": 20 },
+      { "resourceId": "stone", "quantity": 15 },
+      { "resourceId": "plank", "quantity": 10 }
+    ],
+    "outputs": [{ "resourceId": "furnace", "quantity": 1 }],
+    "requiresTool": "workbench_near",
+    "requiredKnowledge": ["knows_metal"]
+  },
+  {
+    "id": "iron_bar", "name": "Eisenbarren", "icon": "🔩",
+    "description": "Geschmolzenes Eisen für Werkzeuge",
+    "category": "resource", "tier": 4, "craftingTime": 15000,
+    "inputs": [{ "resourceId": "iron_ore", "quantity": 3 }, { "resourceId": "wood", "quantity": 5 }],
+    "outputs": [{ "resourceId": "iron_bar", "quantity": 1 }],
+    "requiresTool": "furnace_near",
+    "requiredKnowledge": ["knows_metal"],
+    "grantsKnowledge": ["knows_metal"]
+  },
+  {
+    "id": "iron_axe", "name": "Eisenaxt", "icon": "🪓",
+    "description": "5× Holz-Ertrag; schnellstes Werkzeug",
+    "category": "tool", "tier": 4, "craftingTime": 10000,
+    "inputs": [{ "resourceId": "iron_bar", "quantity": 1 }, { "resourceId": "plank", "quantity": 3 }],
+    "outputs": [{ "resourceId": "iron_axe", "quantity": 1 }],
+    "requiresTool": "furnace_near",
+    "requiredKnowledge": ["knows_metal"]
+  },
+  {
+    "id": "iron_pickaxe", "name": "Eisenspitzhacke", "icon": "⛏️",
+    "description": "5× Stein-Ertrag; schnellstes Werkzeug",
+    "category": "tool", "tier": 4, "craftingTime": 10000,
+    "inputs": [{ "resourceId": "iron_bar", "quantity": 1 }, { "resourceId": "plank", "quantity": 3 }],
+    "outputs": [{ "resourceId": "iron_pickaxe", "quantity": 1 }],
+    "requiresTool": "furnace_near",
+    "requiredKnowledge": ["knows_metal"]
+  }
+]
