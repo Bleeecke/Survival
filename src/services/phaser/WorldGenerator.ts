@@ -135,7 +135,23 @@ export class WorldGenerator {
 
   private makeTile(x: number, y: number, type: string): Tile {
     const tileType = TILE_TYPES[type] ?? TILE_TYPES['impassable'];
-    return { id: `tile-${x}-${y}`, type, walkable: tileType.walkable, x, y, spriteIndex: tileType.spriteIndex };
+    return { id: `tile-${x}-${y}`, type, walkable: tileType.walkable, x, y, spriteIndex: tileType.spriteIndex, elevation: this.elevationForType(type) };
+  }
+
+  private elevationForType(type: string): number {
+    switch (type) {
+      case 'water':        return 0;
+      case 'beach':        return 0;
+      case 'grass':        return 1;
+      case 'tall_grass':   return 1;
+      case 'sparse_forest': return 1;
+      case 'dense_jungle': return 1;
+      case 'forest':       return 2;
+      case 'hills':        return 2;
+      case 'mountain':     return 3;
+      case 'impassable':   return 4;
+      default:             return 1;
+    }
   }
 
   // ── Spawn on SOUTH beach ─────────────────────────────────────────────
@@ -237,32 +253,36 @@ export class WorldGenerator {
         spawnOn: ['beach'], minQ: 1, maxQ: 2, minDistFromSpawn: 3,
       },
       palm_tree: {
-        clusterCount: 10, radius: 5, density: 0.28,
-        spawnOn: ['beach'], minQ: 3, maxQ: 5, minDistFromSpawn: 0,
+        clusterCount: 20, radius: 6, density: 0.35,
+        spawnOn: ['beach', 'grass'], minQ: 3, maxQ: 5, minDistFromSpawn: 0,
       },
       resin_tree: {
-        clusterCount: 6, radius: 7, density: 0.18,
-        spawnOn: ['sparse_forest', 'forest', 'dense_jungle'], minQ: 3, maxQ: 5, minDistFromSpawn: 35,
+        clusterCount: 8, radius: 7, density: 0.20,
+        spawnOn: ['sparse_forest', 'forest', 'dense_jungle'], minQ: 3, maxQ: 5, minDistFromSpawn: 30,
       },
       rubber_tree: {
-        clusterCount: 4, radius: 6, density: 0.12,
-        spawnOn: ['dense_jungle'], minQ: 1, maxQ: 1, minDistFromSpawn: 60,
+        clusterCount: 6, radius: 6, density: 0.15,
+        spawnOn: ['dense_jungle'], minQ: 1, maxQ: 1, minDistFromSpawn: 55,
       },
       cacao_tree: {
-        clusterCount: 5, radius: 5, density: 0.14,
-        spawnOn: ['dense_jungle'], minQ: 1, maxQ: 1, minDistFromSpawn: 50,
+        clusterCount: 7, radius: 5, density: 0.18,
+        spawnOn: ['dense_jungle', 'forest'], minQ: 1, maxQ: 1, minDistFromSpawn: 40,
+      },
+      fern: {
+        clusterCount: 20, radius: 5, density: 0.30,
+        spawnOn: ['grass', 'tall_grass', 'sparse_forest', 'dense_jungle'], minQ: 1, maxQ: 1, minDistFromSpawn: 5,
       },
       pandanus: {
-        clusterCount: 8, radius: 6, density: 0.16,
-        spawnOn: ['sparse_forest'], minQ: 1, maxQ: 1, minDistFromSpawn: 15,
+        clusterCount: 12, radius: 6, density: 0.22,
+        spawnOn: ['sparse_forest', 'beach', 'grass'], minQ: 1, maxQ: 1, minDistFromSpawn: 10,
       },
       breadfruit_tree: {
-        clusterCount: 7, radius: 5, density: 0.15,
-        spawnOn: ['forest'], minQ: 1, maxQ: 1, minDistFromSpawn: 25,
+        clusterCount: 10, radius: 6, density: 0.18,
+        spawnOn: ['forest', 'sparse_forest'], minQ: 1, maxQ: 1, minDistFromSpawn: 20,
       },
       bamboo: {
-        clusterCount: 8, radius: 4, density: 0.22,
-        spawnOn: ['forest'], minQ: 1, maxQ: 1, minDistFromSpawn: 20,
+        clusterCount: 12, radius: 5, density: 0.28,
+        spawnOn: ['forest', 'dense_jungle'], minQ: 1, maxQ: 1, minDistFromSpawn: 15,
       },
       obsidian: {
         clusterCount: 3, radius: 5, density: 0.20,

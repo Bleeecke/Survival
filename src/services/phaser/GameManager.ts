@@ -388,6 +388,7 @@ export class GameManager {
       }
     }
     this.renderTileBlendingViewport(g, world, tx0, ty0, tx1, ty1);
+    this.renderCliffFaces(g, world, tx0, ty0, tx1, ty1);
 
     this.lastTileViewTx = Math.floor(cam.worldView.x / TS);
     this.lastTileViewTy = Math.floor(cam.worldView.y / TS);
@@ -432,6 +433,42 @@ export class GameManager {
     }
   }
 
+
+  private renderCliffFaces(g: Phaser.GameObjects.Graphics, world: any, tx0: number, ty0: number, tx1: number, ty1: number) {
+    for (let ty = ty0; ty < ty1; ty++) {
+      for (let tx = tx0; tx <= tx1; tx++) {
+        const here = world.tileMap[ty]?.[tx];
+        const below = world.tileMap[ty + 1]?.[tx];
+        if (!here || !below) continue;
+        const diff = (here.elevation ?? 0) - (below.elevation ?? 0);
+        if (diff <= 0) continue;
+
+        const x = tx * TS;
+        const y = ty * TS;
+        const faceH = Math.min(diff * 12, 24);
+        const hash = (tx * 7 + ty * 13) % 8;
+
+        // Main rock face — extends from bottom of upper tile into tile below
+        g.fillStyle(0x7a6a52);
+        g.fillRect(x, y + TS - faceH + 4, TS, faceH);
+
+        // Darker shadow strip at base
+        g.fillStyle(0x2e2418, 0.75);
+        g.fillRect(x, y + TS - faceH + faceH - 3, TS, 5);
+
+        // Highlight at top edge of cliff
+        g.fillStyle(0xa09070, 0.65);
+        g.fillRect(x, y + TS - faceH + 4, TS, 3);
+
+        // Rocky cracks / texture
+        for (let i = 0; i < 3; i++) {
+          const rx = x + (hash * 3 + i * 9 + tx % 5) % (TS - 5);
+          g.fillStyle(0x4a3c28, 0.55);
+          g.fillRect(rx, y + TS - faceH + 7 + i * 4, 3 + (i % 2), 2);
+        }
+      }
+    }
+  }
 
   private drawTile(g: Phaser.GameObjects.Graphics, type: string, tx: number, ty: number) {
     const x = tx * TS;
@@ -1252,12 +1289,58 @@ export class GameManager {
         break;
       }
       case 'driftwood': {
-        g.fillStyle(0xb8a888);
-        g.fillRect(cx - 8, base - 3, 16, 5);
-        g.fillStyle(0xd0bea0, 0.6);
-        g.fillRect(cx - 6, base - 4, 10, 3);
-        g.fillStyle(0x907860, 0.5);
-        g.fillRect(cx - 3, base, 6, 3);
+        const ds = (tx * 531 + ty * 317) % 100;
+        const ox = (ds % 7) - 3; // horizontal offset variation
+        const large = ds > 35;
+        // Shadow
+        g.fillStyle(0x000000, 0.15);
+        g.fillEllipse(cx + ox, base + 3, large ? 36 : 20, 6);
+        if (large) {
+          // Main log body — fat horizontal ellipse, bleached grey-white
+          g.fillStyle(0xd8cdb8, 0.97);
+          g.fillEllipse(cx + ox, base - 5, 34, 11);
+          // Dark shadow underside
+          g.fillStyle(0x9a8868, 0.5);
+          g.fillEllipse(cx + ox, base - 2, 30, 6);
+          // Bleached top highlight
+          g.fillStyle(0xeee8d8, 0.7);
+          g.fillEllipse(cx + ox - 2, base - 8, 20, 5);
+          // Bark crack lines
+          g.lineStyle(1, 0xa09070, 0.6);
+          g.lineBetween(cx + ox - 10, base - 5, cx + ox - 4, base - 7);
+          g.lineBetween(cx + ox + 3,  base - 4, cx + ox + 9,  base - 6);
+          // End knots
+          g.fillStyle(0xb0a080, 0.9);
+          g.fillCircle(cx + ox - 16, base - 5, 5);
+          g.fillStyle(0x8a7858, 0.6);
+          g.fillCircle(cx + ox - 16, base - 5, 3);
+          g.fillStyle(0xb0a080, 0.9);
+          g.fillCircle(cx + ox + 16, base - 5, 4);
+          g.fillStyle(0x8a7858, 0.6);
+          g.fillCircle(cx + ox + 16, base - 5, 2);
+          // Occasional small branch stub
+          if (ds % 3 !== 0) {
+            g.lineStyle(2, 0xb8a888, 0.8);
+            g.lineBetween(cx + ox + 4, base - 10, cx + ox + 10, base - 16);
+            g.lineStyle(1.5, 0xc8b898, 0.5);
+            g.lineBetween(cx + ox + 10, base - 16, cx + ox + 14, base - 13);
+          }
+        } else {
+          // Small piece — short chunk or branch
+          g.fillStyle(0xd0c4a8, 0.95);
+          g.fillEllipse(cx + ox, base - 4, 18, 8);
+          g.fillStyle(0x9a8868, 0.45);
+          g.fillEllipse(cx + ox, base - 2, 14, 4);
+          g.fillStyle(0xe4dac4, 0.6);
+          g.fillEllipse(cx + ox - 1, base - 6, 9, 4);
+          // End
+          g.fillStyle(0xb0a080, 0.85);
+          g.fillCircle(cx + ox + 8, base - 4, 4);
+          g.fillStyle(0x8a7858, 0.55);
+          g.fillCircle(cx + ox + 8, base - 4, 2.5);
+          g.lineStyle(1, 0xa09070, 0.5);
+          g.lineBetween(cx + ox - 5, base - 4, cx + ox + 3, base - 6);
+        }
         break;
       }
       case 'shells': {
@@ -1286,6 +1369,82 @@ export class GameManager {
         g.fillCircle(cx + 4, base - 6, 3);
         g.lineStyle(1, 0x1a7838, 0.9);
         g.lineBetween(cx, base, cx, base - 8);
+        break;
+      }
+      case 'fern': {
+        // Ground shadow
+        g.fillStyle(0x000000, 0.12);
+        g.fillEllipse(cx, base + 2, 26, 6);
+        // Draw a fern frond: stem + pairs of pinnae (leaflets)
+        const drawFernFrond = (
+          ox: number, angle: number, length: number,
+          stemColor: number, leafColor: number, leafAlpha: number
+        ) => {
+          const rad = angle * Math.PI / 180;
+          const cos = Math.cos(rad), sin = Math.sin(rad);
+          const perp = { x: -sin, y: cos };
+          // Stem
+          g.lineStyle(1.2, stemColor, 0.95);
+          g.lineBetween(ox, base, ox + cos * length, base + sin * length);
+          // Pinnae pairs along stem
+          const pairs = 5;
+          for (let i = 1; i <= pairs; i++) {
+            const t = i / (pairs + 1);
+            const sx = ox + cos * length * t;
+            const sy = base + sin * length * t;
+            const pLen = length * 0.28 * (1 - t * 0.4); // shorter near tip
+            const pts1: { x: number; y: number }[] = [];
+            const pts2: { x: number; y: number }[] = [];
+            const leafN = 5;
+            for (let j = 0; j <= leafN; j++) {
+              const lt = j / leafN;
+              const lx = sx + perp.x * pLen * lt;
+              const ly = sy + perp.y * pLen * lt + pLen * 0.3 * lt * lt; // droop
+              const hw = pLen * 0.18 * Math.sin(lt * Math.PI);
+              pts1.push({ x: lx + cos * hw, y: ly + sin * hw });
+            }
+            for (let j = leafN; j >= 0; j--) {
+              const lt = j / leafN;
+              const lx = sx + perp.x * pLen * lt;
+              const ly = sy + perp.y * pLen * lt + pLen * 0.3 * lt * lt;
+              const hw = pLen * 0.18 * Math.sin(lt * Math.PI);
+              pts1.push({ x: lx - cos * hw, y: ly - sin * hw });
+            }
+            for (let j = 0; j <= leafN; j++) {
+              const lt = j / leafN;
+              const lx = sx - perp.x * pLen * lt;
+              const ly = sy - perp.y * pLen * lt + pLen * 0.3 * lt * lt;
+              const hw = pLen * 0.18 * Math.sin(lt * Math.PI);
+              pts2.push({ x: lx + cos * hw, y: ly + sin * hw });
+            }
+            for (let j = leafN; j >= 0; j--) {
+              const lt = j / leafN;
+              const lx = sx - perp.x * pLen * lt;
+              const ly = sy - perp.y * pLen * lt + pLen * 0.3 * lt * lt;
+              const hw = pLen * 0.18 * Math.sin(lt * Math.PI);
+              pts2.push({ x: lx - cos * hw, y: ly - sin * hw });
+            }
+            g.fillStyle(leafColor, leafAlpha);
+            if (pts1.length >= 3) g.fillPoints(pts1 as Phaser.Math.Vector2[], true);
+            if (pts2.length >= 3) g.fillPoints(pts2 as Phaser.Math.Vector2[], true);
+          }
+        };
+        // Three fronds, each arching in a different direction
+        drawFernFrond(cx,     -88, 22, 0x1a6b28, 0x2da842, 0.92); // upright center
+        drawFernFrond(cx - 3, -108, 20, 0x1a6b28, 0x25963a, 0.85); // lean left
+        drawFernFrond(cx + 3, -68,  20, 0x1a6b28, 0x25963a, 0.85); // lean right
+        // Bright highlight on center frond tip
+        g.fillStyle(0x5de87a, 0.5);
+        g.fillCircle(cx, base - 22, 2.5);
+        // Dew drops — only during morning hours (7–9h)
+        const _dewHour = ((useGameStore.getState().elapsedTime % DAY_DURATION_MS) / DAY_DURATION_MS) * 24;
+        if (_dewHour >= 7 && _dewHour < 9) {
+          g.fillStyle(0xb8eaff, 0.85);
+          g.fillCircle(cx - 6, base - 12, 1.5);
+          g.fillCircle(cx + 7, base - 10, 1.2);
+          g.fillStyle(0xdff5ff, 0.7);
+          g.fillCircle(cx - 1, base - 17, 1.3);
+        }
         break;
       }
       case 'fiber': {
@@ -2563,7 +2722,7 @@ export class GameManager {
     const { player, addToInventory } = usePlayerStore.getState();
     const eq = player.equipment;
     const handIds = [eq?.leftHand?.resourceId, eq?.rightHand?.resourceId].filter(Boolean) as string[];
-    const hasKnife = handIds.some(id => ['shell_knife','flint_knife','stone_axe','improved_axe','iron_axe'].includes(id));
+    const hasKnife = handIds.some(id => ['flint_knife','stone_axe','improved_axe','iron_axe'].includes(id));
     const hasSpear = handIds.some(id => id === 'stone_spear');
 
     const playerCx = this.playerPx + TS / 2;
@@ -3402,7 +3561,7 @@ export class GameManager {
             const { addToInventory } = usePlayerStore.getState();
             const freshEq = usePlayerStore.getState().player.equipment;
             const handIds = [freshEq?.leftHand?.resourceId, freshEq?.rightHand?.resourceId].filter(Boolean);
-            const hasKnife = handIds.some(id => ['shell_knife','flint_knife','stone_axe','improved_axe','iron_axe'].includes(id as string));
+            const hasKnife = handIds.some(id => ['flint_knife','stone_axe','improved_axe','iron_axe'].includes(id as string));
             addToInventory('crab_meat', hasKnife ? 2 : 1);
             this.spawnFloatingText(`🦀 Gefangen!${hasKnife ? ' ×2' : ''}`, Math.floor(crab.px / TS), Math.floor(crab.py / TS), '#f97316');
             crab.g.destroy();
@@ -3668,7 +3827,10 @@ export class GameManager {
     const newPx = this.playerPx + vx;
     const edgeTileX = Math.floor((newPx + (vx > 0 ? TS - 1 : 0)) / TS);
     const curTileY = Math.floor((this.playerPy + TS / 2) / TS);
-    if (worldState.getTile(edgeTileX, curTileY)?.walkable) {
+    const curTileXforY = Math.floor((this.playerPx + TS / 2) / TS);
+    const playerElev = worldState.getTile(curTileXforY, curTileY)?.elevation ?? 1;
+    const targetXTile = worldState.getTile(edgeTileX, curTileY);
+    if (targetXTile?.walkable && Math.abs((targetXTile.elevation ?? 1) - playerElev) <= 1) {
       this.playerPx = Math.max(0, Math.min((WORLD_CONFIG.width - 1) * TS, newPx));
     }
 
@@ -3676,7 +3838,8 @@ export class GameManager {
     const curTileX = Math.floor((this.playerPx + TS / 2) / TS);
     const newPy = this.playerPy + vy;
     const edgeTileY = Math.floor((newPy + (vy > 0 ? TS - 1 : 0)) / TS);
-    if (worldState.getTile(curTileX, edgeTileY)?.walkable) {
+    const targetYTile = worldState.getTile(curTileX, edgeTileY);
+    if (targetYTile?.walkable && Math.abs((targetYTile.elevation ?? 1) - playerElev) <= 1) {
       this.playerPy = Math.max(0, Math.min((WORLD_CONFIG.height - 1) * TS, newPy));
     }
 
@@ -3982,7 +4145,7 @@ export class GameManager {
     // Tool bonus: only equipped hand slots count (Option B)
     const eq = freshPlayer.equipment ?? { leftHand: null, rightHand: null };
     const handIds = [eq.leftHand?.resourceId, eq.rightHand?.resourceId].filter(Boolean) as string[];
-    const hasFlintKnife  = handIds.includes('flint_knife') || handIds.includes('shell_knife');
+    const hasFlintKnife  = handIds.includes('flint_knife');
     const hasAxe         = handIds.includes('stone_axe');
     const hasImpAxe     = handIds.includes('improved_axe');
     const hasIronAxe    = handIds.includes('iron_axe');
@@ -4012,6 +4175,7 @@ export class GameManager {
         case 'food':         return { stamina: 3, time: T * 4 };
         case 'spring':       return { stamina: 2, time: T * 2 };
         case 'puddle':       return { stamina: 2, time: T * 2 };
+        case 'fern':         return { stamina: 1, time: T * 2 };
         case 'palm_tree':    return anyKnife ? { stamina: 3, time: T * 5 } : { stamina: 5, time: T * 10 };
         // Medium — cutting (needs knife, costs more without)
         case 'fiber':        return anyKnife ? { stamina: 5, time: T * 8  } : { stamina: 10, time: T * 20 };
@@ -4095,6 +4259,32 @@ export class GameManager {
       this.spawnFloatingText('💧 Getrunken! Durst -25', player.x, player.y, '#38bdf8');
       // Tutorial step 1 — first water
       useTutorialStore.getState().completeStep(1);
+      return;
+    }
+
+    // Fern: collect dew — requires morning (7-9h) and coconut_shell in hand
+    if (resource.type === 'fern') {
+      const elapsedMs = useGameStore.getState().elapsedTime;
+      const gameHour = ((elapsedMs % DAY_DURATION_MS) / DAY_DURATION_MS) * 24;
+      const isDewTime = gameHour >= 7 && gameHour < 9;
+      const hasShellInHand = handIds.includes('shells');
+      if (!hasShellInHand) {
+        this.spawnFloatingText('Muschel in die Hand nehmen 🐚', player.x, player.y, '#f97316');
+        return;
+      }
+      if (!isDewTime) {
+        this.spawnFloatingText('Nur morgens (7–9 Uhr) 🌅', player.x, player.y, '#94a3b8');
+        return;
+      }
+      if (resource.quantity < 1) {
+        this.spawnFloatingText('Dieser Farn ist trocken', player.x, player.y, '#94a3b8');
+        return;
+      }
+      worldState.harvestResource(resource.id, 1);
+      addToInventory('dew_water', 1);
+      useGameStore.getState().tickTime(timeCost);
+      usePlayerStore.getState().updateStats({ stamina: Math.max(0, currentStamina - staminaCost) });
+      this.spawnFloatingText('💧 Tau gesammelt! +1 Tauschale', player.x, player.y, '#38bdf8');
       return;
     }
 
@@ -4588,14 +4778,14 @@ export class GameManager {
       if (this.keyPressed.space && distToPlayer < ATTACK_RANGE && !gameState.gatherMenuOpen && !gameState.placementMode) {
         const atkEq = usePlayerStore.getState().player.equipment;
         const atkHands = [atkEq?.leftHand?.resourceId, atkEq?.rightHand?.resourceId].filter(Boolean) as string[];
-        const hasWeapon = atkHands.some(id => ['stone_spear','shell_knife','flint_knife','stone_axe','improved_axe','iron_axe'].includes(id));
+        const hasWeapon = atkHands.some(id => ['stone_spear','flint_knife','stone_axe','improved_axe','iron_axe'].includes(id));
         const dmg = hasWeapon ? (25 + Math.random() * 10) : (5 + Math.random() * 3);
         boar.health = Math.max(0, boar.health - dmg);
         boar.hitFlash = 250;
         this.spawnFloatingText(`-${Math.round(dmg)}`, Math.floor(boar.px / TS), Math.floor(boar.py / TS), '#ff4444');
         // Damage weapon on hit
         if (hasWeapon) {
-          const weaponId = atkHands.find(id => ['stone_spear','shell_knife','flint_knife','stone_axe','improved_axe','iron_axe'].includes(id));
+          const weaponId = atkHands.find(id => ['stone_spear','flint_knife','stone_axe','improved_axe','iron_axe'].includes(id));
           if (weaponId) usePlayerStore.getState().damageTool(weaponId, SPEAR_DAMAGE_PER_HIT);
         }
         this.keyPressed.space = false;

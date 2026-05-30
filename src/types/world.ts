@@ -5,6 +5,7 @@ export interface Tile {
   x: number;
   y: number;
   spriteIndex: number;
+  elevation: number; // 0=water/beach, 1=lowland, 2=forest/hills, 3=mountain, 4=impassable
 }
 
 export interface TileType {
