@@ -423,7 +423,7 @@ export class WorldGenerator {
       }
     };
 
-    tryPlace('large_tree', ['sparse_forest', 'forest', 'dense_jungle'], 40);
+    tryPlace('large_tree', ['sparse_forest', 'forest', 'dense_jungle', 'grass', 'tall_grass'], 50);
     tryPlace('banyan_tree', ['dense_jungle', 'forest'], 20);
   }
 
