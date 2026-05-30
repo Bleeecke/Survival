@@ -463,30 +463,36 @@ export class GameManager {
   private drawCliffSouth(g: Phaser.GameObjects.Graphics, tx: number, ty: number, diff: number) {
     const x = tx * TS;
     const y = ty * TS;
-    const faceH = 14;
-    const hash  = (tx * 7 + ty * 13) % 8;
-    const fy    = y + TS - 2; // starts just inside bottom of high tile
+    const impassable = diff >= 2;
+    const faceH = impassable ? 20 : 12;
+    const rockColor  = impassable ? 0x3e3228 : 0x7c6b50;
+    const lipColor   = impassable ? 0x5a4a38 : 0xb0a080;
+    const shadowAlpha = impassable ? 0.90 : 0.75;
+    const hash = (tx * 7 + ty * 13) % 8;
+    const fy   = y + TS - 2;
 
-    // Rock face body — extends into tile below
-    g.fillStyle(0x7c6b50);
+    g.fillStyle(rockColor);
     g.fillRect(x, fy, TS, faceH);
 
     // Top highlight (cliff lip)
-    g.fillStyle(0xb0a080, 0.80);
+    g.fillStyle(lipColor, 0.85);
     g.fillRect(x, fy, TS, 3);
 
     // Bottom shadow
-    g.fillStyle(0x1e1408, 0.80);
+    g.fillStyle(0x0e0a04, shadowAlpha);
     g.fillRect(x, fy + faceH - 4, TS, 5);
 
     // Mid-tone band
-    g.fillStyle(0x5a4c38, 0.55);
-    g.fillRect(x, fy + Math.floor(faceH / 2), TS, 3);
+    if (impassable) {
+      g.fillStyle(0x2a2018, 0.60);
+      g.fillRect(x, fy + Math.floor(faceH / 2), TS, 3);
+    }
 
-    // Vertical rock cracks
-    for (let i = 0; i < 4; i++) {
-      const cx = x + ((hash * 5 + i * 8 + tx % 6) % (TS - 4));
-      g.fillStyle(0x3a2e1e, 0.50);
+    // Vertical cracks
+    const crackCount = impassable ? 5 : 3;
+    for (let i = 0; i < crackCount; i++) {
+      const cx = x + ((hash * 5 + i * 7 + tx % 6) % (TS - 4));
+      g.fillStyle(0x1a1208, impassable ? 0.65 : 0.45);
       g.fillRect(cx, fy + 3, 2, faceH - 6);
     }
   }
@@ -494,35 +500,34 @@ export class GameManager {
   private drawCliffEast(g: Phaser.GameObjects.Graphics, tx: number, ty: number, diff: number) {
     const x = tx * TS;
     const y = ty * TS;
-    const faceW = 10;
+    const impassable = diff >= 2;
+    const faceW = impassable ? 14 : 8;
+    const rockColor = impassable ? 0x3e3228 : 0x5a4c38;
 
-    // Side wall — thin strip on right edge of high tile + slight overhang into lower tile
-    g.fillStyle(0x5a4c38);
+    g.fillStyle(rockColor);
     g.fillRect(x + TS - 2, y, faceW, TS);
 
-    // Dark inner shadow
-    g.fillStyle(0x1e1408, 0.70);
+    g.fillStyle(0x0e0a04, impassable ? 0.85 : 0.65);
     g.fillRect(x + TS - 2 + faceW - 3, y, 4, TS);
 
-    // Top highlight
-    g.fillStyle(0x9a8a68, 0.60);
+    g.fillStyle(impassable ? 0x5a4a38 : 0x9a8a68, 0.65);
     g.fillRect(x + TS - 2, y, 3, TS);
   }
 
   private drawCliffWest(g: Phaser.GameObjects.Graphics, tx: number, ty: number, diff: number) {
     const x = tx * TS;
     const y = ty * TS;
-    const faceW = 10;
+    const impassable = diff >= 2;
+    const faceW = impassable ? 14 : 8;
+    const rockColor = impassable ? 0x3e3228 : 0x5a4c38;
 
-    g.fillStyle(0x5a4c38);
+    g.fillStyle(rockColor);
     g.fillRect(x - faceW + 2, y, faceW, TS);
 
-    // Dark inner shadow on left
-    g.fillStyle(0x1e1408, 0.70);
+    g.fillStyle(0x0e0a04, impassable ? 0.85 : 0.65);
     g.fillRect(x - faceW + 2, y, 4, TS);
 
-    // Top highlight on right
-    g.fillStyle(0x9a8a68, 0.60);
+    g.fillStyle(impassable ? 0x5a4a38 : 0x9a8a68, 0.65);
     g.fillRect(x - 2, y, 3, TS);
   }
 
