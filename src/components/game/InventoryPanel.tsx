@@ -1,3 +1,4 @@
+import { useState, useRef } from 'react';
 import { usePlayerStore } from '../../store/playerStore';
 import { useWorldStore } from '../../store/worldStore';
 import { useGameStore } from '../../store/gameStore';
@@ -5,6 +6,9 @@ import type { PlayerStats } from '../../types';
 import { calcWeight, MAX_CARRY_KG } from '../../data/weights';
 import { getDefaultSlot } from './CharacterPanel';
 import { FOOD_SPOIL_TIME } from '../../data/foodDecay';
+import { RECIPES } from '../../data/recipes';
+import { craftingSystem } from '../../services/game/CraftingSystem';
+import { useJournalStore } from '../../store/journalStore';
 
 // Items that can be used from the inventory
 export const USABLE: Record<string, {
@@ -317,6 +321,9 @@ export default function InventoryPanel() {
     <div className="p-4">
       <h3 className="text-base font-bold text-white mb-2">Inventar</h3>
 
+      {/* Quick craft — anywhere recipes */}
+      <QuickCraft />
+
       {/* Weight bar */}
       <div className="mb-3">
         <div className="flex justify-between text-xs mb-1">
@@ -509,3 +516,99 @@ const ITEM_ICON: Record<string, string> = {
   farm_plot:        '🌾',
   furnace:          '🏭',
 };
+
+// Recipe IDs that can be crafted anywhere (no tool/location required)
+const HAND_CRAFT_IDS = [
+  'palm_leaf_to_fiber', 'driftwood_to_sticks', 'knap_flint',
+  'rope_fiber', 'bandage', 'herbal_remedy', 'antiparasitic',
+  'shell_knife', 'flint_knife', 'stone_axe', 'stone_spear',
+  'stone_pickaxe', 'torch_carry', 'fishing_rod',
+];
+
+const HAND_CRAFT_RECIPES = RECIPES.filter(r => HAND_CRAFT_IDS.includes(r.id));
+
+function QuickCraft() {
+  const inventory  = usePlayerStore(s => s.player.inventory);
+  const knowledge  = usePlayerStore(s => s.knowledge);
+  const freeCraft  = useGameStore(s => s.freeCraft);
+  const tickTime   = useGameStore(s => s.tickTime);
+
+  const [craftingId, setCraftingId] = useState<string | null>(null);
+  const [progress, setProgress]     = useState(0);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const available = HAND_CRAFT_RECIPES.filter(r =>
+    craftingSystem.hasRequiredKnowledge(r) &&
+    craftingSystem.canCraft(r.id, inventory)
+  );
+
+  if (available.length === 0) return null;
+
+  function startCraft(recipe: typeof RECIPES[0]) {
+    if (craftingId) return;
+    if (!freeCraft) {
+      for (const input of recipe.inputs) usePlayerStore.getState().removeResource(input.resourceId, input.quantity);
+    }
+    setCraftingId(recipe.id);
+    setProgress(0);
+    const steps = 20;
+    const stepTime = recipe.craftingTime / steps;
+    let step = 0;
+    intervalRef.current = setInterval(() => {
+      step++;
+      setProgress(step / steps);
+      tickTime(stepTime / steps);
+      if (step >= steps) {
+        clearInterval(intervalRef.current!);
+        for (const output of recipe.outputs) usePlayerStore.getState().addToInventory(output.resourceId, output.quantity);
+        craftingSystem.awardSkillXp(recipe);
+        craftingSystem.grantKnowledge(recipe);
+        // Journal events
+        if (recipe.id === 'knap_flint') useJournalStore.getState().triggerJournalEvent('first_knapping');
+        if (recipe.id === 'flint_knife' || recipe.id === 'shell_knife') useJournalStore.getState().triggerJournalEvent('first_knife');
+        setCraftingId(null);
+        setProgress(0);
+      }
+    }, 80);
+  }
+
+  return (
+    <div className="mb-3 border border-slate-700 rounded-xl overflow-hidden">
+      <div className="px-3 py-1.5 bg-slate-900/60 text-slate-400 text-[10px] font-bold uppercase tracking-widest">
+        ✋ Überall herstellen
+      </div>
+      <div className="divide-y divide-slate-700/50">
+        {available.map(recipe => {
+          const isRunning = craftingId === recipe.id;
+          return (
+            <div key={recipe.id} className="px-3 py-2">
+              <div className="flex items-center gap-2">
+                <span className="text-base">{recipe.icon}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="text-white text-xs font-semibold leading-tight">{recipe.name}</div>
+                  <div className="text-slate-500 text-[10px] leading-tight">
+                    {recipe.inputs.map(i => `${i.quantity}× ${i.resourceId}`).join(' + ')}
+                  </div>
+                </div>
+                <button
+                  onClick={() => startCraft(recipe)}
+                  disabled={!!craftingId}
+                  className={`px-2.5 py-1 text-[10px] font-bold rounded-lg transition-colors shrink-0 ${
+                    !craftingId ? 'bg-slate-600 hover:bg-slate-500 text-white' : 'bg-slate-700 text-slate-500 cursor-not-allowed'
+                  }`}
+                >
+                  {isRunning ? `${Math.round(progress * 100)}%` : 'Herstellen'}
+                </button>
+              </div>
+              {isRunning && (
+                <div className="mt-1.5 h-1 bg-slate-700 rounded-full overflow-hidden">
+                  <div className="h-full bg-amber-500 transition-all duration-75 rounded-full" style={{ width: `${Math.round(progress * 100)}%` }} />
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}

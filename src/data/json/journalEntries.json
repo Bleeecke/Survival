@@ -1,112 +1,98 @@
 [
   {
     "id": "journal_survival_2",
-    "skillId": "survival",
-    "skillLevel": 2,
+    "triggerId": "first_flint",
     "grantsKnowledge": "knows_basic_fire",
     "title": "Funken aus Stein",
     "text": "Heute habe ich zwei Kiesel aneinandergeschlagen und einen Funken gesehen. Nur kurz, aber er war da. Ich glaube, mit genug trockenem Material darunter könnte ich das hinbekommen. Äste, ein Steinring — das sollte reichen, um ein Feuer zu entfachen. Ich sollte es ausprobieren."
   },
   {
     "id": "journal_survival_3",
-    "skillId": "survival",
-    "skillLevel": 3,
+    "triggerId": "first_rain_with_leaves",
     "grantsKnowledge": "knows_rain_collection",
     "title": "Was der Regen hinterlässt",
     "text": "Es hat die ganze Nacht geregnet. Überall Pfützen — und ich habe gemerkt, dass die großen Palmblätter das Wasser wie Rinnen ableiten. Eine Kokosschale darunter hätte viel aufgefangen. Das nächste Mal werde ich das ausprobieren, bevor der Regen kommt, nicht hinterher."
   },
   {
     "id": "journal_survival_4",
-    "skillId": "survival",
-    "skillLevel": 4,
+    "triggerId": "first_campfire",
     "grantsKnowledge": "knows_fire",
     "title": "Feuer beherrschen",
     "text": "Das Lagerfeuer brennt jetzt zuverlässig. Ich habe gelernt, wie viel Holz es braucht, wann ich nachlegen muss, wie ich es vor Wind schütze. Es ist kein Zufall mehr — ich verstehe, was Feuer will. Mit einem richtigen Steinring hält es die ganze Nacht. Das verändert alles."
   },
   {
     "id": "journal_crafting_2",
-    "skillId": "crafting",
-    "skillLevel": 2,
+    "triggerId": "first_knapping",
     "grantsKnowledge": "knows_sharp_edges",
     "title": "Klingen aus Stein",
     "text": "Heute habe ich den Feuerstein gegen einen Kiesel geschlagen und etwas Unerwartetes passiert: eine Seite ist abgesplittert, messerscharf. Ich habe mir fast den Daumen aufgeschnitten. Aber ich habe begriffen — wenn ich das kontrolliert mache, kann ich eine Klinge formen. Einfach, aber brauchbar."
   },
   {
     "id": "journal_crafting_3",
-    "skillId": "crafting",
-    "skillLevel": 3,
+    "triggerId": "first_fiber",
     "grantsKnowledge": "knows_binding",
     "title": "Fasern als Faden",
     "text": "Ich habe Palmfasern zwischen den Fingern gerollt und gemerkt: wenn man sie dreht, werden sie fester. Verflochten halten sie erstaunlich viel. Zwei Stücke zusammengebunden, dann noch eins — ich könnte damit Steine an Äste binden, Blätter zusammenhalten, Gegenstände tragen. Fasern sind mehr als ich dachte."
   },
   {
     "id": "journal_crafting_4",
-    "skillId": "crafting",
-    "skillLevel": 4,
+    "triggerId": "first_knife",
     "grantsKnowledge": "knows_tool_binding",
     "title": "Klinge und Griff",
     "text": "Als ich die Feuersteinklinge mit Fasern an den Ast gewickelt habe, hat sich etwas verändert — ich spürte, wie die Kraft meiner Hand durch den Griff in die Klinge fließt. Das ist kein zusammengestückeltes Werkzeug mehr. Das ist ein Messer. Ich verstehe jetzt, wie Werkzeuge funktionieren: Klinge und Griff zusammen sind mehr als ihre Teile."
   },
   {
     "id": "journal_crafting_5",
-    "skillId": "crafting",
-    "skillLevel": 5,
+    "triggerId": "first_harden",
     "grantsKnowledge": "knows_hardened_wood",
     "title": "Feuer macht Holz zu Knochen",
     "text": "Ich habe einen feuchten Ast langsam über der Glut gedreht — nicht verbrennen lassen, nur erhitzen. Das Wasser verdampfte, die Fasern zogen sich zusammen. Danach war der Ast anders: härter, schwerer, fast wie Knochen. Das verändert, was ich bauen kann. Ein gehärtetes Stück Holz ist nicht mehr nur ein Stock."
   },
   {
     "id": "journal_crafting_7",
-    "skillId": "crafting",
-    "skillLevel": 7,
+    "triggerId": "first_iron_ore",
     "grantsKnowledge": "knows_metal",
     "title": "Das rostbraune Erz",
     "text": "Ich habe diesen Stein schon oft gesehen — schwer, rostbraun, irgendwie anders als normaler Stein. Heute habe ich ihn ins Feuer gehalten und gesehen, wie an der Oberfläche etwas glänzte. Metall. Ich weiß nicht wie, aber ich weiß, dass man daraus etwas machen kann. Etwas viel Härteres als alles, was ich bisher hatte."
   },
   {
     "id": "journal_building_2",
-    "skillId": "building",
-    "skillLevel": 2,
+    "triggerId": "first_rain_awake",
     "grantsKnowledge": "knows_basic_shelter",
     "title": "Blätter als Dach",
     "text": "Es hat heute Nacht geregnet und ich bin durchnässt aufgewacht. Dabei habe ich auf die Palmen geblickt und etwas gesehen, das ich vorher übersehen hatte: die Blätter sind wasserabweisend, fast wie Dachziegel, wenn man sie übereinanderlegt. Äste als Gestell, Blätter als Dach, Lianen als Verbindung — ich könnte mich trocken halten."
   },
   {
     "id": "journal_building_4",
-    "skillId": "building",
-    "skillLevel": 4,
+    "triggerId": "first_wood_shelter",
     "grantsKnowledge": "knows_construction",
     "title": "Stabile Verbindungen",
     "text": "Ich habe meinen ersten Unterstand im Sturm beobachtet und gesehen, was hält und was nicht. Die Verbindungen — da ist es. Fest verschnürt, Kreuzverbindungen, Gewicht oben als Anker. Ein Gebäude ist so stark wie seine schwächste Verbindung. Ich verstehe jetzt, wie man etwas baut, das wirklich hält."
   },
   {
     "id": "journal_naturelore_2",
-    "skillId": "naturelore",
-    "skillLevel": 2,
+    "triggerId": "first_herbs",
     "grantsKnowledge": "knows_medicine",
     "title": "Die heilenden Blätter",
     "text": "Ich habe eine Pflanze gefunden, die ich vorher ignoriert hatte — bitter riechend, mit kleinen zackigen Blättern. Als ich sie an meine aufgeschürfte Hand hielt, kühlte die Wunde. Der Schmerz ließ nach. Diese Pflanze heilt. Ich weiß nicht warum, aber ich weiß dass es stimmt. Ich muss lernen, mehr davon zu erkennen."
   },
   {
     "id": "journal_hunting_2",
-    "skillId": "hunting",
-    "skillLevel": 2,
+    "triggerId": "first_hunt_kill",
     "grantsKnowledge": "knows_basic_weapon",
     "title": "Eine Waffe formen",
     "text": "Ich habe das Wildschwein beobachtet — schnell, stark, mit diesen Hauern. Mit bloßen Händen hätte ich keine Chance. Aber ein langer Ast mit einer scharfen Spitze gibt mir Reichweite. Ich könnte den Speer erst werfen, dann näherkommen. Das braucht Übung, aber das Prinzip ist klar: Distanz ist Überleben."
   },
   {
     "id": "journal_cooking_2",
-    "skillId": "cooking",
-    "skillLevel": 2,
+    "triggerId": "first_cook",
     "grantsKnowledge": "knows_cooking",
     "title": "Feuer macht Essen sicher",
     "text": "Ich habe rohes Fleisch gegessen und es hat mir nicht gut getan. Als ich es heute über die Flamme gehalten habe und es durchgegart war, hat es sich anders angefühlt — sicherer. Die Hitze tötet etwas ab, das man nicht sehen kann, aber das krank macht. Ich werde nichts mehr roh essen, was ich kochen kann."
   },
   {
     "id": "journal_cooking_4",
-    "skillId": "cooking",
-    "skillLevel": 4,
+    "triggerId": "first_cook_advanced",
     "grantsKnowledge": "knows_preservation",
     "title": "Haltbar durch Wärme und Trockenheit",
     "text": "Fleisch das ich getrocknet habe, liegt noch nach drei Tagen bei mir — ohne zu verderben. Ich habe es über dem Feuer hängen gelassen bis alle Feuchtigkeit draußen war. Das ist kein Kochen mehr, das ist Konservierung. Wärme und Luft entziehen dem Essen das Wasser und damit die Fäulnis."

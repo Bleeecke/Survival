@@ -86,6 +86,19 @@ export const usePlayerStore = create<PlayerStore>()(
             useJournalStore.getState().addDiscovery(id, toastText);
           });
         }
+        // Journal event triggers
+        const MATERIAL_EVENTS: Partial<Record<string, string>> = {
+          flint: 'first_flint',
+          fiber: 'first_fiber',
+          herbs: 'first_herbs',
+          iron_ore: 'first_iron_ore',
+        };
+        const eventId = MATERIAL_EVENTS[id];
+        if (eventId) {
+          import('../store/journalStore').then(({ useJournalStore }) => {
+            useJournalStore.getState().triggerJournalEvent(eventId);
+          });
+        }
       },
 
       recordCraft: (recipeId: string) => {
@@ -322,19 +335,16 @@ export const usePlayerStore = create<PlayerStore>()(
         });
         const levelsAfter = get().player.skills?.[skillId]?.level ?? 1;
         if (levelsAfter > levelsBefore) {
-          for (let lvl = levelsBefore + 1; lvl <= levelsAfter; lvl++) {
-            import('./journalStore').then(({ useJournalStore }) => {
-              useJournalStore.getState().addPendingEntry(skillId, lvl);
-            });
-            import('./notificationStore').then(({ useNotificationStore }) => {
-              import('../types/skills').then(({ SKILL_LABELS }) => {
+          import('./notificationStore').then(({ useNotificationStore }) => {
+            import('../types/skills').then(({ SKILL_LABELS }) => {
+              for (let lvl = levelsBefore + 1; lvl <= levelsAfter; lvl++) {
                 useNotificationStore.getState().addNotification(
-                  `📖 Neue Eingebung: ${SKILL_LABELS[skillId]} Stufe ${lvl}`,
+                  `⬆ ${SKILL_LABELS[skillId]} Stufe ${lvl}`,
                   'levelup'
                 );
-              });
+              }
             });
-          }
+          });
         }
       },
 

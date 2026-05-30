@@ -16,6 +16,7 @@ import { GATHER_SKILL_XP, type SkillId } from '../../types/skills';
 import { TOOL_DAMAGE_ON_GATHER, SPEAR_DAMAGE_PER_HIT } from '../../data/toolDurability';
 import { calcWeight, MAX_CARRY_KG } from '../../data/weights';
 import { FOOD_SPOIL_TIME, FOOD_ITEM_NAMES } from '../../data/foodDecay';
+import { useJournalStore } from '../../store/journalStore';
 import { DISEASE_DRAIN, COLD_EXPOSURE_THRESHOLD, FEVER_FROM_COLD_CHANCE,
          INJURY_DRAIN, BLEED_ON_BOAR_ATTACK, BLEED_DURATION } from '../../data/diseases';
 
@@ -2870,10 +2871,17 @@ export class GameManager {
 
   private checkRainKnowledge() {
     const { knownMaterials, learnKnowledge } = usePlayerStore.getState();
+    const journal = useJournalStore.getState();
+    // Always fire first_rain_awake (knows_basic_shelter insight)
+    journal.triggerJournalEvent('first_rain_awake');
     for (const grant of RAIN_KNOWLEDGE_GRANTS) {
       if (grant.needsAny.some(m => knownMaterials.includes(m))) {
         learnKnowledge(grant.flag);
       }
+    }
+    // Additional event when player has palm_leaf (knows_rain_collection insight)
+    if (knownMaterials.includes('palm_leaf')) {
+      journal.triggerJournalEvent('first_rain_with_leaves');
     }
   }
 
@@ -3022,6 +3030,7 @@ export class GameManager {
               if (Math.random() > 0.4) useWorldStore.getState().dropItem('fat', 1, tx, ty);
             }
             this.spawnFloatingText('🐗 Erlegt! Fleisch + Knochen', tx, ty - 1, '#f97316');
+            useJournalStore.getState().triggerJournalEvent('first_hunt_kill');
             boar.state = 'dead';
             boar.deadAt = Date.now();
             boar.g.clear();
@@ -3498,6 +3507,9 @@ export class GameManager {
           usePlayerStore.getState().learnKnowledge(flag as KnowledgeFlag);
         }
       }
+      // Journal events for specific builds
+      if (recipeId === 'campfire') useJournalStore.getState().triggerJournalEvent('first_campfire');
+      if (recipeId === 'wooden_shelter') useJournalStore.getState().triggerJournalEvent('first_wood_shelter');
       if (buildDef.grantsSkill) {
         usePlayerStore.getState().gainSkillXp(buildDef.grantsSkill.skill as SkillId, buildDef.grantsSkill.xp);
       }
@@ -4598,6 +4610,7 @@ export class GameManager {
             if (Math.random() > 0.4) useWorldStore.getState().dropItem('fat', 1, tx2, ty2);
           }
           this.spawnFloatingText('🐗 Erlegt! Fleisch + Knochen', tx2, ty2 - 1, '#f97316');
+          useJournalStore.getState().triggerJournalEvent('first_hunt_kill');
           boar.state = 'dead';
           boar.deadAt = now;
           boar.g.clear();

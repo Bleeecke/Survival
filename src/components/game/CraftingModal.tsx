@@ -8,6 +8,7 @@ import type { Recipe, RecipeCategory } from '../../types';
 import { SKILL_LABELS } from '../../types/skills';
 import { KNOWLEDGE_LABELS } from '../../data/knowledge';
 import { useNotificationStore } from '../../store/notificationStore';
+import { useJournalStore } from '../../store/journalStore';
 
 // ── Constants ─────────────────────────────────────────────────────
 
@@ -177,6 +178,9 @@ export default function CraftingModal({ onClose }: { onClose: () => void }) {
     craftingSystem.awardSkillXp(recipe);
     craftingSystem.grantKnowledge(recipe);
     craftingSystem.damageToolOnCraft(recipe);
+    // Journal events
+    if (recipeId === 'knap_flint') useJournalStore.getState().triggerJournalEvent('first_knapping');
+    if (recipeId === 'flint_knife' || recipeId === 'shell_knife') useJournalStore.getState().triggerJournalEvent('first_knife');
     setCraftingId(null);
     setProgress(0);
     craftStartRef.current = null;

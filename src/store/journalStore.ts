@@ -1,13 +1,11 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { SkillId } from '../types/skills';
 import type { KnowledgeFlag } from '../data/knowledge';
 import rawEntries from '../data/json/journalEntries.json';
 
 export interface JournalEntry {
   id: string;
-  skillId: SkillId;
-  skillLevel: number;
+  triggerId: string;
   grantsKnowledge: KnowledgeFlag;
   title: string;
   text: string;
@@ -17,7 +15,7 @@ export interface JournalEntry {
 export interface DiscoveryEntry {
   resourceId: string;
   text: string;
-  discoveredAt: number; // real timestamp ms
+  discoveredAt: number;
 }
 
 const ALL_ENTRIES: JournalEntry[] = rawEntries as JournalEntry[];
@@ -30,7 +28,7 @@ interface JournalStore {
 
   openJournal: () => void;
   closeJournal: () => void;
-  addPendingEntry: (skillId: SkillId, skillLevel: number) => void;
+  triggerJournalEvent: (eventId: string) => void;
   acceptEntry: (entryId: string) => void;
   addDiscovery: (resourceId: string, text: string) => void;
   hasUnread: () => boolean;
@@ -48,10 +46,8 @@ export const useJournalStore = create<JournalStore>()(
       openJournal: () => set({ isOpen: true }),
       closeJournal: () => set({ isOpen: false }),
 
-      addPendingEntry: (skillId, skillLevel) => {
-        const entry = ALL_ENTRIES.find(
-          e => e.skillId === skillId && e.skillLevel === skillLevel
-        );
+      triggerJournalEvent: (eventId) => {
+        const entry = ALL_ENTRIES.find(e => e.triggerId === eventId);
         if (!entry) return;
         const { pending, accepted } = get();
         const alreadyKnown = [...pending, ...accepted].some(e => e.id === entry.id);

@@ -14,7 +14,7 @@
     "requiredMaterials": [{ "item": "sticks", "amount": 5 }, { "item": "pebbles", "amount": 3 }, { "item": "flint", "amount": 1 }],
     "requiredTools": [], "requiredSkills": [{ "skill": "survival", "level": 1 }],
     "requiredKnowledge": ["knows_basic_fire"], "visibleWhenSeen": ["sticks", "pebbles", "flint"],
-    "buildTime": 8, "grantsKnowledge": ["knows_fire"],
+    "buildTime": 8, "grantsKnowledge": [],
     "grantsSkill": { "skill": "survival", "xp": 15 }
   },
   {
@@ -43,7 +43,7 @@
     "requiredMaterials": [{ "item": "sticks", "amount": 8 }, { "item": "palm_leaf", "amount": 6 }, { "item": "vine", "amount": 3 }],
     "requiredTools": [], "requiredSkills": [{ "skill": "building", "level": 1 }],
     "requiredKnowledge": ["knows_basic_shelter"], "visibleWhenSeen": ["palm_leaf", "vine", "sticks"],
-    "buildTime": 40, "grantsKnowledge": ["knows_construction"],
+    "buildTime": 40, "grantsKnowledge": [],
     "grantsSkill": { "skill": "building", "xp": 25 }
   },
   {
