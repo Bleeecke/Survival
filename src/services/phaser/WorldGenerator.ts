@@ -456,9 +456,9 @@ export class WorldGenerator {
       return false;
     };
 
-    tryPlace(30, 45);   // first puddle closer
-    tryPlace(55, 85);   // second
-    tryPlace(55, 85);   // third
+    tryPlace(20, 35);   // first puddle closer
+    tryPlace(45, 75);   // second
+    tryPlace(45, 75);   // third
     return placed;
   }
 
