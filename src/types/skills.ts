@@ -6,7 +6,7 @@ export type SkillId =
   | 'hunting'
   | 'cooking'
   | 'medicine'
-  | 'athletics';
+  | 'body';
 
 export interface Skill {
   level: number; // 1–10
@@ -23,7 +23,7 @@ export const SKILL_LABELS: Record<SkillId, string> = {
   hunting:    'Jagen',
   cooking:    'Kochen',
   medicine:   'Medizin',
-  athletics:  'Körperbeherrschung',
+  body:       'Körperbeherrschung',
 };
 
 export const SKILL_DESCRIPTIONS: Record<SkillId, string> = {
@@ -34,12 +34,12 @@ export const SKILL_DESCRIPTIONS: Record<SkillId, string> = {
   hunting:    'Tiere, Speere, Fallen, Zerlegen',
   cooking:    'Nahrung sicher machen, haltbar machen, Wasser abkochen',
   medicine:   'Wunden, Krankheit, Salben, Gegengift',
-  athletics:  'Ausdauer, Tragen, Schleichen, Bewegung im Gelände',
+  body:       'Ausdauer, Tragen, Schleichen, Bewegung im Gelände',
 };
 
 export const SKILL_IDS: SkillId[] = [
   'survival', 'crafting', 'building', 'naturelore',
-  'hunting', 'cooking', 'medicine', 'athletics',
+  'hunting', 'cooking', 'medicine', 'body',
 ];
 
 export const DEFAULT_SKILLS: Skills = {
@@ -50,7 +50,7 @@ export const DEFAULT_SKILLS: Skills = {
   hunting:    { level: 1, xp: 0 },
   cooking:    { level: 1, xp: 0 },
   medicine:   { level: 1, xp: 0 },
-  athletics:  { level: 1, xp: 0 },
+  body:       { level: 1, xp: 0 },
 };
 
 // XP pro Ressourcentyp beim Sammeln

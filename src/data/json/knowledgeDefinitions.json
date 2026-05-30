@@ -1,0 +1,102 @@
+{
+  "startingKnowledge": ["knows_basic_rest", "knows_basic_storage"],
+
+  "materialGrants": {
+    "flint":         "knows_sharp_edges",
+    "sharp_flint":   "knows_sharp_edges",
+    "pebbles":       "knows_basic_fire",
+    "fiber":         "knows_binding",
+    "iron_ore":      "knows_metal",
+    "herbs":         "knows_medicine",
+    "coconut_shell": "knows_rain_collection",
+    "coconut":       "knows_rain_collection"
+  },
+
+  "rainGrants": [
+    { "flag": "knows_basic_shelter",   "needsAny": ["palm_leaf", "sticks", "vine"] },
+    { "flag": "knows_rain_collection", "needsAny": ["coconut", "coconut_shell", "palm_leaf"] }
+  ],
+
+  "flags": {
+    "knows_basic_rest": {
+      "label": "Einfaches Lager",
+      "insight": "Du weißt: Ein weiches Lager ist besser als blanker Boden. 🌿",
+      "source": "start"
+    },
+    "knows_basic_storage": {
+      "label": "Ablagelogik",
+      "insight": "Du weißt: Ein fester Ablageort hält dein Lager geordnet. 📦",
+      "source": "start"
+    },
+    "knows_basic_fire": {
+      "label": "Feuerstelle möglich",
+      "insight": "Du erkennst: Äste und Steine könnten eine Feuerstelle ergeben. 🔥",
+      "source": "idea"
+    },
+    "knows_sharp_edges": {
+      "label": "Klingen formen",
+      "insight": "Der Feuerstein splittert scharf. Daraus könnte eine primitive Klinge entstehen. 🪨",
+      "source": "material"
+    },
+    "knows_hardened_wood": {
+      "label": "Holz härten",
+      "insight": "Die Hitze macht Holz härter. Ein Ast im Feuer wird zäher und stabiler. 🌿",
+      "source": "idea"
+    },
+    "knows_binding": {
+      "label": "Fasern binden",
+      "insight": "Mit Fasern lassen sich Stein und Holz fest verbinden. 🌾",
+      "source": "material"
+    },
+    "knows_tool_binding": {
+      "label": "Werkzeug binden",
+      "insight": "Du verstehst: Klinge und Griff ergeben ein richtiges Werkzeug. 🪓",
+      "source": "idea"
+    },
+    "knows_basic_weapon": {
+      "label": "Primitive Waffe",
+      "insight": "Eine scharfe Spitze am Ast – das ist eine Waffe. 🗡️",
+      "source": "idea"
+    },
+    "knows_basic_shelter": {
+      "label": "Dach bauen",
+      "insight": "Nach dem Regen ist klar: Ein Dach aus Blättern könnte dich trocken halten. 🌴",
+      "source": "rain"
+    },
+    "knows_rain_collection": {
+      "label": "Regenwasser sammeln",
+      "insight": "Die Palmblätter leiten Regenwasser ab. Mit einer Schale könntest du es auffangen. 🥥",
+      "source": "rain"
+    },
+    "knows_fire": {
+      "label": "Feuer beherrschen",
+      "insight": "Du verstehst, wie Feuer kontrolliert werden kann. 🔥",
+      "source": "build"
+    },
+    "knows_cooking": {
+      "label": "Kochen",
+      "insight": "Du erkennst, dass Hitze Nahrung sicherer macht. 🍖",
+      "source": "idea"
+    },
+    "knows_preservation": {
+      "label": "Konservierung",
+      "insight": "Du begreifst, wie man Nahrung haltbar macht. 🥩",
+      "source": "idea"
+    },
+    "knows_construction": {
+      "label": "Konstruktion",
+      "insight": "Du verstehst, wie man stabile Strukturen baut. 🏠",
+      "source": "idea"
+    },
+    "knows_medicine": {
+      "label": "Heilkunde",
+      "insight": "Du lernst, welche Pflanzen heilen können. 🌿",
+      "source": "idea"
+    },
+    "knows_metal": {
+      "label": "Metallverarbeitung",
+      "insight": "Du ahnst das Potenzial dieses rostigen Erzes. ⛏️",
+      "source": "material"
+    }
+  }
+}

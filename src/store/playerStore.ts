@@ -429,7 +429,7 @@ export const usePlayerStore = create<PlayerStore>()(
             }
           }
           if (!s['medicine']) s['medicine'] = { level: 1, xp: 0 };
-          if (!s['athletics']) s['athletics'] = { level: 1, xp: 0 };
+          if (!s['body']) s['body'] = { level: 1, xp: 0 };
           state.player.skills = s as unknown as typeof DEFAULT_SKILLS;
         }
         if (state && !state.knownMaterials) {
