@@ -43,13 +43,15 @@ export const FOCUS_ICONS: Record<ReflectionFocus, string> = {
 };
 
 /** Which focuses are available from the start; others unlock via knowledge */
-export const INITIAL_FOCUSES: ReflectionFocus[] = ['water', 'food', 'tools', 'shelter', 'fire'];
+export const INITIAL_FOCUSES: ReflectionFocus[] = ['water', 'tools', 'shelter'];
 
 /**
  * Which knowledge flag unlocks each additional focus.
  * Focuses in INITIAL_FOCUSES are always available.
  */
 export const FOCUS_UNLOCK_CONDITIONS: Partial<Record<ReflectionFocus, KnowledgeFlag>> = {
+  fire:     'knows_basic_fire',
+  food:     'knows_fire',
   medicine: 'knows_binding',
   hunting:  'knows_basic_fire',
   storage:  'knows_fire',

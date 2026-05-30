@@ -12,7 +12,7 @@ import { RAIN_KNOWLEDGE_GRANTS } from '../../data/knowledge';
 import { useTutorialStore } from '../../store/tutorialStore';
 import { craftingSystem } from '../game/CraftingSystem';
 import { FootstepAudio } from '../game/FootstepAudio';
-import { GATHER_SKILL_XP } from '../../types/skills';
+import { GATHER_SKILL_XP, type SkillId } from '../../types/skills';
 import { TOOL_DAMAGE_ON_GATHER, SPEAR_DAMAGE_PER_HIT } from '../../data/toolDurability';
 import { calcWeight, MAX_CARRY_KG } from '../../data/weights';
 import { FOOD_SPOIL_TIME, FOOD_ITEM_NAMES } from '../../data/foodDecay';
@@ -3497,6 +3497,9 @@ export class GameManager {
         for (const flag of buildDef.grantsKnowledge) {
           usePlayerStore.getState().learnKnowledge(flag as KnowledgeFlag);
         }
+      }
+      if (buildDef.grantsSkill) {
+        usePlayerStore.getState().gainSkillXp(buildDef.grantsSkill.skill as SkillId, buildDef.grantsSkill.xp);
       }
       useGameStore.getState().addScore(150);
       useGameStore.getState().exitPlacementMode();

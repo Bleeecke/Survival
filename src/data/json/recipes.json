@@ -207,7 +207,7 @@
     ],
     "outputs": [{ "resourceId": "flint_knife", "quantity": 1 }],
     "requiresSkill": { "skill": "crafting", "level": 3 },
-    "requiredKnowledge": ["knows_sharp_edges"],
+    "requiredKnowledge": ["knows_tool_binding"],
     "grantsSkill": { "skill": "crafting", "xp": 30 }
   },
   {

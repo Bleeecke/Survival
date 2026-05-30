@@ -12,6 +12,7 @@ import CharacterPanel from '../game/CharacterPanel';
 import IntroModal from '../game/IntroModal';
 import TutorialPanel from '../game/TutorialPanel';
 import SkillNotifications from '../game/SkillNotifications';
+import JournalModal from '../game/JournalModal';
 import SkillsBar from '../game/SkillsBar';
 import StatsOverlay from '../game/StatsOverlay';
 import PauseMenu from './PauseMenu';
@@ -247,6 +248,7 @@ export default function GameScreen() {
         )}
 
         <SkillNotifications />
+        <JournalModal />
 
         {/* Skills panel — moved from canvas */}
         <div className="px-3 py-2 border-b border-slate-700">

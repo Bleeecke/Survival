@@ -4,7 +4,8 @@
     "description": "Ein markierter Bodenbereich – keine Kiste, nur eine Zone. Sofort nutzbar, aber völlig ungeschützt: Regen beschädigt Nahrung, Tiere können stehlen, Sturm verstreut Gegenstände.",
     "effects": ["Sofort baubar, keine Materialien", "Kleine Kapazität", "⚠ Kein Regenschutz", "⚠ Tiere können stehlen", "⚠ Sturm verstreut Gegenstände"],
     "requiredMaterials": [], "requiredTools": [], "requiredSkills": [],
-    "requiredKnowledge": ["knows_basic_storage"], "visibleWhenSeen": [], "buildTime": 2
+    "requiredKnowledge": ["knows_basic_storage"], "visibleWhenSeen": [], "buildTime": 2,
+    "grantsSkill": { "skill": "survival", "xp": 3 }
   },
   {
     "id": "campfire", "name": "Lagerfeuerstelle", "icon": "🔥", "category": "fire",
@@ -13,7 +14,8 @@
     "requiredMaterials": [{ "item": "sticks", "amount": 5 }, { "item": "pebbles", "amount": 3 }, { "item": "flint", "amount": 1 }],
     "requiredTools": [], "requiredSkills": [{ "skill": "survival", "level": 1 }],
     "requiredKnowledge": ["knows_basic_fire"], "visibleWhenSeen": ["sticks", "pebbles", "flint"],
-    "buildTime": 8, "grantsKnowledge": ["knows_fire"]
+    "buildTime": 8, "grantsKnowledge": ["knows_fire"],
+    "grantsSkill": { "skill": "survival", "xp": 15 }
   },
   {
     "id": "water_container", "name": "Einfacher Regensammler", "icon": "🥥", "category": "water",
@@ -22,7 +24,8 @@
     "requiredMaterials": [{ "item": "coconut_shell", "amount": 1 }, { "item": "palm_leaf", "amount": 1 }],
     "requiredTools": [], "requiredSkills": [],
     "requiredKnowledge": ["knows_rain_collection"], "visibleWhenSeen": ["coconut_shell", "coconut"],
-    "buildTime": 10, "grantsKnowledge": [], "placementRules": { "requiresOpenSky": true }
+    "buildTime": 10, "grantsKnowledge": [], "placementRules": { "requiresOpenSky": true },
+    "grantsSkill": { "skill": "survival", "xp": 12 }
   },
   {
     "id": "sleeping_spot", "name": "Schlafplatz", "icon": "🌿", "category": "survival",
@@ -30,7 +33,8 @@
     "effects": ["Schlafen möglich", "Schlechte Erholung", "Leichter Gesundheitsmalus", "Kein Schutz gegen Regen oder Kälte"],
     "requiredMaterials": [{ "item": "palm_leaf", "amount": 4 }],
     "requiredTools": [], "requiredSkills": [],
-    "requiredKnowledge": ["knows_basic_rest"], "visibleWhenSeen": ["palm_leaf"], "buildTime": 5
+    "requiredKnowledge": ["knows_basic_rest"], "visibleWhenSeen": ["palm_leaf"], "buildTime": 5,
+    "grantsSkill": { "skill": "building", "xp": 8 }
   },
   {
     "id": "palm_shelter", "name": "Palmendach", "icon": "🌴", "category": "shelter",
@@ -39,7 +43,8 @@
     "requiredMaterials": [{ "item": "sticks", "amount": 8 }, { "item": "palm_leaf", "amount": 6 }, { "item": "vine", "amount": 3 }],
     "requiredTools": [], "requiredSkills": [{ "skill": "building", "level": 1 }],
     "requiredKnowledge": ["knows_basic_shelter"], "visibleWhenSeen": ["palm_leaf", "vine", "sticks"],
-    "buildTime": 40, "grantsKnowledge": ["knows_construction"]
+    "buildTime": 40, "grantsKnowledge": ["knows_construction"],
+    "grantsSkill": { "skill": "building", "xp": 25 }
   },
   {
     "id": "wooden_shelter", "name": "Holzunterkunft", "icon": "🏠", "category": "shelter",
@@ -47,7 +52,8 @@
     "effects": ["+80% Regenprotection", "+30% Schlafqualität", "Schutz vor Kälte"],
     "requiredMaterials": [{ "item": "wood", "amount": 20 }, { "item": "stone", "amount": 5 }],
     "requiredTools": ["stone_axe"], "requiredSkills": [{ "skill": "building", "level": 2 }, { "skill": "crafting", "level": 1 }],
-    "requiredKnowledge": ["knows_construction"], "visibleWhenSeen": ["wood", "stone"], "buildTime": 120
+    "requiredKnowledge": ["knows_construction"], "visibleWhenSeen": ["wood", "stone"], "buildTime": 120,
+    "grantsSkill": { "skill": "building", "xp": 35 }
   },
   {
     "id": "log_cabin", "name": "Blockhütte", "icon": "🏡", "category": "shelter",
@@ -55,7 +61,8 @@
     "effects": ["Vollschutz gegen Regen & Kälte", "+60% Schlafqualität", "Permanenter Heimatpunkt"],
     "requiredMaterials": [{ "item": "wood", "amount": 40 }, { "item": "stone", "amount": 20 }, { "item": "plank", "amount": 10 }],
     "requiredTools": ["stone_axe"], "requiredSkills": [{ "skill": "building", "level": 3 }, { "skill": "crafting", "level": 3 }],
-    "requiredKnowledge": ["knows_construction"], "visibleWhenSeen": ["plank"], "buildTime": 300
+    "requiredKnowledge": ["knows_construction"], "visibleWhenSeen": ["plank"], "buildTime": 300,
+    "grantsSkill": { "skill": "building", "xp": 50 }
   },
   {
     "id": "bed", "name": "Bett", "icon": "🛏️", "category": "shelter",
@@ -63,7 +70,8 @@
     "effects": ["+35% Schlafqualität", "+20% Erholungsrate", "Setzt Schlafpunkt"],
     "requiredMaterials": [{ "item": "plank", "amount": 8 }, { "item": "palm_leaf", "amount": 10 }],
     "requiredTools": [], "requiredSkills": [{ "skill": "building", "level": 3 }, { "skill": "crafting", "level": 3 }],
-    "requiredKnowledge": ["knows_construction"], "visibleWhenSeen": ["plank"], "buildTime": 90
+    "requiredKnowledge": ["knows_construction"], "visibleWhenSeen": ["plank"], "buildTime": 90,
+    "grantsSkill": { "skill": "building", "xp": 20 }
   },
   {
     "id": "storage_box", "name": "Lagerbox", "icon": "📦", "category": "storage",
@@ -71,7 +79,8 @@
     "effects": ["20 Lagerslots", "Schützt Inhalt vor Regen (20%)"],
     "requiredMaterials": [{ "item": "wood", "amount": 8 }, { "item": "rope", "amount": 2 }],
     "requiredTools": ["stone_axe"], "requiredSkills": [{ "skill": "crafting", "level": 2 }],
-    "requiredKnowledge": ["knows_construction"], "visibleWhenSeen": ["wood", "rope"], "buildTime": 60
+    "requiredKnowledge": ["knows_construction"], "visibleWhenSeen": ["wood", "rope"], "buildTime": 60,
+    "grantsSkill": { "skill": "building", "xp": 15 }
   },
   {
     "id": "granite_campfire", "name": "Granit-Feuerstelle", "icon": "🔥", "category": "fire",
@@ -79,7 +88,8 @@
     "effects": ["2× längere Brenndauer", "Bessere Wärmeabgabe"],
     "requiredMaterials": [{ "item": "granite", "amount": 6 }, { "item": "sticks", "amount": 4 }],
     "requiredTools": ["stone_pickaxe"], "requiredSkills": [{ "skill": "survival", "level": 2 }],
-    "requiredKnowledge": ["knows_fire"], "visibleWhenSeen": ["granite"], "buildTime": 45
+    "requiredKnowledge": ["knows_fire"], "visibleWhenSeen": ["granite"], "buildTime": 45,
+    "grantsSkill": { "skill": "survival", "xp": 20 }
   },
   {
     "id": "torch", "name": "Fackelhalter", "icon": "🔦", "category": "fire",
@@ -87,7 +97,8 @@
     "effects": ["+3 Sichtweite in der Nacht", "Markiert wichtige Orte"],
     "requiredMaterials": [{ "item": "sticks", "amount": 2 }, { "item": "rope", "amount": 1 }, { "item": "tree_resin", "amount": 2 }],
     "requiredTools": [], "requiredSkills": [],
-    "requiredKnowledge": ["knows_fire"], "visibleWhenSeen": ["tree_resin"], "buildTime": 20
+    "requiredKnowledge": ["knows_fire"], "visibleWhenSeen": ["tree_resin"], "buildTime": 20,
+    "grantsSkill": { "skill": "building", "xp": 10 }
   },
   {
     "id": "drying_rack", "name": "Trockengestell", "icon": "🍊", "category": "food",
@@ -96,7 +107,8 @@
     "requiredMaterials": [{ "item": "sticks", "amount": 6 }, { "item": "rope", "amount": 2 }],
     "requiredTools": [], "requiredSkills": [{ "skill": "cooking", "level": 2 }],
     "requiredKnowledge": ["knows_preservation"], "visibleWhenSeen": ["fish", "boar_meat", "exotic_fruit"],
-    "buildTime": 50, "placementRules": { "requiresOpenSky": true }
+    "buildTime": 50, "placementRules": { "requiresOpenSky": true },
+    "grantsSkill": { "skill": "cooking", "xp": 12 }
   },
   {
     "id": "smoking_rack", "name": "Räucherstelle", "icon": "🥩", "category": "food",
@@ -105,15 +117,17 @@
     "requiredMaterials": [{ "item": "wood", "amount": 8 }, { "item": "rope", "amount": 4 }, { "item": "palm_leaf", "amount": 2 }],
     "requiredTools": [], "requiredSkills": [{ "skill": "survival", "level": 3 }, { "skill": "cooking", "level": 2 }],
     "requiredKnowledge": ["knows_preservation", "knows_fire"], "visibleWhenSeen": ["boar_meat", "fish"],
-    "buildTime": 80, "placementRules": { "requiresNearbyFire": true }
+    "buildTime": 80, "placementRules": { "requiresNearbyFire": true },
+    "grantsSkill": { "skill": "cooking", "xp": 15 }
   },
   {
     "id": "workbench", "name": "Werkbank", "icon": "🪚", "category": "workstation",
     "description": "Schaltet fortgeschrittenes Handwerk frei – Bretter, bessere Werkzeuge, Strukturen.",
-    "effects": ["Fortgeschrittenes Crafting", "-10% Fehlschlagchance", "Mehr Rezepte sichtbar"],
+    "effects": ["Fortgeschrittenes Crafting", "Mehr Rezepte sichtbar"],
     "requiredMaterials": [{ "item": "wood", "amount": 15 }, { "item": "stone", "amount": 10 }],
     "requiredTools": ["stone_axe"], "requiredSkills": [{ "skill": "crafting", "level": 2 }],
-    "requiredKnowledge": ["knows_construction"], "visibleWhenSeen": ["wood", "stone"], "buildTime": 90
+    "requiredKnowledge": ["knows_construction"], "visibleWhenSeen": ["wood", "stone"], "buildTime": 90,
+    "grantsSkill": { "skill": "building", "xp": 25 }
   },
   {
     "id": "furnace", "name": "Schmelzofen", "icon": "🏭", "category": "workstation",
@@ -121,7 +135,8 @@
     "effects": ["Eisenerz → Eisenbarren", "Schaltet Eisenwerkzeuge frei"],
     "requiredMaterials": [{ "item": "wood", "amount": 20 }, { "item": "stone", "amount": 15 }, { "item": "plank", "amount": 10 }],
     "requiredTools": ["stone_axe"], "requiredSkills": [{ "skill": "survival", "level": 4 }, { "skill": "crafting", "level": 4 }],
-    "requiredKnowledge": ["knows_metal", "knows_fire"], "visibleWhenSeen": ["iron_ore"], "buildTime": 180
+    "requiredKnowledge": ["knows_metal", "knows_fire"], "visibleWhenSeen": ["iron_ore"], "buildTime": 180,
+    "grantsSkill": { "skill": "building", "xp": 45 }
   },
   {
     "id": "farm_plot", "name": "Ackerbeet", "icon": "🌾", "category": "food",
@@ -129,7 +144,8 @@
     "effects": ["Passiv: 1× Nahrung alle 40s"],
     "requiredMaterials": [{ "item": "plank", "amount": 10 }, { "item": "stone", "amount": 5 }],
     "requiredTools": [], "requiredSkills": [{ "skill": "naturelore", "level": 3 }],
-    "requiredKnowledge": ["knows_construction"], "visibleWhenSeen": ["plank"], "buildTime": 120
+    "requiredKnowledge": ["knows_construction"], "visibleWhenSeen": ["plank"], "buildTime": 120,
+    "grantsSkill": { "skill": "naturelore", "xp": 20 }
   },
   {
     "id": "herb_drying_rack", "name": "Kräutergestell", "icon": "🌿", "category": "medicine",
@@ -138,7 +154,8 @@
     "requiredMaterials": [{ "item": "sticks", "amount": 4 }, { "item": "vine", "amount": 2 }],
     "requiredTools": [], "requiredSkills": [{ "skill": "naturelore", "level": 2 }],
     "requiredKnowledge": ["knows_medicine"], "visibleWhenSeen": ["herbs"],
-    "buildTime": 30, "placementRules": { "requiresOpenSky": true }
+    "buildTime": 30, "placementRules": { "requiresOpenSky": true },
+    "grantsSkill": { "skill": "naturelore", "xp": 12 }
   },
   {
     "id": "snare_trap", "name": "Schlinge", "icon": "🪤", "category": "hunting",
@@ -146,6 +163,7 @@
     "effects": ["Fängt Kleintiere passiv", "Muss täglich kontrolliert werden"],
     "requiredMaterials": [{ "item": "rope", "amount": 2 }, { "item": "sticks", "amount": 3 }],
     "requiredTools": [], "requiredSkills": [{ "skill": "hunting", "level": 2 }],
-    "requiredKnowledge": ["knows_basic_weapon"], "visibleWhenSeen": ["rope"], "buildTime": 20
+    "requiredKnowledge": ["knows_basic_weapon"], "visibleWhenSeen": ["rope"], "buildTime": 20,
+    "grantsSkill": { "skill": "hunting", "xp": 10 }
   }
 ]

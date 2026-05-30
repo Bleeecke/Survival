@@ -7,7 +7,7 @@ import { DEFAULT_SKILLS, type SkillId } from '../types/skills';
 import { TOOL_MAX_DURABILITY } from '../data/toolDurability';
 import { PERISHABLE_IDS } from '../data/foodDecay';
 import { DEFAULT_KNOWLEDGE, MATERIAL_KNOWLEDGE_GRANTS, type KnowledgeFlag, KNOWLEDGE_INSIGHTS } from '../data/knowledge';
-import { getInsightsByFocus, INITIAL_FOCUSES, FOCUS_UNLOCK_CONDITIONS, type ReflectionFocus } from '../data/ideas';
+import rawMaterialToasts from '../data/json/materialToasts.json';
 
 interface PlayerStore {
   player: Player;
@@ -18,13 +18,6 @@ interface PlayerStore {
   craftCounts: Record<string, number>;  // recipeId → times crafted
   recordCraft: (recipeId: string) => void;
   getCraftXpMultiplier: (recipeId: string) => number;
-
-  // Grübel-System
-  reflectionFocus: ReflectionFocus | null;
-  collectedInsights: string[];       // insight IDs gathered so far
-  unlockedFocuses: ReflectionFocus[];
-  setReflectionFocus: (focus: ReflectionFocus | null) => void;
-  checkInsight: (materialId: string) => void; // call on material pickup
 
   initPlayer: (name: string) => void;
   movePlayer: (x: number, y: number) => void;
@@ -76,56 +69,20 @@ export const usePlayerStore = create<PlayerStore>()(
       knownMaterials: [],
       knowledge: { ...DEFAULT_KNOWLEDGE },
       craftCounts: {},
-      reflectionFocus: null,
-      collectedInsights: [],
-      unlockedFocuses: [...INITIAL_FOCUSES],
 
       learnMaterial: (id: string) => {
         if (get().knownMaterials.includes(id)) return;
         set(s => ({ knownMaterials: [...s.knownMaterials, id] }));
+        // Material knowledge grants (instant)
         const flag = MATERIAL_KNOWLEDGE_GRANTS[id];
         if (flag) get().learnKnowledge(flag);
-        get().checkInsight(id);
-      },
-
-      setReflectionFocus: (focus) => set({ reflectionFocus: focus }),
-
-      checkInsight: (materialId: string) => {
-        const state = get();
-        if (!state.reflectionFocus) return;
-        const insightMap = getInsightsByFocus(state.reflectionFocus);
-        const entry = insightMap.get(materialId);
-        if (!entry) return;
-        const { idea, insight } = entry;
-        if (state.collectedInsights.includes(insight.id)) return;
-        // Check requiresKnowledge gate
-        if (idea.requiresKnowledge && !state.knowledge[idea.requiresKnowledge]) return;
-
-        const newInsights = [...state.collectedInsights, insight.id];
-        set({ collectedInsights: newInsights });
-
-        // Show insight toast
-        import('../store/notificationStore').then(({ useNotificationStore }) => {
-          const allCollected = idea.insights.every(i => newInsights.includes(i.id));
-          useNotificationStore.getState().addNotification(insight.text, 'xp');
-          if (allCollected) {
-            setTimeout(() => {
-              useNotificationStore.getState().addNotification(
-                `💡 Idee verstanden: ${idea.name}`,
-                'levelup'
-              );
-            }, 800);
-            for (const flag of idea.grantsKnowledge) {
-              get().learnKnowledge(flag);
-            }
-          } else {
-            const done = idea.insights.filter(i => newInsights.includes(i.id)).length;
-            useNotificationStore.getState().addNotification(
-              `Idee: ${idea.name} — ${done}/${idea.insights.length}`,
-              'xp'
-            );
-          }
-        });
+        // Atmospheric toast on first pickup
+        const toastText = (rawMaterialToasts as Record<string, string>)[id];
+        if (toastText) {
+          import('../store/notificationStore').then(({ useNotificationStore }) => {
+            useNotificationStore.getState().addNotification(toastText, 'xp');
+          });
+        }
       },
 
       recordCraft: (recipeId: string) => {
@@ -144,13 +101,6 @@ export const usePlayerStore = create<PlayerStore>()(
         import('../store/notificationStore').then(({ useNotificationStore }) => {
           useNotificationStore.getState().addNotification(KNOWLEDGE_INSIGHTS[flag], 'levelup');
         });
-        // Unlock new reflection focuses if this flag is the condition
-        const state = get();
-        for (const [focus, requiredFlag] of Object.entries(FOCUS_UNLOCK_CONDITIONS) as [ReflectionFocus, KnowledgeFlag][]) {
-          if (requiredFlag === flag && !state.unlockedFocuses.includes(focus)) {
-            set(s => ({ unlockedFocuses: [...s.unlockedFocuses, focus] }));
-          }
-        }
       },
 
       initPlayer: (name: string) =>
@@ -182,8 +132,6 @@ export const usePlayerStore = create<PlayerStore>()(
 
       addToInventory: (resourceId: string, quantity: number) => {
         get().learnMaterial(resourceId);
-        // checkInsight fires on every pickup (learnMaterial skips known materials)
-        if (get().knownMaterials.includes(resourceId)) get().checkInsight(resourceId);
         const state = get();
         const { items, maxSlots } = state.player.inventory;
 
@@ -355,6 +303,7 @@ export const usePlayerStore = create<PlayerStore>()(
       },
 
       gainSkillXp: (skillId, xp) => {
+        const levelsBefore = get().player.skills?.[skillId]?.level ?? 1;
         set((state) => {
           const MAX_LEVEL = 10;
           const skills = { ...(state.player.skills ?? DEFAULT_SKILLS) };
@@ -363,18 +312,27 @@ export const usePlayerStore = create<PlayerStore>()(
           while (skill.level < MAX_LEVEL && skill.xp >= skill.level * 20) {
             skill.xp -= skill.level * 20;
             skill.level += 1;
-            // Lazy import to avoid circular dependency
-            import('../store/notificationStore').then(({ useNotificationStore }) => {
-              useNotificationStore.getState().addNotification(
-                `${skillId}:levelup:${skill.level}`,
-                'levelup'
-              );
-            });
           }
           if (skill.level >= MAX_LEVEL) skill.xp = Math.min(skill.xp, MAX_LEVEL * 20);
           skills[skillId] = skill;
           return { player: { ...state.player, skills } };
         });
+        const levelsAfter = get().player.skills?.[skillId]?.level ?? 1;
+        if (levelsAfter > levelsBefore) {
+          for (let lvl = levelsBefore + 1; lvl <= levelsAfter; lvl++) {
+            import('./journalStore').then(({ useJournalStore }) => {
+              useJournalStore.getState().addPendingEntry(skillId, lvl);
+            });
+            import('./notificationStore').then(({ useNotificationStore }) => {
+              import('../types/skills').then(({ SKILL_LABELS }) => {
+                useNotificationStore.getState().addNotification(
+                  `📖 Neue Eingebung: ${SKILL_LABELS[skillId]} Stufe ${lvl}`,
+                  'levelup'
+                );
+              });
+            });
+          }
+        }
       },
 
       damageTool: (resourceId, damage) => {
@@ -407,7 +365,10 @@ export const usePlayerStore = create<PlayerStore>()(
         });
       },
 
-      reset: () => set({ player: { ...defaultPlayer, equipment: { ...defaultEquipment, belt: [null, null, null] }, skills: { ...DEFAULT_SKILLS } }, knownMaterials: [], knowledge: { ...DEFAULT_KNOWLEDGE }, craftCounts: {}, reflectionFocus: null, collectedInsights: [], unlockedFocuses: [...INITIAL_FOCUSES] }),
+      reset: () => {
+        set({ player: { ...defaultPlayer, equipment: { ...defaultEquipment, belt: [null, null, null] }, skills: { ...DEFAULT_SKILLS } }, knownMaterials: [], knowledge: { ...DEFAULT_KNOWLEDGE }, craftCounts: {} });
+        import('./journalStore').then(({ useJournalStore }) => useJournalStore.getState().reset());
+      },
     }),
     {
       name: 'survival-player-save',
@@ -441,12 +402,10 @@ export const usePlayerStore = create<PlayerStore>()(
         if (state && !state.craftCounts) {
           state.craftCounts = {};
         }
-        if (state && !state.collectedInsights) {
-          state.collectedInsights = [];
-        }
-        if (state && !state.unlockedFocuses) {
-          state.unlockedFocuses = [...INITIAL_FOCUSES];
-        }
+        // Clean up old grübel state if present
+        if (state && 'collectedInsights' in state) delete (state as Record<string, unknown>).collectedInsights;
+        if (state && 'reflectionFocus' in state) delete (state as Record<string, unknown>).reflectionFocus;
+        if (state && 'unlockedFocuses' in state) delete (state as Record<string, unknown>).unlockedFocuses;
       },
     }
   )

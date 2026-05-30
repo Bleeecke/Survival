@@ -43,6 +43,26 @@ export default function DevPanel() {
     useGameStore.getState().tickTime(600_000); // 10 min real = 1 game day
   }
 
+  function skip6Hours() {
+    // 6h = 1500 ticks. Apply stat drain manually then advance game time.
+    const stats = usePlayerStore.getState().player.stats;
+    const TICKS = 1500;
+    const hunger  = stats.hunger  ?? 0;
+    const thirst  = stats.thirst  ?? 0;
+    const fatigue = stats.fatigue ?? 0;
+    const hungerGain  = hunger < 65
+      ? Math.min(100, hunger  + TICKS * (65 / 12000))
+      : Math.min(100, hunger  + TICKS * (35 / 3000));
+    const thirstGain  = Math.min(100, thirst  + TICKS * (100 / 9000));
+    const fatigueGain = Math.min(100, fatigue + TICKS * (100 / 6000));
+    usePlayerStore.getState().updateStats({
+      hunger:  hungerGain,
+      thirst:  thirstGain,
+      fatigue: fatigueGain,
+    });
+    useGameStore.getState().tickTime(150_000); // 2.5 min real = 6 game hours
+  }
+
   function giveItem(id: string) {
     usePlayerStore.getState().addToInventory(id, 5);
   }
@@ -77,6 +97,10 @@ export default function DevPanel() {
               devRain ? 'bg-sky-600 text-white' : 'bg-sky-900 hover:bg-sky-800 text-sky-300'
             }`}>
             🌧️ Regen {devRain ? 'AN' : 'AUS'}
+          </button>
+          <button onClick={skip6Hours}
+            className="py-1.5 bg-amber-700 hover:bg-amber-600 text-amber-200 rounded-lg font-semibold">
+            ⏩ +6 Stunden
           </button>
           <button onClick={skipDay}
             className="py-1.5 bg-amber-800 hover:bg-amber-700 text-amber-200 rounded-lg font-semibold">

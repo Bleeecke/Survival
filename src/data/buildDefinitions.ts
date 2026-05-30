@@ -30,6 +30,7 @@ export interface BuildDefinition {
   visibleWhenSeen: string[];
   buildTime: number;
   grantsKnowledge?: KnowledgeFlag[];
+  grantsSkill?: { skill: SkillId; xp: number };
   placementRules?: PlacementRules;
 }
 

@@ -89,7 +89,7 @@ export class CraftingSystem {
 
   hasRequiredKnowledge(recipe: Recipe): boolean {
     if (useGameStore.getState().freeCraft) return true;
-    if (!recipe.requiredKnowledge?.length) return false;
+    if (!recipe.requiredKnowledge?.length) return true;
     const knowledge = usePlayerStore.getState().knowledge;
     return recipe.requiredKnowledge.every(flag => knowledge[flag]);
   }
