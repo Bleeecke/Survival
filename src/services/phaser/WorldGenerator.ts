@@ -378,7 +378,7 @@ export class WorldGenerator {
     spawnY: number,
   ) {
     const placements: { x: number; y: number }[] = [];
-    const MIN_SPACING = 14; // tiles between any two large trees
+    const MIN_SPACING = 10; // tiles between any two large trees
     const MIN_DIST_SPAWN = 25;
 
     const tryPlace = (type: 'large_tree' | 'banyan_tree', validBiomes: string[], count: number) => {
@@ -423,8 +423,8 @@ export class WorldGenerator {
       }
     };
 
-    tryPlace('large_tree', ['sparse_forest', 'forest', 'dense_jungle'], 18);
-    tryPlace('banyan_tree', ['dense_jungle', 'forest'], 10);
+    tryPlace('large_tree', ['sparse_forest', 'forest', 'dense_jungle'], 40);
+    tryPlace('banyan_tree', ['dense_jungle', 'forest'], 20);
   }
 
   // ── Puddles ──────────────────────────────────────────────────────────
