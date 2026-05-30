@@ -14,6 +14,7 @@ class MusicManager {
   private sounds: Partial<Record<Track, Howl>> = {};
   private current: Track | null = null;
   private introSound: Howl | null = null;
+  private _introActive = false;
   private _volume = (() => {
     const v = localStorage.getItem('survival-music-volume');
     return v !== null ? parseFloat(v) : 0.4;
@@ -37,11 +38,10 @@ class MusicManager {
     return this.sounds[track]!;
   }
 
-  get introPlaying() { return this.introSound?.playing() ?? false; }
+  get introPlaying() { return this._introActive; }
 
   crossfadeTo(track: Track) {
-    // Never interrupt a playing intro
-    if (this.introPlaying) return;
+    if (this._introActive) return;
     if (this.current === track) return;
 
     // Fade out current
@@ -83,6 +83,9 @@ class MusicManager {
   }
 
   playIntro(onEnd: () => void) {
+    if (this._introActive) return;
+    this._introActive = true;
+
     // Fade out menu music over 1.5s, then start intro
     if (this.current) {
       const old = this.sounds[this.current];
@@ -99,6 +102,7 @@ class MusicManager {
       volume: 0,
     });
     this.introSound.once('end', () => {
+      this._introActive = false;
       this.introSound = null;
       onEnd();
     });
@@ -108,6 +112,7 @@ class MusicManager {
 
   stopIntro() {
     if (this.introSound) {
+      this._introActive = false;
       this.introSound.fade(this.introSound.volume(), 0, FADE_MS);
       this.introSound.once('fade', () => { this.introSound?.stop(); this.introSound = null; });
     }
