@@ -435,6 +435,7 @@ export class GameManager {
 
 
   private renderCliffFaces(g: Phaser.GameObjects.Graphics, world: any, tx0: number, ty0: number, tx1: number, ty1: number) {
+    // South faces — high tile above, lower tile below (the main Zelda cliff face)
     for (let ty = ty0; ty < ty1; ty++) {
       for (let tx = tx0; tx <= tx1; tx++) {
         const here = world.tileMap[ty]?.[tx];
@@ -442,32 +443,87 @@ export class GameManager {
         if (!here || !below) continue;
         const diff = (here.elevation ?? 0) - (below.elevation ?? 0);
         if (diff <= 0) continue;
-
-        const x = tx * TS;
-        const y = ty * TS;
-        const faceH = Math.min(diff * 12, 24);
-        const hash = (tx * 7 + ty * 13) % 8;
-
-        // Main rock face — extends from bottom of upper tile into tile below
-        g.fillStyle(0x7a6a52);
-        g.fillRect(x, y + TS - faceH + 4, TS, faceH);
-
-        // Darker shadow strip at base
-        g.fillStyle(0x2e2418, 0.75);
-        g.fillRect(x, y + TS - faceH + faceH - 3, TS, 5);
-
-        // Highlight at top edge of cliff
-        g.fillStyle(0xa09070, 0.65);
-        g.fillRect(x, y + TS - faceH + 4, TS, 3);
-
-        // Rocky cracks / texture
-        for (let i = 0; i < 3; i++) {
-          const rx = x + (hash * 3 + i * 9 + tx % 5) % (TS - 5);
-          g.fillStyle(0x4a3c28, 0.55);
-          g.fillRect(rx, y + TS - faceH + 7 + i * 4, 3 + (i % 2), 2);
-        }
+        this.drawCliffSouth(g, tx, ty, diff);
       }
     }
+
+    // East/West faces — high tile left, lower tile right (and vice-versa)
+    for (let ty = ty0; ty <= ty1; ty++) {
+      for (let tx = tx0; tx < tx1; tx++) {
+        const left  = world.tileMap[ty]?.[tx];
+        const right = world.tileMap[ty]?.[tx + 1];
+        if (!left || !right) continue;
+        const diff = (left.elevation ?? 0) - (right.elevation ?? 0);
+        if      (diff > 0) this.drawCliffEast(g, tx,     ty, diff);
+        else if (diff < 0) this.drawCliffWest(g, tx + 1, ty, -diff);
+      }
+    }
+  }
+
+  private drawCliffSouth(g: Phaser.GameObjects.Graphics, tx: number, ty: number, diff: number) {
+    const x = tx * TS;
+    const y = ty * TS;
+    const faceH = Math.min(4 + diff * 10, 26); // 14–26px
+    const hash  = (tx * 7 + ty * 13) % 8;
+    const fy    = y + TS - 2; // starts just inside bottom of high tile
+
+    // Rock face body — extends into tile below
+    g.fillStyle(0x7c6b50);
+    g.fillRect(x, fy, TS, faceH);
+
+    // Top highlight (cliff lip)
+    g.fillStyle(0xb0a080, 0.80);
+    g.fillRect(x, fy, TS, 3);
+
+    // Bottom shadow
+    g.fillStyle(0x1e1408, 0.80);
+    g.fillRect(x, fy + faceH - 4, TS, 5);
+
+    // Mid-tone band
+    g.fillStyle(0x5a4c38, 0.55);
+    g.fillRect(x, fy + Math.floor(faceH / 2), TS, 3);
+
+    // Vertical rock cracks
+    for (let i = 0; i < 4; i++) {
+      const cx = x + ((hash * 5 + i * 8 + tx % 6) % (TS - 4));
+      g.fillStyle(0x3a2e1e, 0.50);
+      g.fillRect(cx, fy + 3, 2, faceH - 6);
+    }
+  }
+
+  private drawCliffEast(g: Phaser.GameObjects.Graphics, tx: number, ty: number, diff: number) {
+    const x = tx * TS;
+    const y = ty * TS;
+    const faceW = Math.min(3 + diff * 6, 16);
+
+    // Side wall — thin strip on right edge of high tile + slight overhang into lower tile
+    g.fillStyle(0x5a4c38);
+    g.fillRect(x + TS - 2, y, faceW, TS);
+
+    // Dark inner shadow
+    g.fillStyle(0x1e1408, 0.70);
+    g.fillRect(x + TS - 2 + faceW - 3, y, 4, TS);
+
+    // Top highlight
+    g.fillStyle(0x9a8a68, 0.60);
+    g.fillRect(x + TS - 2, y, 3, TS);
+  }
+
+  private drawCliffWest(g: Phaser.GameObjects.Graphics, tx: number, ty: number, diff: number) {
+    const x = tx * TS;
+    const y = ty * TS;
+    const faceW = Math.min(3 + diff * 6, 16);
+
+    g.fillStyle(0x5a4c38);
+    g.fillRect(x - faceW + 2, y, faceW, TS);
+
+    // Dark inner shadow on left
+    g.fillStyle(0x1e1408, 0.70);
+    g.fillRect(x - faceW + 2, y, 4, TS);
+
+    // Top highlight on right
+    g.fillStyle(0x9a8a68, 0.60);
+    g.fillRect(x - 2, y, 3, TS);
   }
 
   private drawTile(g: Phaser.GameObjects.Graphics, type: string, tx: number, ty: number) {
