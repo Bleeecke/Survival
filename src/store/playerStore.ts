@@ -415,6 +415,23 @@ export const usePlayerStore = create<PlayerStore>()(
         if (state?.player && !state.player.skills) {
           state.player.skills = { ...DEFAULT_SKILLS };
         }
+        // Migrate old skill IDs to new system
+        if (state?.player?.skills) {
+          const s = state.player.skills as Record<string, { level: number; xp: number }>;
+          const oldToNew: Record<string, string> = {
+            flintknapping: 'crafting', woodworking: 'crafting', cordage: 'crafting',
+            firemaking: 'survival', foraging: 'naturelore', shelterbuilding: 'building',
+          };
+          for (const [old, neo] of Object.entries(oldToNew)) {
+            if (s[old]) {
+              if (!s[neo] || s[neo].level === 1) s[neo] = s[old];
+              delete s[old];
+            }
+          }
+          if (!s['medicine']) s['medicine'] = { level: 1, xp: 0 };
+          if (!s['athletics']) s['athletics'] = { level: 1, xp: 0 };
+          state.player.skills = s as unknown as typeof DEFAULT_SKILLS;
+        }
         if (state && !state.knownMaterials) {
           state.knownMaterials = state.player?.inventory?.items?.map(i => i.resourceId) ?? [];
         }

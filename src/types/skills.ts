@@ -1,12 +1,12 @@
 export type SkillId =
-  | 'flintknapping'
-  | 'woodworking'
-  | 'cordage'
-  | 'firemaking'
-  | 'foraging'
-  | 'cooking'
+  | 'survival'
+  | 'crafting'
+  | 'building'
+  | 'naturelore'
   | 'hunting'
-  | 'shelterbuilding';
+  | 'cooking'
+  | 'medicine'
+  | 'athletics';
 
 export interface Skill {
   level: number; // 1–10
@@ -16,44 +16,62 @@ export interface Skill {
 export type Skills = Record<SkillId, Skill>;
 
 export const SKILL_LABELS: Record<SkillId, string> = {
-  flintknapping:   'Feuersteinklopfen',
-  woodworking:     'Holzbearbeitung',
-  cordage:         'Kordel & Seile',
-  firemaking:      'Feuermachen',
-  foraging:        'Sammeln',
-  cooking:         'Kochen',
-  hunting:         'Jagen',
-  shelterbuilding: 'Unterkunftsbau',
+  survival:   'Überleben',
+  crafting:   'Handwerk',
+  building:   'Bauen',
+  naturelore: 'Naturkunde',
+  hunting:    'Jagen',
+  cooking:    'Kochen',
+  medicine:   'Medizin',
+  athletics:  'Körperbeherrschung',
+};
+
+export const SKILL_DESCRIPTIONS: Record<SkillId, string> = {
+  survival:   'Feuer, Wasser, Wetter, Schlaf, Grundroutinen',
+  crafting:   'Werkzeuge, Seile, Stein, einfache Verarbeitung',
+  building:   'Unterstände, Lager, Werkbank, Palisaden',
+  naturelore: 'Pflanzen, Kräuter, Pilze, Ressourcen erkennen',
+  hunting:    'Tiere, Speere, Fallen, Zerlegen',
+  cooking:    'Nahrung sicher machen, haltbar machen, Wasser abkochen',
+  medicine:   'Wunden, Krankheit, Salben, Gegengift',
+  athletics:  'Ausdauer, Tragen, Schleichen, Bewegung im Gelände',
 };
 
 export const SKILL_IDS: SkillId[] = [
-  'flintknapping', 'woodworking', 'cordage', 'firemaking',
-  'foraging', 'cooking', 'hunting', 'shelterbuilding',
+  'survival', 'crafting', 'building', 'naturelore',
+  'hunting', 'cooking', 'medicine', 'athletics',
 ];
 
 export const DEFAULT_SKILLS: Skills = {
-  flintknapping:   { level: 1, xp: 0 },
-  woodworking:     { level: 1, xp: 0 },
-  cordage:         { level: 1, xp: 0 },
-  firemaking:      { level: 1, xp: 0 },
-  foraging:        { level: 1, xp: 0 },
-  cooking:         { level: 1, xp: 0 },
-  hunting:         { level: 1, xp: 0 },
-  shelterbuilding: { level: 1, xp: 0 },
+  survival:   { level: 1, xp: 0 },
+  crafting:   { level: 1, xp: 0 },
+  building:   { level: 1, xp: 0 },
+  naturelore: { level: 1, xp: 0 },
+  hunting:    { level: 1, xp: 0 },
+  cooking:    { level: 1, xp: 0 },
+  medicine:   { level: 1, xp: 0 },
+  athletics:  { level: 1, xp: 0 },
 };
 
 // XP pro Ressourcentyp beim Sammeln
 export const GATHER_SKILL_XP: Partial<Record<string, { skill: SkillId; xp: number }>> = {
-  // flint + pebbles geben kein XP — Erfahrung kommt nur durch aktives Klopfen
-  wood:         { skill: 'woodworking',   xp: 5 },
-  fiber:        { skill: 'cordage',       xp: 5 },
-  vine:         { skill: 'cordage',       xp: 5 },
-  herbs:        { skill: 'foraging',      xp: 8 },
-  mushroom:     { skill: 'foraging',      xp: 6 },
-  exotic_fruit: { skill: 'foraging',      xp: 8 },
-  food:         { skill: 'foraging',      xp: 4 },
-  fish:         { skill: 'hunting',       xp: 6 },
-  boar_meat:    { skill: 'hunting',       xp: 10 },
-  turtle_meat:  { skill: 'hunting',       xp: 8 },
-  crab_meat:    { skill: 'hunting',       xp: 6 },
+  flint:        { skill: 'crafting',   xp: 4 },
+  pebbles:      { skill: 'survival',   xp: 3 },
+  wood:         { skill: 'crafting',   xp: 5 },
+  sticks:       { skill: 'crafting',   xp: 3 },
+  fiber:        { skill: 'crafting',   xp: 4 },
+  vine:         { skill: 'crafting',   xp: 4 },
+  herbs:        { skill: 'naturelore', xp: 8 },
+  mushroom:     { skill: 'naturelore', xp: 6 },
+  exotic_fruit: { skill: 'naturelore', xp: 8 },
+  food:         { skill: 'naturelore', xp: 4 },
+  palm_leaf:    { skill: 'naturelore', xp: 3 },
+  fish:         { skill: 'hunting',    xp: 6 },
+  boar_meat:    { skill: 'hunting',    xp: 10 },
+  boar_hide:    { skill: 'hunting',    xp: 8 },
+  turtle_meat:  { skill: 'hunting',    xp: 8 },
+  crab_meat:    { skill: 'hunting',    xp: 6 },
+  iron_ore:     { skill: 'crafting',   xp: 6 },
+  stone:        { skill: 'building',   xp: 3 },
+  granite:      { skill: 'building',   xp: 4 },
 };
