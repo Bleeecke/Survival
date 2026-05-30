@@ -326,7 +326,6 @@ function RecipeCard({ recipe, inventory, craftingId, progress, onCraft }: {
   const knowledge    = usePlayerStore(s => s.knowledge);
   const isActive     = craftingId === recipe.id;
   const busyCrafting = !!craftingId && !isActive;
-  const effectiveTime = craftingSystem.getEffectiveCraftTime(recipe);
 
   const borderClass = isActive
     ? 'border-amber-500 bg-amber-900/20'
