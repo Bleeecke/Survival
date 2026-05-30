@@ -140,17 +140,17 @@ export class WorldGenerator {
 
   private elevationForType(type: string): number {
     switch (type) {
-      case 'water':        return 0;
-      case 'beach':        return 0;
-      case 'grass':        return 1;
-      case 'tall_grass':   return 1;
-      case 'sparse_forest': return 1;
-      case 'dense_jungle': return 1;
-      case 'forest':       return 2;
-      case 'hills':        return 2;
-      case 'mountain':     return 3;
-      case 'impassable':   return 4;
-      default:             return 1;
+      case 'water':         return 0;
+      case 'beach':         return 0;
+      case 'grass':         return 1;
+      case 'tall_grass':    return 1;
+      case 'sparse_forest': return 2;
+      case 'forest':        return 2;
+      case 'dense_jungle':  return 2;
+      case 'hills':         return 3;
+      case 'mountain':      return 4;
+      case 'impassable':    return 5;
+      default:              return 1;
     }
   }
 
