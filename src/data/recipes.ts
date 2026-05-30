@@ -16,6 +16,7 @@ export const RECIPES: Recipe[] = [
     inputs: [{ resourceId: 'sticks', quantity: 5 }, { resourceId: 'pebbles', quantity: 3 }],
     outputs: [{ resourceId: 'campfire', quantity: 1 }],
     craftingTime: 3000,
+    requiredKnowledge: ['knows_basic_fire'],
     grantsSkill: { skill: 'firemaking', xp: 20 },
     grantsKnowledge: ['knows_fire'],
   },
@@ -80,6 +81,7 @@ export const RECIPES: Recipe[] = [
     inputs: [{ resourceId: 'sticks', quantity: 8 }, { resourceId: 'palm_leaf', quantity: 6 }, { resourceId: 'vine', quantity: 3 }],
     outputs: [{ resourceId: 'palm_shelter', quantity: 1 }],
     craftingTime: 3000,
+    requiredKnowledge: ['knows_basic_shelter'],
     grantsSkill: { skill: 'shelterbuilding', xp: 15 },
     grantsKnowledge: ['knows_construction'],
   },
@@ -98,6 +100,7 @@ export const RECIPES: Recipe[] = [
     inputs: [{ resourceId: 'coconut_shell', quantity: 1 }, { resourceId: 'palm_leaf', quantity: 1 }],
     outputs: [{ resourceId: 'water_container', quantity: 1 }],
     craftingTime: 2000,
+    requiredKnowledge: ['knows_rain_collection'],
   },
   {
     id: 'turtle_shell_bowl',

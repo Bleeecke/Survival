@@ -7,7 +7,7 @@ import { DEFAULT_SKILLS, type SkillId } from '../types/skills';
 import { TOOL_MAX_DURABILITY } from '../data/toolDurability';
 import { PERISHABLE_IDS } from '../data/foodDecay';
 import { DEFAULT_KNOWLEDGE, MATERIAL_KNOWLEDGE_GRANTS, type KnowledgeFlag, KNOWLEDGE_INSIGHTS } from '../data/knowledge';
-import { getInsightsByFocus, INITIAL_FOCUSES, type ReflectionFocus } from '../data/ideas';
+import { getInsightsByFocus, INITIAL_FOCUSES, FOCUS_UNLOCK_CONDITIONS, type ReflectionFocus } from '../data/ideas';
 
 interface PlayerStore {
   player: Player;
@@ -144,6 +144,13 @@ export const usePlayerStore = create<PlayerStore>()(
         import('../store/notificationStore').then(({ useNotificationStore }) => {
           useNotificationStore.getState().addNotification(KNOWLEDGE_INSIGHTS[flag], 'levelup');
         });
+        // Unlock new reflection focuses if this flag is the condition
+        const state = get();
+        for (const [focus, requiredFlag] of Object.entries(FOCUS_UNLOCK_CONDITIONS) as [ReflectionFocus, KnowledgeFlag][]) {
+          if (requiredFlag === flag && !state.unlockedFocuses.includes(focus)) {
+            set(s => ({ unlockedFocuses: [...s.unlockedFocuses, focus] }));
+          }
+        }
       },
 
       initPlayer: (name: string) =>
