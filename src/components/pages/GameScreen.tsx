@@ -3,6 +3,7 @@ import GameCanvas from '../game/GameCanvas';
 import GameHUD from '../game/GameHUD';
 import InventoryPanel from '../game/InventoryPanel';
 import CraftingModal from '../game/CraftingModal';
+import TechbaumModal from '../game/TechbaumModal';
 import BuildBar from '../game/BuildMenu';
 import CampfireModal from '../game/CampfireModal';
 import PalmShelterModal from '../game/PalmShelterModal';
@@ -37,6 +38,8 @@ export default function GameScreen() {
   const closeGatherMenu = useGameStore(s => s.closeGatherMenu);
   const craftingOpen    = useGameStore(s => s.craftingOpen);
   const setCraftingOpen = useGameStore(s => s.setCraftingOpen);
+  const techbaumOpen    = useGameStore(s => s.techbaumOpen);
+  const setTechbaumOpen = useGameStore(s => s.setTechbaumOpen);
   const storageBoxId    = useGameStore(s => s.storageBoxId);
   const closeStorageBox = useGameStore(s => s.closeStorageBox);
   const useBeltSlot     = usePlayerStore(s => s.useBeltSlot);
@@ -151,12 +154,12 @@ export default function GameScreen() {
         if (useGameStore.getState().pickupMenuOpen) { useGameStore.getState().closePickupMenu(); return; }
         if (useGameStore.getState().gatherMenuOpen) { closeGatherMenu(); return; }
         if (craftingOpen) { setCraftingOpen(false); return; }
+        if (useGameStore.getState().techbaumOpen) { setTechbaumOpen(false); return; }
         if (useGameStore.getState().storageBoxId) { closeStorageBox(); return; }
         setPaused(!useGameStore.getState().isPaused);
       }
-      if ((e.key === 'c' || e.key === 'C') && !isPaused) {
-        const open = useGameStore.getState().craftingOpen;
-        setCraftingOpen(!open);
+      if ((e.key === 't' || e.key === 'T') && !isPaused) {
+        setTechbaumOpen(!useGameStore.getState().techbaumOpen);
       }
 
       // Belt quick-use: 1 / 2 / 3
@@ -181,7 +184,7 @@ export default function GameScreen() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [setPaused, isPaused, craftingOpen, closeGatherMenu, setCraftingOpen, storageBoxId, closeStorageBox, useBeltSlot, updateStats]);
+  }, [setPaused, isPaused, craftingOpen, closeGatherMenu, setCraftingOpen, setTechbaumOpen, storageBoxId, closeStorageBox, useBeltSlot, updateStats]);
 
   return (
     <div className="flex w-full h-screen bg-black relative">
@@ -228,12 +231,12 @@ export default function GameScreen() {
         {/* Crafting + Menu buttons */}
         <div className="px-3 pt-3 pb-2 border-b border-slate-700 flex gap-2">
           <button
-            onClick={() => setCraftingOpen(true)}
+            onClick={() => setTechbaumOpen(true)}
             className="flex-1 py-1.5 bg-amber-700 hover:bg-amber-600 text-white font-bold text-xs rounded-lg transition-colors flex items-center justify-center gap-1.5"
           >
-            <span>📖</span>
-            <span>Crafting</span>
-            <span className="text-amber-300 font-normal">(C)</span>
+            <span>📊</span>
+            <span>Techbaum</span>
+            <span className="text-amber-300 font-normal">(T)</span>
           </button>
           <button
             onClick={() => setPaused(true)}
@@ -284,8 +287,11 @@ export default function GameScreen() {
         </button>
       )}
 
-      {/* Crafting modal */}
+      {/* Crafting modal (Arbeitsplatz) */}
       {craftingOpen && <CraftingModal onClose={closeCrafting} />}
+
+      {/* Techbaum modal */}
+      {techbaumOpen && <TechbaumModal onClose={() => setTechbaumOpen(false)} />}
 
       {/* Storage box modal */}
       <StorageBoxModal />

@@ -9,8 +9,10 @@ export const CHANGELOG: ChangelogEntry[] = [
     version: '1.9',
     date: '31.05.2026',
     changes: [
-      'Arbeitsplatz: ersetzt den Ablageplatz — 4× Bruchstein + 4× Palmblatt',
-      'Crafting nur noch am Arbeitsplatz möglich (Banner + deaktivierte Buttons wenn zu weit weg)',
+      'Arbeitsplatz: ersetzt den Ablageplatz — 4× Bruchstein + 4× Palmblatt, mit F öffnen',
+      'Crafting ausschließlich am Arbeitsplatz (F-Taste wenn daneben stehend)',
+      'Techbaum: neuer T-Button oben rechts — zeigt alle entdeckten Rezepte als Übersicht',
+      'Techbaum: Filter nach Herstellbar/Gesperrt, Materialanzeige farbcodiert',
       'Neues Sprite: Steine mit Palmblatt-Unterlage und Kreuz-Markierung',
     ],
   },

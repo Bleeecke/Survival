@@ -4770,6 +4770,13 @@ export class GameManager {
         return;
       }
 
+      // Arbeitsplatz: open crafting modal
+      const arbeitsplatz = structures.find(s => s.type === 'arbeitsplatz' && Math.abs(s.x - player.x) <= 1 && Math.abs(s.y - player.y) <= 1);
+      if (arbeitsplatz) {
+        useGameStore.getState().setCraftingOpen(true);
+        return;
+      }
+
       // Water container (Regensammler): trinken wenn gefüllt
       const waterContainer = structures.find(s => s.type === 'water_container' && Math.abs(s.x - player.x) <= 1 && Math.abs(s.y - player.y) <= 1);
       if (waterContainer) {

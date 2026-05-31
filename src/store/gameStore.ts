@@ -30,9 +30,13 @@ interface GameStore {
   hoveredResource: WorldResource | null;
   hoverSince: number | null;
 
-  // Crafting modal
+  // Crafting modal (Arbeitsplatz)
   craftingOpen: boolean;
   setCraftingOpen: (open: boolean) => void;
+
+  // Techbaum modal (read-only discovery overview)
+  techbaumOpen: boolean;
+  setTechbaumOpen: (open: boolean) => void;
 
   // Placement mode — active after clicking "Craft" for a structure
   placementMode: { recipeId: string } | null;
@@ -120,6 +124,8 @@ export const useGameStore = create<GameStore>()(
       setAwakeningBlur: (v) => set({ awakeningBlur: v }),
       setIsNewGame: (v) => set({ isNewGame: v }),
       craftingOpen: false,
+      techbaumOpen: false,
+      setTechbaumOpen: (open) => set({ techbaumOpen: open }),
 
       setPhase: (phase) => set({ phase }),
       setPaused: (paused) => set({ isPaused: paused }),
