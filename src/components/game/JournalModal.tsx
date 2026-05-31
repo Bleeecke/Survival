@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { useJournalStore } from '../../store/journalStore';
-import { SKILL_LABELS } from '../../types/skills';
 import rawResources from '../../data/json/resources.json';
 
 const RESOURCE_NAMES: Record<string, string> = Object.fromEntries(
@@ -74,7 +73,7 @@ export default function JournalModal() {
                         <div>
                           <div className="text-amber-200 font-semibold text-sm">{entry.title}</div>
                           <div className="text-slate-400 text-[10px] mt-0.5">
-                            {SKILL_LABELS[entry.skillId]} · Stufe {entry.skillLevel}
+                            💡 Eingebung
                           </div>
                         </div>
                         <span className="text-xl flex-shrink-0">💡</span>
@@ -107,9 +106,7 @@ export default function JournalModal() {
                       <span className="text-green-500 text-sm">✅</span>
                       <div className="flex-1 min-w-0">
                         <div className="text-slate-300 text-xs font-medium truncate">{entry.title}</div>
-                        <div className="text-slate-500 text-[10px]">
-                          {SKILL_LABELS[entry.skillId]} · Stufe {entry.skillLevel}
-                        </div>
+                        <div className="text-slate-500 text-[10px]">💡 Eingebung</div>
                       </div>
                     </div>
                   ))}

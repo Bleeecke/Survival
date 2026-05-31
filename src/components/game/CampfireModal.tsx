@@ -28,8 +28,6 @@ export default function CampfireModal() {
   const world           = useWorldStore(s => s.world);
   const updateStructure = useWorldStore(s => s.updateStructure);
   const inventory       = usePlayerStore(s => s.player.inventory.items);
-  const knowledge       = usePlayerStore(s => s.knowledge);
-
   const campfire = world?.structures.find(s => s.id === campfireId);
   const fuel     = campfire?.fuel ?? 0;
 
@@ -65,7 +63,7 @@ export default function CampfireModal() {
   const wood      = inventory.find(i => i.resourceId === 'wood')?.quantity      ?? 0;
   const cookDef   = cookSlot ? COOKABLE[cookSlot] : null;
 
-  const { addToInventory, removeResource } = usePlayerStore.getState();
+  const { removeResource } = usePlayerStore.getState();
 
   function handleAddFuel(type: 'sticks' | 'driftwood' | 'wood') {
     if (!campfire) return;

@@ -538,7 +538,6 @@ const HAND_CRAFT_RECIPES = RECIPES.filter(r => HAND_CRAFT_IDS.includes(r.id));
 
 function QuickCraft() {
   const inventory  = usePlayerStore(s => s.player.inventory);
-  const knowledge  = usePlayerStore(s => s.knowledge);
   const freeCraft  = useGameStore(s => s.freeCraft);
   const tickTime   = useGameStore(s => s.tickTime);
 
