@@ -4458,9 +4458,13 @@ export class GameManager {
       if (resource) this.executeGather(resource, player, addToInventory, worldState, pendingAction);
       // Refresh menu with updated quantities (resource may be depleted)
       const { x, y } = usePlayerStore.getState().player;
-      const stillNearby = useWorldStore.getState().world?.resources.filter(r =>
-        r.quantity > 0 && Math.abs(r.x - x) <= 1 && Math.abs(r.y - y) <= 1
-      ) ?? [];
+      const _rHour = ((useGameStore.getState().elapsedTime % DAY_DURATION_MS) / DAY_DURATION_MS) * 24;
+      const _rDewTime = _rHour >= 7 && _rHour < 9;
+      const stillNearby = useWorldStore.getState().world?.resources.filter((r: any) => {
+        if (r.quantity <= 0 || Math.abs(r.x - x) > 1 || Math.abs(r.y - y) > 1) return false;
+        if (r.type === 'fern') return _rDewTime && !this.dewHarvestedFerns.has(`${r.x},${r.y}`);
+        return true;
+      }) ?? [];
       if (stillNearby.length > 0) gameState.openGatherMenu(stillNearby);
       else gameState.closeGatherMenu();
       return;
