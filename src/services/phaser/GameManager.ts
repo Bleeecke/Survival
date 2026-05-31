@@ -374,6 +374,13 @@ export class GameManager {
       this.updateFog(player.x, player.y, SIGHT_DAY);
     }
 
+    // Rain scheduling — initialize based on current day so save/reload works
+    {
+      const startDay = Math.floor(useGameStore.getState().elapsedTime / DAY_DURATION_MS);
+      this.nextRainDay = startDay < 2 ? 2 : startDay + 1;
+      this.lastGameDay = startDay;
+    }
+
     this.worldUnsubscribe = useWorldStore.subscribe((state) => {
       if (state.world) {
         this.syncResources(state.world);
@@ -4384,13 +4391,11 @@ export class GameManager {
         const newFuel = Math.max(0, (cf.fuel ?? 0) - 1);
         worldState.updateStructure(cf.id, { fuel: newFuel });
       }
-      // Initialize first rain target on day 1
-      if (this.nextRainDay === -1) this.nextRainDay = 2;
     }
     this.lastGameDay = currentDay;
 
     // Rain trigger — checked every tick so it fires as soon as daytime arrives
-    if (!this.isRaining && this.nextRainDay !== -1 && currentDay >= this.nextRainDay) {
+    if (!this.isRaining && currentDay >= this.nextRainDay) {
       const rainHour = (gameState.elapsedTime % DAY_DURATION_MS) / DAY_DURATION_MS * 24;
       if (rainHour >= 7 && rainHour < 19) {
         const worldState = useWorldStore.getState();
