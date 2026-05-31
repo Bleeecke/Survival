@@ -6,6 +6,21 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '1.7',
+    date: '31.05.2026',
+    changes: [
+      'Höhensystem: Tiles haben Elevation (Strand→Gras→Wald→Hügel→Berg), Übergänge blockieren Bewegung',
+      'Zelda-Klippen: Felswände auf allen 4 Seiten — dunkel & hoch = unpassierbar, hell & niedrig = Pfad',
+      'Große Bäume: riesige Tropenhölzer und Banyanbäume mit Luftwurzeln & breitem Kronenschatten',
+      'Tau-Mechnanik: morgens (7–9 Uhr) mit Muschel an Farnen Tauwasser sammeln',
+      'Farne: neue Pflanze in Gras & Dschungel, visuell detailliertes Sprite',
+      'Journal-Trigger: Ereignisbasiert statt Skill-Level (Feuerstein finden, erste Jagd, etc.)',
+      'Muschelklinge entfernt, Muschel als Sammelwerkzeug neu eingeführt',
+      'Baumstümpfe und Treibholz überarbeitet, Driftwood-Grafik erneuert',
+      'Welt 250×250: Palmen auch auf Wiese, Kräuter reduziert, Äste nur unter Bäumen',
+    ],
+  },
+  {
     version: '1.6',
     date: '30.05.2026',
     changes: [

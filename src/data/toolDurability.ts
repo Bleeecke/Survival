@@ -1,6 +1,5 @@
 // Maximum durability per tool (uses before breaking)
 export const TOOL_MAX_DURABILITY: Record<string, number> = {
-  shell_knife:       15, // very fragile
   flint_knife:       30,
   stone_axe:         50,
   stone_pickaxe:     50,
@@ -18,9 +17,9 @@ export const TOOL_DAMAGE_ON_GATHER: Record<string, Partial<Record<string, number
   wood:       { stone_axe: 2, improved_axe: 1, iron_axe: 1 },
   stone:      { stone_pickaxe: 2, improved_pickaxe: 1, iron_pickaxe: 1 },
   iron_ore:   { stone_pickaxe: 3, improved_pickaxe: 2, iron_pickaxe: 1 },
-  fiber:      { flint_knife: 1, shell_knife: 2 },
-  vine:       { flint_knife: 1, shell_knife: 2 },
-  palm_tree:  { flint_knife: 1, shell_knife: 2 },
+  fiber:      { flint_knife: 1 },
+  vine:       { flint_knife: 1 },
+  palm_tree:  { flint_knife: 1 },
   resin_tree: { stone_axe: 1, improved_axe: 1, iron_axe: 1 },
   fish:       { fishing_rod: 1 },
 };

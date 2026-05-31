@@ -42,7 +42,7 @@ export class CraftingSystem {
       );
     }
     if (recipe.requiresTool === 'any_knife') {
-      const knives = ['shell_knife', 'flint_knife', 'stone_axe', 'improved_axe', 'iron_axe'];
+      const knives = ['flint_knife', 'stone_axe', 'improved_axe', 'iron_axe'];
       const eq = usePlayerStore.getState().player.equipment;
       return knives.some(k =>
         this.hasItem(inventory, k) ||

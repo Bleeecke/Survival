@@ -5,8 +5,10 @@
     "flint":         "knows_sharp_edges",
     "sharp_flint":   "knows_sharp_edges",
     "pebbles":       "knows_basic_fire",
+    "sticks":        "knows_basic_fire",
     "fiber":         "knows_binding",
     "iron_ore":      "knows_metal",
+    "obsidian":      "knows_obsidian",
     "herbs":         "knows_medicine",
     "coconut_shell": "knows_rain_collection",
     "coconut":       "knows_rain_collection"
@@ -96,6 +98,11 @@
     "knows_metal": {
       "label": "Metallverarbeitung",
       "insight": "Du ahnst das Potenzial dieses rostigen Erzes. ⛏️",
+      "source": "material"
+    },
+    "knows_obsidian": {
+      "label": "Obsidian",
+      "insight": "Dieses schwarze Vulkanglas ist schärfer als alles, was du bisher hattest. 🗡️",
       "source": "material"
     }
   }

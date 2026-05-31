@@ -35,7 +35,6 @@ export const ITEM_WEIGHTS: Record<string, number> = {
   driftwood:        0.5,
   fishing_rod:      0.5,
 
-  shell_knife:      0.2,
   obsidian:         1.0,
   granite:          2.0,
   // Medicine & first aid

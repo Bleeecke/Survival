@@ -91,6 +91,15 @@ export const USABLE: Record<string, {
     }),
     tooltip: 'Hunger -50, Durst -15, Ausdauer +20, Gesundheit +8',
   },
+  dew_water: {
+    label: 'Trinken',
+    color: 'bg-sky-700 hover:bg-sky-600',
+    effect: s => ({
+      thirst:  Math.max(0, (s.thirst ?? 0) - 10),
+      stamina: Math.min(100, s.stamina + 3),
+    }),
+    tooltip: 'Durst -10, Ausdauer +3 (kleine Menge)',
+  },
   herbal_remedy: {
     label: 'Heilen',
     color: 'bg-emerald-700 hover:bg-emerald-600',
@@ -243,7 +252,7 @@ const ITEM_NAMES: Record<string, string> = {
   fever_tea: 'Fiebertee', antiparasitic: 'Parasitenmedizin', bandage: 'Verband',
   bone: 'Knochen', hide: 'Tierhaut', fat: 'Tierfett',
   obsidian: 'Obsidian', granite: 'Granit',
-  shell_knife: 'Muschelklinge', sharp_flint: 'Gesp. Feuerstein', hardened_stick: 'Gehärt. Ast',
+  sharp_flint: 'Gesp. Feuerstein', hardened_stick: 'Gehärt. Ast', dew_water: 'Tauschale',
   smoked_meat: 'Geräuch. Fleisch', dried_fish: 'Getr. Fisch', dried_fruit: 'Getr. Frucht',
   cooked_fish_meal: 'Gebratener Fisch', herbal_remedy: 'Kräutermittel',
   cooked_mushroom: 'Geb. Pilze', fish: 'Fisch',
@@ -519,7 +528,7 @@ const ITEM_ICON: Record<string, string> = {
 
 // Recipe IDs that can be crafted anywhere (no tool/location required)
 const HAND_CRAFT_IDS = [
-  'palm_leaf_to_fiber', 'driftwood_to_sticks', 'knap_flint',
+  'palm_leaf_to_fiber', 'knap_flint',
   'rope_fiber', 'bandage', 'herbal_remedy', 'antiparasitic',
   'shell_knife', 'flint_knife', 'stone_axe', 'stone_spear',
   'stone_pickaxe', 'torch_carry', 'fishing_rod',
@@ -565,7 +574,7 @@ function QuickCraft() {
         craftingSystem.grantKnowledge(recipe);
         // Journal events
         if (recipe.id === 'knap_flint') useJournalStore.getState().triggerJournalEvent('first_knapping');
-        if (recipe.id === 'flint_knife' || recipe.id === 'shell_knife') useJournalStore.getState().triggerJournalEvent('first_knife');
+        if (recipe.id === 'flint_knife') useJournalStore.getState().triggerJournalEvent('first_knife');
         setCraftingId(null);
         setProgress(0);
       }

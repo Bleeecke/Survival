@@ -36,10 +36,10 @@ function getVisibility(
   freeCraft: boolean,
 ): 'hidden' | 'locked' | 'available' {
   if (freeCraft) return 'available';
+  if (def.requiredKnowledge.some(f => !knowledge[f])) return 'hidden';
   if (def.visibleWhenSeen.length > 0 && !def.visibleWhenSeen.some(m => knownMaterials.includes(m))) return 'hidden';
-  const missingK = def.requiredKnowledge.some(f => !knowledge[f]);
   const missingS = def.requiredSkills.some(r => (skills?.[r.skill]?.level ?? 1) < r.level);
-  return missingK || missingS ? 'locked' : 'available';
+  return missingS ? 'locked' : 'available';
 }
 
 // ── Main component ───────────────────────────────────────────────────

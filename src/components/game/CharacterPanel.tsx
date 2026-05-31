@@ -5,7 +5,7 @@ import { TOOL_MAX_DURABILITY } from '../../data/toolDurability';
 // Which items go in which slot (ordered by preference)
 export const EQUIPPABLE: Record<string, EquipSlot[]> = {
   // Both hands possible for tools
-  shell_knife:       ['rightHand', 'leftHand'],
+  shells:            ['rightHand', 'leftHand'],
   flint_knife:       ['rightHand', 'leftHand'],
   stone_axe:         ['rightHand', 'leftHand'],
   stone_pickaxe:     ['rightHand', 'leftHand'],
@@ -47,7 +47,7 @@ export function getDefaultSlot(resourceId: string, equipment?: any): EquipSlot |
 }
 
 const ITEM_ICON: Record<string, string> = {
-  shell_knife: '🐚', flint_knife: '🔪', stone_axe: '🪓', stone_pickaxe: '⛏️', stone_spear: '🗡️',
+  shells: '🐚', flint_knife: '🔪', stone_axe: '🪓', stone_pickaxe: '⛏️', stone_spear: '🗡️',
   improved_axe: '🪓', improved_pickaxe: '⛏️', iron_axe: '🪓', iron_pickaxe: '⛏️',
   torch: '🕯️', fishing_rod: '🎣',
   water: '💧', water_container: '🪣', herbal_remedy: '🌿',
@@ -56,7 +56,7 @@ const ITEM_ICON: Record<string, string> = {
 };
 
 const ITEM_NAMES: Record<string, string> = {
-  shell_knife: 'Muschelklinge', flint_knife: 'Messer', stone_axe: 'Steinaxt', stone_pickaxe: 'Spitzhacke',
+  shells: 'Muscheln', flint_knife: 'Messer', stone_axe: 'Steinaxt', stone_pickaxe: 'Spitzhacke',
   stone_spear: 'Speer', improved_axe: 'Verb. Axt', improved_pickaxe: 'Verb. Hacke',
   iron_axe: 'Eisenaxt', iron_pickaxe: 'Eisenhacke', torch: 'Fackel',
   fishing_rod: 'Angel', water: 'Wasser', water_container: 'Wasserbehälter',

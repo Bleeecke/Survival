@@ -24,14 +24,6 @@
     "grantsKnowledge": ["knows_hardened_wood"]
   },
   {
-    "id": "driftwood_to_sticks", "name": "Treibholz zerbrechen", "icon": "🪵",
-    "description": "Treibholz über das Knie brechen – ergibt grobe Äste.",
-    "category": "resource", "tier": 0, "craftingTime": 2000,
-    "inputs": [{ "resourceId": "driftwood", "quantity": 1 }],
-    "outputs": [{ "resourceId": "sticks", "quantity": 2 }],
-    "requiredKnowledge": ["knows_basic_fire"]
-  },
-  {
     "id": "palm_leaf_to_fiber", "name": "Palmenblätter zerreißen", "icon": "🌿",
     "description": "Palmenblätter längs aufreißen und die Fasern herausziehen.",
     "category": "resource", "tier": 0, "craftingTime": 4000,
@@ -45,8 +37,7 @@
     "category": "resource", "tier": 0, "craftingTime": 1500,
     "inputs": [{ "resourceId": "coconut", "quantity": 1 }],
     "outputs": [{ "resourceId": "coconut_shell", "quantity": 2 }, { "resourceId": "coconut_water", "quantity": 1 }],
-    "requiresTool": "any_axe",
-    "requiredKnowledge": ["knows_rain_collection"]
+    "requiresTool": "any_axe"
   },
   {
     "id": "rope_fiber", "name": "Seil flechten", "icon": "🪢",
@@ -88,15 +79,6 @@
 
   {
     "_comment": "── Werkzeuge ─────────────────────────────────────────────────────",
-    "id": "shell_knife", "name": "Muschelklinge", "icon": "🐚",
-    "description": "Scharfe Muschel am Ast befestigt – primitives Schneidwerkzeug, zerbrechlich.",
-    "category": "tool", "tier": 0, "craftingTime": 2000,
-    "inputs": [{ "resourceId": "shells", "quantity": 3 }, { "resourceId": "sticks", "quantity": 1 }, { "resourceId": "fiber", "quantity": 1 }],
-    "outputs": [{ "resourceId": "shell_knife", "quantity": 1 }],
-    "requiredKnowledge": ["knows_sharp_edges"],
-    "grantsSkill": { "skill": "crafting", "xp": 8 }
-  },
-  {
     "id": "flint_knife", "name": "Feuersteinmesser", "icon": "🔪",
     "description": "Binde eine gespaltene Klinge mit Fasern an einen gehärteten Ast.",
     "category": "tool", "tier": 0, "craftingTime": 5000,
@@ -206,7 +188,7 @@
     ],
     "outputs": [{ "resourceId": "flint_knife", "quantity": 1 }],
     "requiresSkill": { "skill": "crafting", "level": 3 },
-    "requiredKnowledge": ["knows_tool_binding"],
+    "requiredKnowledge": ["knows_obsidian"],
     "grantsSkill": { "skill": "crafting", "xp": 30 }
   },
   {

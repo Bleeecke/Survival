@@ -55,7 +55,8 @@
       "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\)[0]; print\\(d.get\\('error_message'\\), d.get\\('summary'\\)\\)\")",
       "Bash(curl *)",
       "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\)[0]; print\\(d['state'], d['created_at']\\)\")",
-      "Bash(node -e \" const fs = require\\('fs'\\); const src = fs.readFileSync\\('src/data/recipes.ts', 'utf8'\\); // Extract recipe objects via regex const matches = [...src.matchAll\\(/\\\\{[\\\\s\\\\S]*?id: '\\([^']+\\)'[\\\\s\\\\S]*?\\\\}/g\\)]; console.log\\('RECIPES count:', matches.length\\); \")"
+      "Bash(node -e \" const fs = require\\('fs'\\); const src = fs.readFileSync\\('src/data/recipes.ts', 'utf8'\\); // Extract recipe objects via regex const matches = [...src.matchAll\\(/\\\\{[\\\\s\\\\S]*?id: '\\([^']+\\)'[\\\\s\\\\S]*?\\\\}/g\\)]; console.log\\('RECIPES count:', matches.length\\); \")",
+      "Bash(node *)"
     ]
   }
 }

@@ -6,14 +6,14 @@ const ITEM_NAMES: Record<string, string> = {
   pebbles: 'Bruchstein', flint: 'Feuerstein', driftwood: 'Treibholz',
   shells: 'Muscheln', palm_leaf: 'Palmenblatt', herbs: 'Kräuter',
   fiber: 'Fasern', mushroom: 'Pilze', exotic_fruit: 'Exotische Frucht',
-  vine: 'Lianen', iron_ore: 'Eisenerz', spring: 'Quelle', puddle: 'Pfütze', palm_tree: 'Palme',
+  vine: 'Lianen', iron_ore: 'Eisenerz', spring: 'Quelle', puddle: 'Pfütze', palm_tree: 'Palme', fern: 'Farn (Tau)',
 };
 
 const ITEM_ICON: Record<string, string> = {
   wood: '🪵', stone: '🪨', food: '🫐', sticks: '🌿', pebbles: '⚪',
   flint: '🔶', driftwood: '🪵', shells: '🐚', palm_leaf: '🌴',
   herbs: '🌿', fiber: '🌾', mushroom: '🍄', exotic_fruit: '🍊',
-  vine: '🌿', iron_ore: '🟤', spring: '💧', puddle: '💧', palm_tree: '🌴',
+  vine: '🌿', iron_ore: '🟤', spring: '💧', puddle: '💧', palm_tree: '🌴', fern: '🌿',
 };
 
 // Tools that HARD-BLOCK gathering (button disabled without them)
@@ -30,7 +30,7 @@ function hasToolFor(type: string, _inv: ReturnType<typeof usePlayerStore.getStat
   const inHand = (id: string) => eq?.leftHand?.resourceId === id || eq?.rightHand?.resourceId === id;
   const anyAxe   = inHand('iron_axe')   || inHand('improved_axe')   || inHand('stone_axe');
   const anyPick  = inHand('iron_pickaxe') || inHand('improved_pickaxe') || inHand('stone_pickaxe');
-  const anyKnife = inHand('flint_knife') || inHand('shell_knife') || anyAxe;
+  const anyKnife = inHand('flint_knife') || anyAxe;
   switch (type) {
     case 'wood':     return anyAxe;
     case 'stone':    return anyPick;
