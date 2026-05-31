@@ -53,6 +53,7 @@ const defaultPlayer: Player = {
     thirst: 42,   // salt water doesn't help
     stamina: 22,  // exhausted
     fatigue: 58,  // barely conscious
+    temperature: 50, // comfortable on arrival
   },
   inventory: {
     items: [],

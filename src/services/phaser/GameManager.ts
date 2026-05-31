@@ -19,6 +19,7 @@ import { FOOD_SPOIL_TIME, FOOD_ITEM_NAMES } from '../../data/foodDecay';
 import { useJournalStore } from '../../store/journalStore';
 import { DISEASE_DRAIN, COLD_EXPOSURE_THRESHOLD, FEVER_FROM_COLD_CHANCE,
          INJURY_DRAIN, BLEED_ON_BOAR_ATTACK, BLEED_DURATION } from '../../data/diseases';
+import { getAmbientTemp } from '../../utils/weather';
 
 const TS = WORLD_CONFIG.tileSize; // 32px
 const SIGHT_DAY = 12;
@@ -46,6 +47,7 @@ export class GameManager {
   private structureObjects = new Map<string, Phaser.GameObjects.Graphics>();
   private droppedItemObjects = new Map<string, Phaser.GameObjects.Graphics>();
   private fireGraphics: Phaser.GameObjects.Graphics | null = null;
+  private warmthGraphics: Phaser.GameObjects.Graphics | null = null;
   private shipwreckGraphics: Phaser.GameObjects.Graphics | null = null;
   private microsleepOverlay: Phaser.GameObjects.Rectangle | null = null;
   private awakeningOverlay: Phaser.GameObjects.Rectangle | null = null;
@@ -245,7 +247,8 @@ export class GameManager {
       .setScrollFactor(0).setDepth(600_001)
       .setBlendMode(Phaser.BlendModes.ADD);
     // Fire animation graphics: drawn in world space, depth just above structures
-    this.fireGraphics = this.scene.add.graphics().setDepth(500);
+    this.fireGraphics  = this.scene.add.graphics().setDepth(500);
+    this.warmthGraphics = this.scene.add.graphics().setDepth(1);
 
     // Shipwreck — drawn once in world space, depth below player
     this.shipwreckGraphics = this.scene.add.graphics().setDepth(10);
@@ -2598,6 +2601,24 @@ export class GameManager {
     const campfires = useWorldStore.getState().world?.structures.filter(
       s => s.type === 'campfire'
     ) ?? [];
+
+    // Warmth glow circles — drawn at depth 1, behind all objects
+    const wg = this.warmthGraphics;
+    if (wg) {
+      wg.clear();
+      const t2 = Date.now();
+      const pulse = 0.93 + Math.sin(t2 / 1400) * 0.07;
+      const R = 5 * TS * pulse; // 5-tile radius
+      for (const cf of campfires) {
+        if ((cf.fuel ?? 0) <= 0) continue;
+        const cx = cf.x * TS + TS / 2;
+        const cy = cf.y * TS + TS / 2;
+        wg.fillStyle(0xff6600, 0.055); wg.fillEllipse(cx, cy, R * 2,   R * 1.30);
+        wg.fillStyle(0xff8800, 0.075); wg.fillEllipse(cx, cy, R * 1.3, R * 0.85);
+        wg.fillStyle(0xffaa00, 0.100); wg.fillEllipse(cx, cy, R * 0.7, R * 0.45);
+      }
+    }
+
     if (campfires.length === 0) return;
 
     const cam = this.scene.cameras.main;
@@ -4172,11 +4193,43 @@ export class GameManager {
       });
     }
 
+    // ── Temperature system ────────────────────────────────────────────
+    const temperature = player.stats.temperature ?? 50;
+    const worldSeed   = useWorldStore.getState().world?.seed ?? 0;
+    const ambient     = getAmbientTemp(gameState.elapsedTime, worldSeed, this.isRaining);
+    const gameHourNow = (gameState.elapsedTime % DAY_DURATION_MS) / DAY_DURATION_MS * 24;
+
+    // Fire warmth: nearest burning campfire within 5 tiles
+    const nearFire = useWorldStore.getState().world?.structures.some(
+      s => s.type === 'campfire' && (s.fuel ?? 0) > 0 &&
+      Math.hypot(s.x - player.x, s.y - player.y) <= 5
+    ) ?? false;
+
+    // Tree shade: under large/banyan canopy within 4 tiles, only daytime
+    const isDaytime = gameHourNow >= 7 && gameHourNow < 20;
+    const inShade = isDaytime && (useWorldStore.getState().world?.resources.some(
+      r => (r.type === 'large_tree' || r.type === 'banyan_tree') &&
+      Math.hypot(r.x - player.x, r.y - player.y) <= 4
+    ) ?? false);
+
+    let targetTemp = ambient;
+    if (nearFire)  targetTemp = Math.max(targetTemp, 52) + 20; // fire: at least 72
+    if (inShade)   targetTemp = Math.max(0, targetTemp - 12);
+
+    const nudge   = nearFire ? 0.05 : 0.02;
+    const newTemp = temperature + Math.sign(targetTemp - temperature) * Math.min(nudge, Math.abs(targetTemp - temperature));
+
+    // Temperature health effects
+    if (newTemp < 15)      healthDrain += 0.012;
+    else if (newTemp < 30) healthDrain += 0.004;
+    if (newTemp > 85)      healthDrain += 0.012;
+    else if (newTemp > 70) healthDrain += 0.004;
+
     const newHealth = Math.max(0, health - healthDrain);
     const newThirstFinal = Math.min(100, newThirst + extraThirst);
     const newHungerFinal = Math.min(100, newHunger + extraHunger);
 
-    updateStats({ health: newHealth, hunger: newHungerFinal, thirst: newThirstFinal, stamina: newStamina, fatigue: newFatigue });
+    updateStats({ health: newHealth, hunger: newHungerFinal, thirst: newThirstFinal, stamina: newStamina, fatigue: newFatigue, temperature: newTemp });
 
     // ── Kollaps: erzwingt Schlaf wenn Müdigkeit 95%+
     if (fStage >= 5 && !gameState.showSleepMenu) {
@@ -4801,6 +4854,7 @@ export class GameManager {
     this.dayNightRect = null;
     this.lightGraphics = null;
     this.fireGraphics = null;
+    this.warmthGraphics = null;
     this.jungleTreeObjects = [];
     this.footstepAudio.destroy();
   }

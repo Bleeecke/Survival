@@ -25,7 +25,8 @@ export interface PlayerStats {
   hunger: number;   // 0-100  (0 = Satt, 100 = Verhungernd)
   thirst: number;   // 0-100  (0 = Hydriert, 100 = Verdurstend)
   stamina: number;  // 0-100
-  fatigue: number;  // 0-100  (0 = Frisch, 100 = Erschöpft)
+  fatigue: number;     // 0-100  (0 = Frisch, 100 = Erschöpft)
+  temperature?: number; // 0-100  (0 = Erfroren, 50 = Normal, 100 = Hitzschlag)
   poisonedUntil?: number;   // real timestamp ms
   coldUntil?: number;       // real timestamp ms — Erkältung
   feverUntil?: number;      // real timestamp ms — Fieber

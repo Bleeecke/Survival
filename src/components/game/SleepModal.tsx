@@ -72,6 +72,9 @@ export default function SleepModal() {
     fatigue < 80 ? 'Erschöpft'           :
     fatigue < 92 ? 'Übermüdet'           : '💤 Kollaps';
 
+  const temperature = stats.temperature ?? 50;
+  const isColdSleep = temperature < 35; // below comfortable range
+
   function sleep(hours: number) {
     const health  = stats.health  ?? 100;
     const hunger  = stats.hunger  ?? 0;
@@ -79,15 +82,19 @@ export default function SleepModal() {
     const stamina = stats.stamina ?? 100;
     const { newFatigue, healthDelta } = calcEffects(hours, quality, fatigue);
 
+    // Cold sleep penalty: temperature drops further without fire, health suffers
+    const coldPenalty = isColdSleep ? -hours * 3 : 0;
+
     setFadeState('fading-out');
     setTimeout(() => {
       setFadeState('black');
       updateStats({
         fatigue: newFatigue,
-        health:  Math.min(100, Math.max(0, health + healthDelta)),
+        health:  Math.min(100, Math.max(0, health + healthDelta + coldPenalty)),
         stamina: Math.min(100, stamina + hours * 8),
         hunger:  Math.min(100, hunger + hours * 1.5),
         thirst:  Math.min(100, thirst  + hours * 2.0),
+        temperature: isColdSleep ? Math.max(10, temperature - hours * 4) : temperature,
       });
       tickTime(hours * HOUR_MS);
       setTimeout(() => {
@@ -222,6 +229,12 @@ export default function SleepModal() {
               </div>
             );
           })()}
+
+          {isColdSleep && (
+            <div className="bg-blue-950/70 border border-blue-700/60 rounded-lg px-3 py-2 mb-2 text-xs text-blue-300">
+              🥶 Du frierst! Schlafe näher am Lagerfeuer oder du verlierst Gesundheit.
+            </div>
+          )}
 
           <button
             onClick={() => selected !== null && sleep(selected)}
