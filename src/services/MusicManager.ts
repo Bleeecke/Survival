@@ -24,6 +24,9 @@ class MusicManager {
     if (localStorage.getItem('survival-music-muted') === 'true') {
       Howler.mute(true);
     }
+    // Tauri/WebView2: unlock audio context on first user interaction
+    Howler.autoUnlock = true;
+    Howler.autoSuspend = false;
   }
 
   private getOrCreate(track: Track): Howl {
@@ -33,6 +36,8 @@ class MusicManager {
         loop: true,
         volume: 0,
         preload: true,
+        html5: true,
+        format: ['mp3'],
       });
     }
     return this.sounds[track]!;
@@ -100,6 +105,8 @@ class MusicManager {
       src: ['/music/Salz im Mund.mp3'],
       loop: false,
       volume: 0,
+      html5: true,
+      format: ['mp3'],
     });
     this.introSound.once('end', () => {
       this._introActive = false;
