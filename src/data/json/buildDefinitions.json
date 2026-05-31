@@ -1,11 +1,12 @@
 [
   {
-    "id": "storage_spot", "name": "Ablageplatz", "icon": "🟫", "category": "survival",
-    "description": "Ein markierter Bodenbereich – keine Kiste, nur eine Zone. Sofort nutzbar, aber völlig ungeschützt: Regen beschädigt Nahrung, Tiere können stehlen, Sturm verstreut Gegenstände.",
-    "effects": ["Sofort baubar, keine Materialien", "Kleine Kapazität", "⚠ Kein Regenschutz", "⚠ Tiere können stehlen", "⚠ Sturm verstreut Gegenstände"],
-    "requiredMaterials": [], "requiredTools": [], "requiredSkills": [],
-    "requiredKnowledge": ["knows_basic_storage"], "visibleWhenSeen": [], "buildTime": 2,
-    "grantsSkill": { "skill": "survival", "xp": 3 }
+    "id": "arbeitsplatz", "name": "Arbeitsplatz", "icon": "🪵", "category": "survival",
+    "description": "Flach angeordnete Steine mit Palmblättern als Unterlage – ein einfacher Arbeitsplatz. Hier kannst du Materialien bearbeiten und Werkzeuge herstellen.",
+    "effects": ["Crafting möglich", "Benötigt 4 Bruchsteine & 4 Palmblätter", "Kein Regenschutz"],
+    "requiredMaterials": [{ "item": "pebbles", "amount": 4 }, { "item": "palm_leaf", "amount": 4 }],
+    "requiredTools": [], "requiredSkills": [],
+    "requiredKnowledge": ["knows_basic_storage"], "visibleWhenSeen": ["pebbles"], "buildTime": 8,
+    "grantsSkill": { "skill": "building", "xp": 10 }
   },
   {
     "id": "campfire", "name": "Lagerfeuerstelle", "icon": "🔥", "category": "fire",

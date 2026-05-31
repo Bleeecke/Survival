@@ -2002,32 +2002,30 @@ export class GameManager {
     const cx  = tx * TS + TS / 2;
     const base = ty * TS + TS - 2; // ground anchor
 
-    if (type === 'storage_spot') {
-      const top = ty * TS + 4;
-      const left = tx * TS + 4;
-      const right = tx * TS + TS - 4;
-      const bot = ty * TS + TS - 4;
-      const cLen = 6; // corner line length
-      // Ground fill — subtle dirt patch
-      g.fillStyle(0x8b6b3d, 0.25);
-      g.fillRect(left, top, right - left, bot - top);
-      // Dashed border via corner markers
-      g.lineStyle(2, 0xc8a05a, 0.85);
-      // Top-left
-      g.lineBetween(left, top, left + cLen, top);
-      g.lineBetween(left, top, left, top + cLen);
-      // Top-right
-      g.lineBetween(right, top, right - cLen, top);
-      g.lineBetween(right, top, right, top + cLen);
-      // Bottom-left
-      g.lineBetween(left, bot, left + cLen, bot);
-      g.lineBetween(left, bot, left, bot - cLen);
-      // Bottom-right
-      g.lineBetween(right, bot, right - cLen, bot);
-      g.lineBetween(right, bot, right, bot - cLen);
-      // Center dot
-      g.fillStyle(0xc8a05a, 0.5);
-      g.fillCircle(cx, ty * TS + TS / 2, 2);
+    if (type === 'arbeitsplatz') {
+      const top  = ty * TS + 3;
+      const left = tx * TS + 3;
+      const w = TS - 6;
+      const h = TS - 6;
+      const my = ty * TS + TS / 2;
+      // Palm-leaf mat (green base)
+      g.fillStyle(0x4a7c3f, 0.35);
+      g.fillRect(left, top, w, h);
+      // Stone border — 4 corner stones
+      g.fillStyle(0x8a8a7a, 0.9);
+      g.fillRect(left,       top,       7, 5); // TL
+      g.fillRect(left + w - 7, top,     7, 5); // TR
+      g.fillRect(left,       top + h - 5, 7, 5); // BL
+      g.fillRect(left + w - 7, top + h - 5, 7, 5); // BR
+      // Center working stone (flat)
+      g.fillStyle(0x9a9080, 0.85);
+      g.fillEllipse(cx, my, 14, 8);
+      g.lineStyle(1, 0x6a6060, 0.7);
+      g.strokeEllipse(cx, my, 14, 8);
+      // Crossed-tool mark on stone
+      g.lineStyle(1.5, 0x4a3a2a, 0.6);
+      g.lineBetween(cx - 4, my - 3, cx + 4, my + 3);
+      g.lineBetween(cx + 4, my - 3, cx - 4, my + 3);
 
     } else if (type === 'sleeping_spot') {
       // Soft palm-leaf mat on the ground

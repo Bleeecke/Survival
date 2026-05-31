@@ -6,6 +6,15 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '1.9',
+    date: '31.05.2026',
+    changes: [
+      'Arbeitsplatz: ersetzt den Ablageplatz — 4× Bruchstein + 4× Palmblatt',
+      'Crafting nur noch am Arbeitsplatz möglich (Banner + deaktivierte Buttons wenn zu weit weg)',
+      'Neues Sprite: Steine mit Palmblatt-Unterlage und Kreuz-Markierung',
+    ],
+  },
+  {
     version: '1.8',
     date: '31.05.2026',
     changes: [

@@ -62,6 +62,10 @@ export class CraftingSystem {
     return this.isStructureNear('campfire');
   }
 
+  isArbeitsplatzNear(): boolean {
+    return this.isStructureNear('arbeitsplatz');
+  }
+
   isStructureNear(type: string, radius = 2): boolean {
     const { x, y } = usePlayerStore.getState().player;
     const structures = useWorldStore.getState().world?.structures ?? [];

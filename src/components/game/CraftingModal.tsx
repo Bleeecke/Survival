@@ -73,6 +73,8 @@ export default function CraftingModal({ onClose }: { onClose: () => void }) {
   const failTimerRef  = useRef<number | null>(null);
 
   const inventory = usePlayerStore(s => s.player.inventory);
+  const freeCraft = useGameStore(s => s.freeCraft);
+  const nearWorkbench = freeCraft || craftingSystem.isArbeitsplatzNear();
 
   // Only show discovered recipes — filter out structures (those belong in BuildMenu)
   const allFiltered = (activeCategory === 'all' ? RECIPES : RECIPES.filter(r => r.category === activeCategory))
@@ -96,6 +98,7 @@ export default function CraftingModal({ onClose }: { onClose: () => void }) {
 
   function startCraft(recipeId: string) {
     if (craftingId) return;
+    if (!nearWorkbench) return;
     const inv = usePlayerStore.getState().player.inventory;
     if (!craftingSystem.canCraft(recipeId, inv)) return;
     const recipe = RECIPES.find(r => r.id === recipeId)!;
@@ -228,6 +231,17 @@ export default function CraftingModal({ onClose }: { onClose: () => void }) {
           </button>
         </div>
 
+        {/* ── Kein Arbeitsplatz Banner ───────────────────────────── */}
+        {!nearWorkbench && (
+          <div className="px-6 py-3 border-b border-yellow-700 bg-yellow-950/60 flex-shrink-0 flex items-center gap-3">
+            <span className="text-2xl">🪵</span>
+            <div>
+              <p className="text-yellow-300 font-semibold text-sm">Kein Arbeitsplatz in der Nähe</p>
+              <p className="text-yellow-500/80 text-xs">Baue einen Arbeitsplatz (4× Bruchstein + 4× Palmblatt) und stelle dich daneben.</p>
+            </div>
+          </div>
+        )}
+
         {/* ── Fehlschlag-Banner ──────────────────────────────────── */}
         {failMessage && (
           <div className="px-6 py-2.5 border-b border-red-800 bg-red-950/60 flex-shrink-0 flex items-center gap-2">
@@ -296,6 +310,7 @@ export default function CraftingModal({ onClose }: { onClose: () => void }) {
                     inventory={inventory}
                     craftingId={craftingId}
                     progress={progress}
+                    nearWorkbench={nearWorkbench}
                     onCraft={startCraft}
                   />
                 ))}
@@ -317,11 +332,12 @@ export default function CraftingModal({ onClose }: { onClose: () => void }) {
 
 // ── RecipeCard ────────────────────────────────────────────────────
 
-function RecipeCard({ recipe, inventory, craftingId, progress, onCraft }: {
+function RecipeCard({ recipe, inventory, craftingId, progress, nearWorkbench, onCraft }: {
   recipe: Recipe;
   inventory: ReturnType<typeof usePlayerStore.getState>['player']['inventory'];
   craftingId: string | null;
   progress: number;
+  nearWorkbench: boolean;
   onCraft: (id: string) => void;
 }) {
   const hasMats      = craftingSystem.canCraft(recipe.id, inventory);
@@ -416,9 +432,10 @@ function RecipeCard({ recipe, inventory, craftingId, progress, onCraft }: {
       {/* Button */}
       <button
         onClick={() => onCraft(recipe.id)}
-        disabled={!hasMats || !hasTool || !hasSkill || !hasKnowledge || busyCrafting}
+        disabled={!nearWorkbench || !hasMats || !hasTool || !hasSkill || !hasKnowledge || busyCrafting}
         className={`w-full py-2 text-xs font-bold rounded-lg transition-colors ${
           isActive              ? 'bg-amber-700 text-amber-200 cursor-wait' :
+          !nearWorkbench        ? 'bg-slate-700 text-yellow-600 cursor-not-allowed' :
           !hasKnowledge         ? 'bg-slate-600 text-cyan-500 cursor-not-allowed' :
           !hasSkill             ? 'bg-slate-600 text-purple-400 cursor-not-allowed' :
           !hasTool              ? 'bg-slate-600 text-orange-400 cursor-not-allowed' :
@@ -428,6 +445,7 @@ function RecipeCard({ recipe, inventory, craftingId, progress, onCraft }: {
         }`}
       >
         {isActive        ? `Herstellung…  ${Math.round(progress)}%` :
+         !nearWorkbench  ? 'Kein Arbeitsplatz' :
          !hasKnowledge   ? `Erkenntnis fehlt` :
          !hasSkill       ? `Skill fehlt: ${SKILL_LABELS[recipe.requiresSkill!.skill]} Stufe ${recipe.requiresSkill!.level}` :
          !hasTool        ? 'Werkzeug fehlt' :
