@@ -3869,6 +3869,27 @@ export class GameManager {
     const world = useWorldStore.getState().world;
     if (!world) return false;
     const w = this.getStructureWidth(recipeId);
+
+    // Interaction-zone clearance: campfire and Arbeitsplatz need 2 tiles buffer
+    // so their 1-tile action radius doesn't overlap with adjacent structures.
+    const INTERACTIVE = new Set(['campfire', 'granite_campfire', 'arbeitsplatz']);
+    const CLEARANCE = 2;
+    for (let dx = 0; dx < w; dx++) {
+      const x = tx + dx;
+      for (const s of world.structures) {
+        if (INTERACTIVE.has(s.type)) {
+          if (Math.abs(x - s.x) <= CLEARANCE && Math.abs(ty - s.y) <= CLEARANCE) return false;
+        }
+        // Also: if placing an interactive structure, enforce clearance from all others
+        if (INTERACTIVE.has(recipeId)) {
+          const sw = s.width ?? 1;
+          for (let sdx = 0; sdx < sw; sdx++) {
+            if (Math.abs(x - (s.x + sdx)) <= CLEARANCE && Math.abs(ty - s.y) <= CLEARANCE) return false;
+          }
+        }
+      }
+    }
+
     for (let dx = 0; dx < w; dx++) {
       const x = tx + dx;
       const y = ty;
