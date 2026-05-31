@@ -109,6 +109,38 @@ export class GameManager {
     g: Phaser.GameObjects.Graphics;
   }[] = [];
 
+  // Ambient animals (non-huntable)
+  private lizards: {
+    id: string; px: number; py: number; targetPx: number; targetPy: number;
+    state: 'idle' | 'wander' | 'flee'; stateTimer: number; facingLeft: boolean;
+    g: Phaser.GameObjects.Graphics;
+  }[] = [];
+
+  private parrots: {
+    id: string; px: number; py: number;
+    state: 'perch' | 'fly'; stateTimer: number;
+    arcT: number; arcStartX: number; arcStartY: number; arcEndX: number; arcEndY: number;
+    facingLeft: boolean; g: Phaser.GameObjects.Graphics;
+  }[] = [];
+
+  private seagulls: {
+    id: string; orbitAngle: number; orbitRadius: number; orbitCx: number; orbitCy: number;
+    orbitSpeed: number; g: Phaser.GameObjects.Graphics;
+  }[] = [];
+  private seagullSoundCooldown = 0; // ms until next seagull cry allowed
+
+  private butterflies: {
+    id: string; px: number; py: number; targetPx: number; targetPy: number;
+    state: 'flutter' | 'rest'; stateTimer: number; phase: number;
+    g: Phaser.GameObjects.Graphics;
+  }[] = [];
+
+  private rats: {
+    id: string; px: number; py: number; targetPx: number; targetPy: number;
+    state: 'idle' | 'wander' | 'flee'; stateTimer: number; facingLeft: boolean;
+    g: Phaser.GameObjects.Graphics;
+  }[] = [];
+
   // Boars
   private boars: {
     id: string;
@@ -145,6 +177,16 @@ export class GameManager {
   private lastTileViewTx = -1;
   private lastTileViewTy = -1;
   private cachedWorld: any = null;
+  // Fern dew tracking — keys "x,y", reset each new game day
+  private dewHarvestedFerns = new Set<string>();
+  private lastDewDay = -1;
+  private dewTipShown = false;
+
+  // Fog cache — only redraw when something relevant changes
+  private fogCachePx = -1;
+  private fogCachePy = -1;
+  private fogCacheSight = -1;
+  private fogCacheCampfireKey = '';
   private lowHungerTicks = 0;
 
   private keyPressed = { space: false, e: false, f: false };
@@ -325,6 +367,11 @@ export class GameManager {
     this.spawnCrabs(world);
     this.spawnTurtles(world);
     this.spawnBoars(world);
+    this.spawnLizards(world);
+    this.spawnParrots(world);
+    this.spawnSeagulls(world);
+    this.spawnButterflies(world);
+    this.spawnRats(world);
 
     // Reveal starting area — skip during awakening (fog expands gradually)
     if (!useGameStore.getState().isAwakening) {
@@ -358,10 +405,13 @@ export class GameManager {
 
   private onVisibilityChange = () => {
     if (document.hidden) {
-      this.game?.loop.sleep();   // stop Phaser's RAF entirely
+      this.game?.loop.sleep();
       this.gameLoop.pause();
     } else {
-      this.game?.loop.wake();    // resume Phaser — no catch-up frames
+      this.game?.loop.wake();
+      this.game?.loop.resetDelta(); // discard accumulated time while tab was hidden
+      this.skipFrames = 3;
+      this.fogCachePx = -1;         // force fog redraw on return
       this.gameLoop.resume();
     }
   };
@@ -1504,13 +1554,21 @@ export class GameManager {
         // Bright highlight on center frond tip
         g.fillStyle(0x5de87a, 0.5);
         g.fillCircle(cx, base - 22, 2.5);
-        // Dew drops — only during morning hours (7–9h)
+        // Dew drops — form 7:00→7:30, peak 7:30–8:30, fade 8:30→9:00
         const _dewHour = ((useGameStore.getState().elapsedTime % DAY_DURATION_MS) / DAY_DURATION_MS) * 24;
-        if (_dewHour >= 7 && _dewHour < 9) {
-          g.fillStyle(0xb8eaff, 0.85);
+        const _fernKey = `${tx},${ty}`;
+        const _dewHarvested = this.dewHarvestedFerns.has(_fernKey);
+        const dewAlpha = _dewHarvested ? 0
+          : _dewHour < 7    ? 0
+          : _dewHour < 7.5  ? (_dewHour - 7) / 0.5
+          : _dewHour < 8.5  ? 1
+          : _dewHour < 9    ? 1 - (_dewHour - 8.5) / 0.5
+          : 0;
+        if (dewAlpha > 0.01) {
+          g.fillStyle(0xb8eaff, 0.85 * dewAlpha);
           g.fillCircle(cx - 6, base - 12, 1.5);
           g.fillCircle(cx + 7, base - 10, 1.2);
-          g.fillStyle(0xdff5ff, 0.7);
+          g.fillStyle(0xdff5ff, 0.7 * dewAlpha);
           g.fillCircle(cx - 1, base - 17, 1.3);
         }
         break;
@@ -2533,6 +2591,23 @@ export class GameManager {
     const g = this.fogGraphics!;
     if (!g || !this.scene) return;
 
+    const litCampfireKey = (useWorldStore.getState().world?.structures ?? [])
+      .filter(s => s.type === 'campfire' && (s.fuel ?? 0) > 0)
+      .map(s => `${s.x},${s.y}`)
+      .join('|');
+
+    if (
+      px === this.fogCachePx &&
+      py === this.fogCachePy &&
+      sightRadius === this.fogCacheSight &&
+      litCampfireKey === this.fogCacheCampfireKey
+    ) return; // nothing changed — skip redraw
+
+    this.fogCachePx = px;
+    this.fogCachePy = py;
+    this.fogCacheSight = sightRadius;
+    this.fogCacheCampfireKey = litCampfireKey;
+
     g.clear();
 
     const cam = this.scene.cameras.main;
@@ -2543,9 +2618,8 @@ export class GameManager {
 
     const r2 = sightRadius * sightRadius;
     const cfR2 = CAMPFIRE_SIGHT * CAMPFIRE_SIGHT;
-    const litCampfires = useWorldStore.getState().world?.structures.filter(
-      s => s.type === 'campfire' && (s.fuel ?? 0) > 0
-    ) ?? [];
+    const litCampfires = (useWorldStore.getState().world?.structures ?? [])
+      .filter(s => s.type === 'campfire' && (s.fuel ?? 0) > 0);
 
     const isVisible = (tx: number, ty: number): boolean => {
       const dx = tx - px, dy = ty - py;
@@ -2852,6 +2926,13 @@ export class GameManager {
 
   // ── Game loop ─────────────────────────────────────────────────────
 
+  private isInViewport(px: number, py: number, margin = 3 * TS): boolean {
+    if (!this.scene) return false;
+    const v = this.scene.cameras.main.worldView;
+    return px > v.x - margin && px < v.right + margin &&
+           py > v.y - margin && py < v.bottom + margin;
+  }
+
   private onUpdate(rawDelta: number) {
     if (!this.scene) return;
 
@@ -2861,7 +2942,7 @@ export class GameManager {
       return;
     }
 
-    // Cap delta to prevent huge catch-up after tab becomes inactive
+    // Cap delta — prevents catch-up burst after tab switch or system sleep
     const delta = Math.min(rawDelta, 100);
 
     // Placement preview — blocks movement while active
@@ -2880,6 +2961,11 @@ export class GameManager {
       this.updateCrabs(delta);
       this.updateTurtles(delta);
       this.updateBoars(delta);
+      this.updateLizards(delta);
+      this.updateParrots(delta);
+      this.updateSeagulls(delta);
+      this.updateButterflies(delta);
+      this.updateRats(delta);
       this.updateSpearLunge(delta);
       this.updateFatigueEffects(delta);
       this.updatePlayerMovement(delta);
@@ -3607,8 +3693,12 @@ export class GameManager {
         }
       }
 
-      turtle.g.setDepth(Math.floor(turtle.py / TS) * 1000 + 2);
-      this.drawTurtle(turtle);
+      const tInView = this.isInViewport(turtle.px, turtle.py);
+      turtle.g.setVisible(tInView);
+      if (tInView) {
+        turtle.g.setDepth(Math.floor(turtle.py / TS) * 1000 + 2);
+        this.drawTurtle(turtle);
+      }
     }
   }
 
@@ -3786,8 +3876,12 @@ export class GameManager {
       }
 
       // ── Redraw ─────────────────────────────────────────
-      crab.g.setDepth(Math.floor(crab.py / TS) * 1000 + 2);
-      this.drawCrab(crab);
+      const cInView = this.isInViewport(crab.px, crab.py);
+      crab.g.setVisible(cInView);
+      if (cInView) {
+        crab.g.setDepth(Math.floor(crab.py / TS) * 1000 + 2);
+        this.drawCrab(crab);
+      }
     }
   }
 
@@ -4299,14 +4393,18 @@ export class GameManager {
       if (this.nextRainDay === -1) {
         this.nextRainDay = 2;
       } else if (currentDay >= this.nextRainDay && !this.isRaining) {
-        this.pickRainType();
-        this.isRaining = true;
-        this.rainTimer = 0;
-        const containers = worldState.world?.structures.filter(s => s.type === 'water_container') ?? [];
-        for (const c of containers) worldState.updateStructure(c.id, { fuel: 2 });
-        if (GameManager.FIRE_EXTINGUISHING_TYPES.has(this.rainType)) this.extinguishCampfires();
-        this.nextRainDay = currentDay + 3 + Math.floor(Math.random() * 4);
-        this.checkRainKnowledge();
+        // Only start rain during daytime (7–19h) — player needs to notice it
+        const rainHour = (useGameStore.getState().elapsedTime % DAY_DURATION_MS) / DAY_DURATION_MS * 24;
+        if (rainHour >= 7 && rainHour < 19) {
+          this.pickRainType();
+          this.isRaining = true;
+          this.rainTimer = 0;
+          const containers = worldState.world?.structures.filter(s => s.type === 'water_container') ?? [];
+          for (const c of containers) worldState.updateStructure(c.id, { fuel: 2 });
+          if (GameManager.FIRE_EXTINGUISHING_TYPES.has(this.rainType)) this.extinguishCampfires();
+          this.nextRainDay = currentDay + 3 + Math.floor(Math.random() * 4);
+          this.checkRainKnowledge();
+        }
       }
     }
     this.lastGameDay = currentDay;
@@ -4373,11 +4471,15 @@ export class GameManager {
     this.keyPressed.space = false;
 
     const { x, y } = player;
-    const nearby = worldState.world.resources.filter(r =>
-      r.quantity > 0 &&
-      Math.abs(r.x - x) <= 1 &&
-      Math.abs(r.y - y) <= 1
-    );
+    const _nowHour = ((useGameStore.getState().elapsedTime % DAY_DURATION_MS) / DAY_DURATION_MS) * 24;
+    const _isDewTime = _nowHour >= 7 && _nowHour < 9;
+    const nearby = worldState.world.resources.filter((r: any) => {
+      if (Math.abs(r.x - x) > 1 || Math.abs(r.y - y) > 1) return false;
+      if (r.quantity <= 0) return false;
+      // Fern only appears when dew is available
+      if (r.type === 'fern') return _isDewTime && !this.dewHarvestedFerns.has(`${r.x},${r.y}`);
+      return true;
+    });
     if (nearby.length === 0) return;
     gameState.openGatherMenu(nearby);
   }
@@ -4420,7 +4522,11 @@ export class GameManager {
         case 'food':         return { stamina: 3, time: T * 4 };
         case 'spring':       return { stamina: 2, time: T * 2 };
         case 'puddle':       return { stamina: 2, time: T * 2 };
-        case 'fern':         return { stamina: 1, time: T * 2 };
+        case 'fern':         return { stamina: 1, time: T * 2 }; // handled separately — dew only
+        case 'pandanus':     return { stamina: 3, time: T * 5 };
+        case 'breadfruit_tree': return anyKnife ? { stamina: 4, time: T * 6 } : { stamina: 7, time: T * 12 };
+        case 'bamboo':       return anyKnife ? { stamina: 4, time: T * 6 } : { stamina: 8, time: T * 15 };
+        case 'cacao_tree':   return { stamina: 3, time: T * 5 };
         case 'palm_tree':    return anyKnife ? { stamina: 3, time: T * 5 } : { stamina: 5, time: T * 10 };
         // Medium — cutting (needs knife, costs more without)
         case 'fiber':        return anyKnife ? { stamina: 5, time: T * 8  } : { stamina: 10, time: T * 20 };
@@ -4513,29 +4619,45 @@ export class GameManager {
       return;
     }
 
-    // Fern: collect dew — requires morning (7-9h) and coconut_shell in hand
+    // Fern: collect dew — plant stays, only dew-state tracked locally
     if (resource.type === 'fern') {
       const elapsedMs = useGameStore.getState().elapsedTime;
+      const gameDay  = Math.floor(elapsedMs / DAY_DURATION_MS);
       const gameHour = ((elapsedMs % DAY_DURATION_MS) / DAY_DURATION_MS) * 24;
-      const isDewTime = gameHour >= 7 && gameHour < 9;
-      const hasShellInHand = handIds.includes('shells');
+      // Reset dew at the start of each new day
+      if (gameDay !== this.lastDewDay) {
+        this.dewHarvestedFerns.clear();
+        this.lastDewDay = gameDay;
+      }
+      const fernKey = `${resource.x},${resource.y}`;
+      const alreadyHarvested = this.dewHarvestedFerns.has(fernKey);
+      const isDewTime = gameHour >= 7 && gameHour < 9 && !alreadyHarvested;
+      const hasShellInHand = handIds.includes('coconut_shell') || handIds.includes('shells');
       if (!hasShellInHand) {
-        this.spawnFloatingText('Muschel in die Hand nehmen 🐚', player.x, player.y, '#f97316');
+        this.spawnFloatingText('Schale in die Hand nehmen 🐚 (Kokos- oder Muschel)', player.x, player.y, '#f97316');
         return;
       }
-      if (!isDewTime) {
-        this.spawnFloatingText('Nur morgens (7–9 Uhr) 🌅', player.x, player.y, '#94a3b8');
+      if (!isDewTime) return;
+      const dewInInventory = usePlayerStore.getState().player.inventory.items
+        .find(i => i.resourceId === 'dew_water')?.quantity ?? 0;
+      if (dewInInventory >= 3) {
+        this.spawnFloatingText('Schale voll (3/3) — erst trinken 💧', player.x, player.y, '#94a3b8');
         return;
       }
-      if (resource.quantity < 1) {
-        this.spawnFloatingText('Dieser Farn ist trocken', player.x, player.y, '#94a3b8');
-        return;
+      if (!this.dewTipShown) {
+        this.dewTipShown = true;
+        import('../../store/notificationStore').then(({ useNotificationStore }) => {
+          useNotificationStore.getState().addNotification(
+            '💡 Tau verdampft nach ~2h — Schale nicht schließbar, bald trinken!',
+            'levelup'
+          );
+        });
       }
-      worldState.harvestResource(resource.id, 1);
+      this.dewHarvestedFerns.add(fernKey);
       addToInventory('dew_water', 1);
       useGameStore.getState().tickTime(timeCost);
       usePlayerStore.getState().updateStats({ stamina: Math.max(0, currentStamina - staminaCost) });
-      this.spawnFloatingText('💧 Tau gesammelt! +1 Tauschale', player.x, player.y, '#38bdf8');
+      this.spawnFloatingText(`💧 Tau gesammelt! (${dewInInventory + 1}/3)`, player.x, player.y, '#38bdf8');
       return;
     }
 
@@ -4572,12 +4694,16 @@ export class GameManager {
     }
 
     // Determine what item to give
-    const giveType = action === 'sticks'              ? 'sticks'
-                   : action === 'coconut'             ? 'coconut'
-                   : resource.type === 'spring'       ? 'water'
-                   : resource.type === 'palm_tree'    ? 'palm_leaf'
-                   : resource.type === 'resin_tree'   ? 'tree_resin'
-                   : resource.type === 'berry_bush'   ? 'food'
+    const giveType = action === 'sticks'                    ? 'sticks'
+                   : action === 'coconut'                   ? 'coconut'
+                   : resource.type === 'spring'             ? 'water'
+                   : resource.type === 'palm_tree'          ? 'palm_leaf'
+                   : resource.type === 'resin_tree'         ? 'tree_resin'
+                   : resource.type === 'berry_bush'         ? 'food'
+                   : resource.type === 'pandanus'           ? 'fiber'
+                   : resource.type === 'breadfruit_tree'    ? 'exotic_fruit'
+                   : resource.type === 'bamboo'             ? 'sticks'
+                   : resource.type === 'cacao_tree'         ? 'food'
                    : resource.type;
 
     // Always 1 per click
@@ -4856,6 +4982,11 @@ export class GameManager {
     this.fireGraphics = null;
     this.warmthGraphics = null;
     this.jungleTreeObjects = [];
+    this.lizards.forEach(a => a.g.destroy()); this.lizards = [];
+    this.parrots.forEach(a => a.g.destroy()); this.parrots = [];
+    this.seagulls.forEach(a => a.g.destroy()); this.seagulls = [];
+    this.butterflies.forEach(a => a.g.destroy()); this.butterflies = [];
+    this.rats.forEach(a => a.g.destroy()); this.rats = [];
     this.footstepAudio.destroy();
   }
 
@@ -5201,7 +5332,476 @@ export class GameManager {
       }
 
       boar.g.setDepth(Math.floor(boar.py / TS) * 1000 + 2);
-      this.drawBoar(boar);
+      if (this.isInViewport(boar.px, boar.py)) this.drawBoar(boar);
+    }
+  }
+
+  // ── Lizards ────────────────────────────────────────────────────────
+  private spawnLizards(world: any) {
+    const COUNT = 18;
+    const candidates: { x: number; y: number }[] = [];
+    for (let y = 3; y < world.height - 3; y++) {
+      for (let x = 3; x < world.width - 3; x++) {
+        const t = world.tileMap[y]?.[x]?.type;
+        if (t !== 'grass' && t !== 'sparse_forest') continue;
+        if (Math.hypot(x - world.spawnX, y - world.spawnY) < 8) continue;
+        candidates.push({ x, y });
+      }
+    }
+    for (let i = 0; i < Math.min(COUNT, candidates.length); i++) {
+      const idx = Math.floor(Math.random() * candidates.length);
+      const [c] = candidates.splice(idx, 1);
+      const g = this.scene!.add.graphics().setDepth(c.y * 1000 + 2);
+      this.lizards.push({
+        id: `lizard-${i}`, px: c.x * TS + TS / 2, py: c.y * TS + TS / 2,
+        targetPx: 0, targetPy: 0, state: 'idle',
+        stateTimer: 1000 + Math.random() * 3000, facingLeft: Math.random() < 0.5, g,
+      });
+      this.drawLizard(this.lizards[this.lizards.length - 1]);
+    }
+  }
+
+  private drawLizard(lz: typeof this.lizards[0]) {
+    const g = lz.g; g.clear();
+    const f = lz.facingLeft ? -1 : 1;
+    // shadow
+    g.fillStyle(0x000000, 0.18); g.fillEllipse(0, 6, 18, 5);
+    // body
+    g.fillStyle(0x4a8c3a); g.fillEllipse(0, 0, 14, 7);
+    // head
+    g.fillStyle(0x3d7830); g.fillEllipse(f * 9, -1, 8, 5);
+    // eye
+    g.fillStyle(0xffd700); g.fillCircle(f * 11, -2, 1.5);
+    g.fillStyle(0x000000); g.fillCircle(f * 11, -2, 0.8);
+    // tail
+    g.lineStyle(2, 0x4a8c3a, 1);
+    g.beginPath(); g.moveTo(-f * 6, 1); g.lineTo(-f * 14, 4); g.strokePath();
+    // legs
+    g.lineStyle(1.5, 0x3d7830, 1);
+    g.beginPath(); g.moveTo(f * 3, 2); g.lineTo(f * 6, 7); g.strokePath();
+    g.beginPath(); g.moveTo(-f * 2, 2); g.lineTo(-f * 5, 7); g.strokePath();
+    g.setPosition(lz.px, lz.py);
+  }
+
+  private updateLizards(delta: number) {
+    if (!this.scene || this.lizards.length === 0) return;
+    const player = usePlayerStore.getState().player;
+    const ppx = player.x * TS + TS / 2, ppy = player.y * TS + TS / 2;
+    const FLEE_R = 3.5 * TS, FLEE_SPEED = 140, WANDER_SPEED = 28;
+    const tileMap = useWorldStore.getState().world?.tileMap;
+
+    for (const lz of this.lizards) {
+      const dist = Math.hypot(ppx - lz.px, ppy - lz.py);
+      if (dist < FLEE_R && lz.state !== 'flee') {
+        lz.state = 'flee';
+        const angle = Math.atan2(lz.py - ppy, lz.px - ppx);
+        lz.targetPx = lz.px + Math.cos(angle) * 4 * TS;
+        lz.targetPy = lz.py + Math.sin(angle) * 4 * TS;
+        lz.facingLeft = Math.cos(angle) < 0;
+        lz.stateTimer = 1800;
+      }
+      lz.stateTimer -= delta;
+      if (lz.state === 'flee' && lz.stateTimer <= 0) { lz.state = 'idle'; lz.stateTimer = 2000 + Math.random() * 3000; }
+      if (lz.state === 'idle' && lz.stateTimer <= 0) {
+        const tx = Math.floor(lz.px / TS), ty = Math.floor(lz.py / TS);
+        const dirs = [[-1,0],[1,0],[0,-1],[0,1],[-1,-1],[1,-1],[-1,1],[1,1]];
+        const valid = dirs.filter(([dx,dy]) => {
+          const t = tileMap?.[ty+dy]?.[tx+dx]?.type;
+          return t === 'grass' || t === 'sparse_forest';
+        });
+        if (valid.length) {
+          const [dx, dy] = valid[Math.floor(Math.random() * valid.length)];
+          lz.targetPx = (tx + dx) * TS + TS / 2;
+          lz.targetPy = (ty + dy) * TS + TS / 2;
+          lz.facingLeft = dx < 0;
+          lz.state = 'wander'; lz.stateTimer = 4000 + Math.random() * 3000;
+        } else { lz.stateTimer = 1500; }
+      }
+      const speed = lz.state === 'flee' ? FLEE_SPEED : lz.state === 'wander' ? WANDER_SPEED : 0;
+      if (speed > 0) {
+        const tdx = lz.targetPx - lz.px, tdy = lz.targetPy - lz.py;
+        const td = Math.sqrt(tdx*tdx + tdy*tdy);
+        if (td > 2) { lz.px += (tdx/td)*(speed*delta/1000); lz.py += (tdy/td)*(speed*delta/1000); }
+        else if (lz.state === 'wander') { lz.state = 'idle'; lz.stateTimer = 1500 + Math.random() * 2500; }
+      }
+      const inView = this.isInViewport(lz.px, lz.py);
+      lz.g.setVisible(inView);
+      if (inView) {
+        lz.g.setDepth(Math.floor(lz.py / TS) * 1000 + 2);
+        this.drawLizard(lz);
+      }
+    }
+  }
+
+  // ── Parrots ────────────────────────────────────────────────────────
+  private spawnParrots(world: any) {
+    const COUNT = 12;
+    // Find large tree resource positions
+    const resources = useWorldStore.getState().world?.resources ?? [];
+    const treeTiles = resources.filter((r: any) => r.type === 'large_tree' || r.type === 'banyan_tree');
+    const candidates = treeTiles.length > 0 ? treeTiles : [];
+    for (let i = 0; i < Math.min(COUNT, candidates.length); i++) {
+      const idx = Math.floor(Math.random() * candidates.length);
+      const c = candidates[idx];
+      const g = this.scene!.add.graphics().setDepth(c.y * 1000 + 500);
+      this.parrots.push({
+        id: `parrot-${i}`,
+        px: c.x * TS + TS / 2 + (Math.random() - 0.5) * TS,
+        py: c.y * TS - TS * 1.5,
+        state: 'perch', stateTimer: 3000 + Math.random() * 6000,
+        arcT: 0, arcStartX: 0, arcStartY: 0, arcEndX: 0, arcEndY: 0,
+        facingLeft: Math.random() < 0.5, g,
+      });
+      this.drawParrot(this.parrots[this.parrots.length - 1]);
+    }
+  }
+
+  private drawParrot(p: typeof this.parrots[0]) {
+    const g = p.g; g.clear();
+    const f = p.facingLeft ? -1 : 1;
+    const flying = p.state === 'fly';
+    const wingY = flying ? Math.sin(Date.now() / 80) * 6 : 0;
+    // shadow (only when flying low)
+    // body
+    g.fillStyle(0x1a8a1a); g.fillEllipse(0, 0, 12, 8);
+    // wing
+    g.fillStyle(flying ? 0x22bb22 : 0x157815);
+    g.fillEllipse(-f * 4, wingY - 2, 14, 5);
+    // tail
+    g.fillStyle(0xff4400); g.fillEllipse(-f * 8, 3, 8, 4);
+    // head
+    g.fillStyle(0xff2200); g.fillCircle(f * 6, -3, 5);
+    // beak
+    g.fillStyle(0xffcc00); g.fillTriangle(f*10, -3, f*13, -1, f*10, -1);
+    // eye
+    g.fillStyle(0xffffff); g.fillCircle(f * 7, -4, 1.5);
+    g.fillStyle(0x000000); g.fillCircle(f * 7, -4, 0.8);
+    g.setPosition(p.px, p.py);
+  }
+
+  private updateParrots(delta: number) {
+    if (!this.scene) return;
+    const player = usePlayerStore.getState().player;
+    const ppx = player.x * TS + TS / 2, ppy = player.y * TS + TS / 2;
+    const FLEE_R = 4 * TS;
+    const resources = useWorldStore.getState().world?.resources ?? [];
+    const treeTiles = resources.filter((r: any) => r.type === 'large_tree' || r.type === 'banyan_tree');
+
+    for (const p of this.parrots) {
+      const dist = Math.hypot(ppx - p.px, ppy - p.py);
+      if (dist < FLEE_R && p.state === 'perch') {
+        p.state = 'fly'; p.arcT = 0;
+        p.arcStartX = p.px; p.arcStartY = p.py;
+        // Pick a distant tree to land on
+        const far = treeTiles.filter((t: any) => Math.hypot(t.x * TS - ppx, t.y * TS - ppy) > 8 * TS);
+        const dest = far.length ? far[Math.floor(Math.random() * far.length)] : { x: p.px / TS + 15, y: p.py / TS + 5 };
+        p.arcEndX = (dest as any).x * TS + TS / 2 + (Math.random() - 0.5) * TS;
+        p.arcEndY = (dest as any).y * TS - TS * 1.5;
+        p.facingLeft = p.arcEndX < p.px;
+        p.stateTimer = 2500;
+      }
+      if (p.state === 'fly') {
+        p.arcT += delta / p.stateTimer;
+        if (p.arcT >= 1) {
+          p.arcT = 1; p.state = 'perch';
+          p.stateTimer = 4000 + Math.random() * 8000;
+        }
+        const t = p.arcT;
+        p.px = p.arcStartX + (p.arcEndX - p.arcStartX) * t;
+        const arcHeight = -Math.sin(t * Math.PI) * 5 * TS;
+        p.py = p.arcStartY + (p.arcEndY - p.arcStartY) * t + arcHeight;
+      } else {
+        p.stateTimer -= delta;
+        // occasional fidget
+        if (p.stateTimer <= 0 && p.state === 'perch') {
+          p.facingLeft = !p.facingLeft;
+          p.stateTimer = 2000 + Math.random() * 5000;
+        }
+      }
+      const inView = this.isInViewport(p.px, p.py, 5 * TS);
+      p.g.setVisible(inView);
+      if (inView) {
+        p.g.setDepth(Math.floor(p.py / TS) * 1000 + 500);
+        this.drawParrot(p);
+      }
+    }
+  }
+
+  // ── Seagulls ───────────────────────────────────────────────────────
+  private spawnSeagulls(world: any) {
+    const COUNT = 8;
+    const beachTiles: { x: number; y: number }[] = [];
+    for (let y = 2; y < world.height - 2; y++) {
+      for (let x = 2; x < world.width - 2; x++) {
+        if (world.tileMap[y]?.[x]?.type === 'beach') beachTiles.push({ x, y });
+      }
+    }
+    for (let i = 0; i < COUNT; i++) {
+      if (beachTiles.length === 0) break;
+      const c = beachTiles[Math.floor(Math.random() * beachTiles.length)];
+      const g = this.scene!.add.graphics().setDepth(9999);
+      this.seagulls.push({
+        id: `seagull-${i}`,
+        orbitAngle: Math.random() * Math.PI * 2,
+        orbitRadius: (3 + Math.random() * 3) * TS,
+        orbitCx: c.x * TS + TS / 2,
+        orbitCy: c.y * TS + TS / 2,
+        orbitSpeed: (0.4 + Math.random() * 0.3) * (Math.random() < 0.5 ? 1 : -1),
+        g,
+      });
+      this.drawSeagull(this.seagulls[this.seagulls.length - 1]);
+    }
+  }
+
+  private drawSeagull(sg: typeof this.seagulls[0]) {
+    const g = sg.g; g.clear();
+    const flying = true;
+    const wingFlap = Math.sin(Date.now() / 200 + sg.orbitAngle) * 5;
+    // body
+    g.fillStyle(0xffffff, 0.95); g.fillEllipse(0, 0, 14, 6);
+    // wings
+    g.fillStyle(0xe8e8e8);
+    g.fillEllipse(-11, wingFlap, 12, 4);
+    g.fillEllipse(11, wingFlap, 12, 4);
+    // head
+    g.fillStyle(0xffffff); g.fillCircle(8, -2, 4);
+    g.fillStyle(0xffcc00); g.fillTriangle(11, -2, 14, -1, 11, 0);
+    // wing tips dark
+    g.fillStyle(0x222222);
+    g.fillEllipse(-16, wingFlap, 4, 3);
+    g.fillEllipse(16, wingFlap, 4, 3);
+    const px = sg.orbitCx + Math.cos(sg.orbitAngle) * sg.orbitRadius;
+    const py = sg.orbitCy + Math.sin(sg.orbitAngle) * sg.orbitRadius * 0.4 - 3 * TS;
+    g.setPosition(px, py);
+  }
+
+  private updateSeagulls(delta: number) {
+    if (!this.scene) return;
+    const player = usePlayerStore.getState().player;
+    const ppx = player.x * TS + TS / 2, ppy = player.y * TS + TS / 2;
+    const SOUND_R = 10 * TS;
+    this.seagullSoundCooldown -= delta;
+
+    let nearestDist = Infinity;
+    for (const sg of this.seagulls) {
+      sg.orbitAngle += sg.orbitSpeed * delta / 1000;
+      const sx = sg.orbitCx + Math.cos(sg.orbitAngle) * sg.orbitRadius;
+      const sy = sg.orbitCy + Math.sin(sg.orbitAngle) * sg.orbitRadius * 0.4 - 3 * TS;
+      const d = Math.hypot(ppx - sx, ppy - sy);
+      if (d < nearestDist) nearestDist = d;
+      const inView = this.isInViewport(sx, sy, 8 * TS);
+      sg.g.setVisible(inView);
+      if (inView) this.drawSeagull(sg);
+    }
+
+    if (nearestDist < SOUND_R && this.seagullSoundCooldown <= 0) {
+      this.playSeagullCry(1 - nearestDist / SOUND_R);
+      // Random interval so cries feel natural, not robotic
+      this.seagullSoundCooldown = 4000 + Math.random() * 6000;
+    }
+  }
+
+  private playSeagullCry(volume: number) {
+    try {
+      const file = Math.random() < 0.5 ? 'Möwe 1.mp3' : 'Möwe 2.mp3';
+      const audio = new Audio(`/music/${encodeURIComponent(file)}`);
+      audio.volume = Math.min(1, volume * 0.9);
+      audio.play().catch(() => {});
+    } catch {}
+  }
+
+  // ── Butterflies ────────────────────────────────────────────────────
+  private spawnButterflies(world: any) {
+    const COUNT = 20;
+    const candidates: { x: number; y: number }[] = [];
+    for (let y = 3; y < world.height - 3; y++) {
+      for (let x = 3; x < world.width - 3; x++) {
+        const t = world.tileMap[y]?.[x]?.type;
+        if (t !== 'grass' && t !== 'tall_grass') continue;
+        candidates.push({ x, y });
+      }
+    }
+    for (let i = 0; i < Math.min(COUNT, candidates.length); i++) {
+      const idx = Math.floor(Math.random() * candidates.length);
+      const [c] = candidates.splice(idx, 1);
+      const g = this.scene!.add.graphics().setDepth(c.y * 1000 + 10);
+      this.butterflies.push({
+        id: `butterfly-${i}`,
+        px: c.x * TS + TS / 2, py: c.y * TS + TS / 2,
+        targetPx: 0, targetPy: 0,
+        state: 'rest', stateTimer: 2000 + Math.random() * 4000,
+        phase: Math.random() * Math.PI * 2, g,
+      });
+      this.drawButterfly(this.butterflies[this.butterflies.length - 1]);
+    }
+  }
+
+  private drawButterfly(bf: typeof this.butterflies[0]) {
+    const g = bf.g; g.clear();
+    const flutter = bf.state === 'flutter';
+    const wingOpen = flutter ? Math.abs(Math.sin(Date.now() / 120 + bf.phase)) : 1;
+    const colors = [0xff6699, 0xffaa00, 0x44aaff, 0xff4444, 0xaa44ff];
+    const col = colors[parseInt(bf.id.split('-')[1]) % colors.length];
+    // upper wings
+    g.fillStyle(col, 0.85);
+    g.fillEllipse(-wingOpen * 7, -4, wingOpen * 8, 7);
+    g.fillEllipse(wingOpen * 7, -4, wingOpen * 8, 7);
+    // lower wings
+    g.fillStyle(col, 0.65);
+    g.fillEllipse(-wingOpen * 5, 3, wingOpen * 6, 5);
+    g.fillEllipse(wingOpen * 5, 3, wingOpen * 6, 5);
+    // body
+    g.fillStyle(0x222222); g.fillEllipse(0, 0, 2.5, 9);
+    g.setPosition(bf.px, bf.py);
+  }
+
+  private updateButterflies(delta: number) {
+    if (!this.scene) return;
+    const tileMap = useWorldStore.getState().world?.tileMap;
+    const SPEED = 22;
+
+    for (const bf of this.butterflies) {
+      bf.stateTimer -= delta;
+      if (bf.state === 'rest' && bf.stateTimer <= 0) {
+        const tx = Math.floor(bf.px / TS), ty = Math.floor(bf.py / TS);
+        const angle = Math.random() * Math.PI * 2;
+        const dist = (2 + Math.random() * 3) * TS;
+        const nx = tx + Math.round(Math.cos(angle) * 3);
+        const ny = ty + Math.round(Math.sin(angle) * 3);
+        const nt = tileMap?.[ny]?.[nx]?.type;
+        if (nt === 'grass' || nt === 'tall_grass') {
+          bf.targetPx = nx * TS + TS / 2; bf.targetPy = ny * TS + TS / 2;
+          bf.state = 'flutter'; bf.stateTimer = (dist / SPEED) * 1000 + 500;
+        } else { bf.stateTimer = 1000 + Math.random() * 2000; }
+      }
+      if (bf.state === 'flutter' && bf.stateTimer <= 0) {
+        bf.state = 'rest'; bf.stateTimer = 1500 + Math.random() * 3000;
+      }
+      if (bf.state === 'flutter') {
+        const tdx = bf.targetPx - bf.px, tdy = bf.targetPy - bf.py;
+        const td = Math.sqrt(tdx*tdx + tdy*tdy);
+        bf.phase += delta / 60;
+        // sine wave perpendicular drift for natural feel
+        const perp = Math.sin(bf.phase * 3) * 0.4;
+        if (td > 3) {
+          bf.px += (tdx/td + perp) * SPEED * delta / 1000;
+          bf.py += (tdy/td) * SPEED * delta / 1000;
+        }
+      }
+      const inView = this.isInViewport(bf.px, bf.py);
+      bf.g.setVisible(inView);
+      if (inView) {
+        bf.g.setDepth(Math.floor(bf.py / TS) * 1000 + 10);
+        this.drawButterfly(bf);
+      }
+    }
+  }
+
+  // ── Rats ───────────────────────────────────────────────────────────
+  private spawnRats(world: any) {
+    const COUNT = 14;
+    const candidates: { x: number; y: number }[] = [];
+    for (let y = 3; y < world.height - 3; y++) {
+      for (let x = 3; x < world.width - 3; x++) {
+        const t = world.tileMap[y]?.[x]?.type;
+        if (t !== 'grass' && t !== 'sparse_forest' && t !== 'forest') continue;
+        if (Math.hypot(x - world.spawnX, y - world.spawnY) < 6) continue;
+        candidates.push({ x, y });
+      }
+    }
+    for (let i = 0; i < Math.min(COUNT, candidates.length); i++) {
+      const idx = Math.floor(Math.random() * candidates.length);
+      const [c] = candidates.splice(idx, 1);
+      const g = this.scene!.add.graphics().setDepth(c.y * 1000 + 2);
+      this.rats.push({
+        id: `rat-${i}`, px: c.x * TS + TS / 2, py: c.y * TS + TS / 2,
+        targetPx: 0, targetPy: 0, state: 'idle',
+        stateTimer: 500 + Math.random() * 2000, facingLeft: Math.random() < 0.5, g,
+      });
+      this.drawRat(this.rats[this.rats.length - 1]);
+    }
+  }
+
+  private drawRat(rat: typeof this.rats[0]) {
+    const g = rat.g; g.clear();
+    const f = rat.facingLeft ? -1 : 1;
+    const isNight = (() => {
+      const elapsed = useGameStore.getState().elapsedTime;
+      const hour = (elapsed % (24 * 60 * 1000)) / (24 * 60 * 1000) * 24;
+      return hour >= 20 || hour < 6;
+    })();
+    const alpha = isNight ? 1 : 0.55; // rats visible but dim in daylight
+    // shadow
+    g.fillStyle(0x000000, 0.15 * alpha); g.fillEllipse(0, 6, 16, 4);
+    // body
+    g.fillStyle(0x6e6050, alpha); g.fillEllipse(0, 0, 16, 8);
+    // head
+    g.fillStyle(0x5a4e40, alpha); g.fillEllipse(f * 9, -1, 9, 6);
+    // nose
+    g.fillStyle(0xff9999, alpha); g.fillCircle(f * 13, -1, 1.5);
+    // ear
+    g.fillStyle(0xd4a0a0, alpha); g.fillEllipse(f * 8, -5, 4, 5);
+    // eye
+    g.fillStyle(0xff2200, alpha); g.fillCircle(f * 11, -2, 1.2);
+    // tail
+    g.lineStyle(1.5, 0x8a7060, alpha);
+    g.beginPath(); g.moveTo(-f * 7, 1); g.lineTo(-f * 15, 5); g.strokePath();
+    g.setPosition(rat.px, rat.py);
+  }
+
+  private updateRats(delta: number) {
+    if (!this.scene) return;
+    const player = usePlayerStore.getState().player;
+    const ppx = player.x * TS + TS / 2, ppy = player.y * TS + TS / 2;
+    const elapsed = useGameStore.getState().elapsedTime;
+    const hour = (elapsed % (24 * 60 * 1000)) / (24 * 60 * 1000) * 24;
+    const isNight = hour >= 20 || hour < 6;
+    const FLEE_R = 3 * TS;
+    const FLEE_SPEED = 120, WANDER_SPEED = isNight ? 40 : 18;
+    const tileMap = useWorldStore.getState().world?.tileMap;
+
+    for (const rat of this.rats) {
+      const dist = Math.hypot(ppx - rat.px, ppy - rat.py);
+      if (dist < FLEE_R && rat.state !== 'flee') {
+        rat.state = 'flee'; rat.stateTimer = 1500;
+        const angle = Math.atan2(rat.py - ppy, rat.px - ppx);
+        rat.targetPx = rat.px + Math.cos(angle) * 3.5 * TS;
+        rat.targetPy = rat.py + Math.sin(angle) * 3.5 * TS;
+        rat.facingLeft = Math.cos(angle) < 0;
+      }
+      rat.stateTimer -= delta;
+      if (rat.state === 'flee' && rat.stateTimer <= 0) { rat.state = 'idle'; rat.stateTimer = 1000 + Math.random() * 2000; }
+      if (rat.state === 'idle' && rat.stateTimer <= 0) {
+        // Rats wander more at night
+        if (isNight || Math.random() < 0.4) {
+          const tx = Math.floor(rat.px / TS), ty = Math.floor(rat.py / TS);
+          const dirs = [[-1,0],[1,0],[0,-1],[0,1],[-2,0],[2,0],[0,-2],[0,2]];
+          const valid = dirs.filter(([dx,dy]) => {
+            const t = tileMap?.[ty+dy]?.[tx+dx]?.type;
+            return t === 'grass' || t === 'sparse_forest' || t === 'forest';
+          });
+          if (valid.length) {
+            const [dx, dy] = valid[Math.floor(Math.random() * valid.length)];
+            rat.targetPx = (tx + dx) * TS + TS / 2;
+            rat.targetPy = (ty + dy) * TS + TS / 2;
+            rat.facingLeft = dx < 0;
+            rat.state = 'wander'; rat.stateTimer = 3000 + Math.random() * 3000;
+          } else { rat.stateTimer = 800; }
+        } else { rat.stateTimer = 1500 + Math.random() * 2000; }
+      }
+      const speed = rat.state === 'flee' ? FLEE_SPEED : rat.state === 'wander' ? WANDER_SPEED : 0;
+      if (speed > 0) {
+        const tdx = rat.targetPx - rat.px, tdy = rat.targetPy - rat.py;
+        const td = Math.sqrt(tdx*tdx + tdy*tdy);
+        if (td > 2) { rat.px += (tdx/td)*(speed*delta/1000); rat.py += (tdy/td)*(speed*delta/1000); }
+        else if (rat.state === 'wander') { rat.state = 'idle'; rat.stateTimer = 1000 + Math.random() * 2000; }
+      }
+      const inView = this.isInViewport(rat.px, rat.py);
+      rat.g.setVisible(inView);
+      if (inView) {
+        rat.g.setDepth(Math.floor(rat.py / TS) * 1000 + 2);
+        this.drawRat(rat);
+      }
     }
   }
 }

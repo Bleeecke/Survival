@@ -41,8 +41,9 @@ export const USABLE: Record<string, {
     effect: s => ({
       thirst:  Math.max(0, (s.thirst ?? 0) - 30),
       stamina: Math.min(100, s.stamina + 10),
+      temperature: (s.temperature ?? 50) > 55 ? Math.max(0, (s.temperature ?? 50) - 8) : s.temperature,
     }),
-    tooltip: 'Durst -30, Ausdauer +10',
+    tooltip: 'Durst -30, Ausdauer +10, Temperatur -8 (bei Hitze)',
   },
   coconut_water: {
     label: 'Trinken',
@@ -50,8 +51,9 @@ export const USABLE: Record<string, {
     effect: s => ({
       thirst:  Math.max(0, (s.thirst ?? 0) - 20),
       stamina: Math.min(100, s.stamina + 8),
+      temperature: (s.temperature ?? 50) > 55 ? Math.max(0, (s.temperature ?? 50) - 6) : s.temperature,
     }),
-    tooltip: 'Durst -20, Ausdauer +8',
+    tooltip: 'Durst -20, Ausdauer +8, Temperatur -6 (bei Hitze)',
   },
   cooked_fish_meal: {
     label: 'Essen',
@@ -97,8 +99,9 @@ export const USABLE: Record<string, {
     effect: s => ({
       thirst:  Math.max(0, (s.thirst ?? 0) - 10),
       stamina: Math.min(100, s.stamina + 3),
+      temperature: (s.temperature ?? 50) > 55 ? Math.max(0, (s.temperature ?? 50) - 12) : s.temperature,
     }),
-    tooltip: 'Durst -10, Ausdauer +3 (kleine Menge)',
+    tooltip: 'Durst -10, Ausdauer +3, Temperatur -12 (bei Hitze — frischer Morgentau)',
   },
   herbal_remedy: {
     label: 'Heilen',

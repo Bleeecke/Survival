@@ -6,6 +6,20 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '1.8',
+    date: '31.05.2026',
+    changes: [
+      'Umgebungstiere: Eidechse, Papagei, Möwe, Schmetterling & Ratte — atmosphärisch, nicht jagdbar',
+      'Möwenschreie: echte MP3-Sounds bei Annäherung auf 10 Tiles, zufällig aus 2 Clips',
+      'Farn-Tau: Pflanze bleibt stehen, nur Tau-Status wird zurückgesetzt — Schale fasst max. 3',
+      'Tau verdampft nach ~2 Spielstunden (offene Schale), einmaliger Hinweis beim ersten Sammeln',
+      'Trinken kühlt ab: Wasser -8°, Kokoswasser -6°, Morgentau -12° (nur bei Temp > 55)',
+      'Primitive Axt: 2× Seil + 2× gehärteter Ast (realistischere Bindung)',
+      'Ast im Feuer härten nur noch am Lagerfeuer-Menü sichtbar, nicht mehr im Crafting',
+      'Viewport-Culling für alle Tiere & Fog-Caching (Performance)',
+    ],
+  },
+  {
     version: '1.7',
     date: '31.05.2026',
     changes: [

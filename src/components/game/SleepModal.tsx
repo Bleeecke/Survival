@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { useGameStore } from '../../store/gameStore';
 import { usePlayerStore } from '../../store/playerStore';
+import { useWorldStore } from '../../store/worldStore';
 import { DAY_DURATION_MS } from '../../data/worldConfig';
+import { getAmbientTemp } from '../../utils/weather';
 
 const HOUR_MS = DAY_DURATION_MS / 24;
 
@@ -56,6 +58,7 @@ export default function SleepModal() {
   const tickTime         = useGameStore(s => s.tickTime);
   const quality          = useGameStore(s => s.sleepQuality);
   const elapsedTime      = useGameStore(s => s.elapsedTime);
+  const worldSeed        = useWorldStore(s => s.world?.seed ?? 0);
   const stats            = usePlayerStore(s => s.player.stats);
   const updateStats      = usePlayerStore(s => s.updateStats);
 
@@ -82,19 +85,32 @@ export default function SleepModal() {
     const stamina = stats.stamina ?? 100;
     const { newFatigue, healthDelta } = calcEffects(hours, quality, fatigue);
 
-    // Cold sleep penalty: temperature drops further without fire, health suffers
-    const coldPenalty = isColdSleep ? -hours * 3 : 0;
+    // Simulate temperature hour-by-hour during sleep
+    let sleepTemp = temperature;
+    const nearFire = quality === 'cabin' || quality === 'shelter';
+    for (let i = 0; i < hours; i++) {
+      const hourMs = elapsedTime + i * HOUR_MS;
+      const ambient = getAmbientTemp(hourMs, worldSeed, false);
+      let target = ambient;
+      if (nearFire) target = Math.max(target, 52) + 15;
+      // 250 ticks per game hour × 0.02 nudge per tick = up to 5 pts/hr
+      const maxNudge = nearFire ? 5 : 3;
+      sleepTemp += Math.sign(target - sleepTemp) * Math.min(maxNudge, Math.abs(target - sleepTemp));
+    }
+    sleepTemp = Math.max(0, Math.min(100, sleepTemp));
+
+    const healthPenalty = sleepTemp < 25 ? -(hours * 2) : sleepTemp > 80 ? -(hours * 1.5) : 0;
 
     setFadeState('fading-out');
     setTimeout(() => {
       setFadeState('black');
       updateStats({
         fatigue: newFatigue,
-        health:  Math.min(100, Math.max(0, health + healthDelta + coldPenalty)),
+        health:  Math.min(100, Math.max(0, health + healthDelta + healthPenalty)),
         stamina: Math.min(100, stamina + hours * 8),
         hunger:  Math.min(100, hunger + hours * 1.5),
         thirst:  Math.min(100, thirst  + hours * 2.0),
-        temperature: isColdSleep ? Math.max(10, temperature - hours * 4) : temperature,
+        temperature: sleepTemp,
       });
       tickTime(hours * HOUR_MS);
       setTimeout(() => {

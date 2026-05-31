@@ -98,9 +98,9 @@
     "description": "Scharfer Stein am gehärteten Ast – fällt Bäume, öffnet Kokosnüsse.",
     "category": "tool", "tier": 1, "craftingTime": 5000,
     "inputs": [
-      { "resourceId": "hardened_stick", "quantity": 1 },
+      { "resourceId": "hardened_stick", "quantity": 2 },
       { "resourceId": "sharp_flint", "quantity": 1 },
-      { "resourceId": "fiber", "quantity": 3 }
+      { "resourceId": "rope", "quantity": 2 }
     ],
     "outputs": [{ "resourceId": "stone_axe", "quantity": 1 }],
     "requiresSkill": { "skill": "crafting", "level": 1 },

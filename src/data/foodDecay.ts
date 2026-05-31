@@ -18,6 +18,8 @@ export const FOOD_SPOIL_TIME: Record<string, number> = {
   cooked_boar:      DAY_DURATION_MS * 2.0,
   cooked_crab:      DAY_DURATION_MS * 1.5,
   cooked_turtle:    DAY_DURATION_MS * 1.5,
+  // Dew water — evaporates from open shell within 2 game hours
+  dew_water:        DAY_DURATION_MS / 12,
   // Medicine
   herbal_remedy:    DAY_DURATION_MS * 4.0,
   // Preserved food — lasts much longer
@@ -42,6 +44,7 @@ export const FOOD_ITEM_NAMES: Record<string, string> = {
   cooked_boar:      'Gek. Wildschwein',
   cooked_crab:      'Gek. Krabbe',
   cooked_turtle:    'Gek. Schildkröte',
+  dew_water:        'Tauschale',
   herbal_remedy:    'Kräutermittel',
   smoked_meat:      'Geräuchertes Fleisch',
   dried_fish:       'Getrockneter Fisch',

@@ -77,7 +77,8 @@ export default function CraftingModal({ onClose }: { onClose: () => void }) {
   // Only show discovered recipes — filter out structures (those belong in BuildMenu)
   const allFiltered = (activeCategory === 'all' ? RECIPES : RECIPES.filter(r => r.category === activeCategory))
     .filter(r => craftingSystem.isDiscovered(r, inventory))
-    .filter(r => !STRUCTURE_IDS.has(r.id));
+    .filter(r => !STRUCTURE_IDS.has(r.id))
+    .filter(r => r.requiresTool !== 'campfire_near');
 
   const discovered = allFiltered.sort((a, b) => {
     const scoreA = (craftingSystem.canCraft(a.id, inventory) ? 4 : 0)
