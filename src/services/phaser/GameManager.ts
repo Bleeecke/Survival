@@ -4363,26 +4363,26 @@ export class GameManager {
         const newFuel = Math.max(0, (cf.fuel ?? 0) - 1);
         worldState.updateStructure(cf.id, { fuel: newFuel });
       }
-
-      // Schedule first rain on day 2, then every 3–6 days randomly
-      if (this.nextRainDay === -1) {
-        this.nextRainDay = 2;
-      } else if (currentDay >= this.nextRainDay && !this.isRaining) {
-        // Only start rain during daytime (7–19h) — player needs to notice it
-        const rainHour = (useGameStore.getState().elapsedTime % DAY_DURATION_MS) / DAY_DURATION_MS * 24;
-        if (rainHour >= 7 && rainHour < 19) {
-          this.pickRainType();
-          this.isRaining = true;
-          this.rainTimer = 0;
-          const containers = worldState.world?.structures.filter(s => s.type === 'water_container') ?? [];
-          for (const c of containers) worldState.updateStructure(c.id, { fuel: 2 });
-          if (GameManager.FIRE_EXTINGUISHING_TYPES.has(this.rainType)) this.extinguishCampfires();
-          this.nextRainDay = currentDay + 3 + Math.floor(Math.random() * 4);
-          this.checkRainKnowledge();
-        }
-      }
+      // Initialize first rain target on day 1
+      if (this.nextRainDay === -1) this.nextRainDay = 2;
     }
     this.lastGameDay = currentDay;
+
+    // Rain trigger — checked every tick so it fires as soon as daytime arrives
+    if (!this.isRaining && this.nextRainDay !== -1 && currentDay >= this.nextRainDay) {
+      const rainHour = (gameState.elapsedTime % DAY_DURATION_MS) / DAY_DURATION_MS * 24;
+      if (rainHour >= 7 && rainHour < 19) {
+        const worldState = useWorldStore.getState();
+        this.pickRainType();
+        this.isRaining = true;
+        this.rainTimer = 0;
+        const containers = worldState.world?.structures.filter(s => s.type === 'water_container') ?? [];
+        for (const c of containers) worldState.updateStructure(c.id, { fuel: 2 });
+        if (GameManager.FIRE_EXTINGUISHING_TYPES.has(this.rainType)) this.extinguishCampfires();
+        this.nextRainDay = currentDay + 3 + Math.floor(Math.random() * 4);
+        this.checkRainKnowledge();
+      }
+    }
 
     // Dev rain toggle
     const devRain = useGameStore.getState().devRain;
