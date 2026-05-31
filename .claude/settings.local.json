@@ -57,7 +57,20 @@
       "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\)[0]; print\\(d['state'], d['created_at']\\)\")",
       "Bash(node -e \" const fs = require\\('fs'\\); const src = fs.readFileSync\\('src/data/recipes.ts', 'utf8'\\); // Extract recipe objects via regex const matches = [...src.matchAll\\(/\\\\{[\\\\s\\\\S]*?id: '\\([^']+\\)'[\\\\s\\\\S]*?\\\\}/g\\)]; console.log\\('RECIPES count:', matches.length\\); \")",
       "Bash(node *)",
-      "Bash(python -c \"import json,sys; data=json.load\\(sys.stdin\\); [print\\(f\\\\\"{r['id']:25} tier={r.get\\('tier',0\\)} tool={r.get\\('requiresTool',''\\)}\\\\\"\\) for r in data]\")"
+      "Bash(python -c \"import json,sys; data=json.load\\(sys.stdin\\); [print\\(f\\\\\"{r['id']:25} tier={r.get\\('tier',0\\)} tool={r.get\\('requiresTool',''\\)}\\\\\"\\) for r in data]\")",
+      "Bash(rustc --version)",
+      "Bash(cargo --version)",
+      "PowerShell(rustc *)",
+      "PowerShell(npm install *)",
+      "PowerShell($env:PATH = [System.Environment]::GetEnvironmentVariable\\(\"PATH\",\"Machine\"\\) + \";\" + [System.Environment]::GetEnvironmentVariable\\(\"PATH\",\"User\"\\); cd C:\\\\Users\\\\chris\\\\Projects\\\\survival-game; npx tauri init --app-name \"Survival Island\" --window-title \"Survival Island\" --dist-dir \"../dist\" --dev-url \"http://localhost:5173\" --before-dev-command \"npm run dev\" --before-build-command \"npm run build\" 2>&1)",
+      "PowerShell($env:PATH = [System.Environment]::GetEnvironmentVariable\\(\"PATH\",\"Machine\"\\) + \";\" + [System.Environment]::GetEnvironmentVariable\\(\"PATH\",\"User\"\\); cd C:\\\\Users\\\\chris\\\\Projects\\\\survival-game; npx tauri init --app-name \"Survival Island\" --window-title \"Survival Island\" --frontend-dist \"../dist\" --dev-url \"http://localhost:5173\" --before-dev-command \"npm run dev\" --before-build-command \"npm run build\" 2>&1)",
+      "PowerShell($env:PATH = [System.Environment]::GetEnvironmentVariable\\(\"PATH\",\"Machine\"\\) + \";\" + [System.Environment]::GetEnvironmentVariable\\(\"PATH\",\"User\"\\); cd C:\\\\Users\\\\chris\\\\Projects\\\\survival-game; npx tauri build --debug 2>&1 | Select-Object -Last 30)",
+      "Bash(sed -n '5445,5455p' src/services/phaser/GameManager.ts)",
+      "Bash(sed -n '5566,5575p' src/services/phaser/GameManager.ts)",
+      "PowerShell($env:PATH = [System.Environment]::GetEnvironmentVariable\\(\"PATH\",\"Machine\"\\) + \";\" + [System.Environment]::GetEnvironmentVariable\\(\"PATH\",\"User\"\\); cd C:\\\\Users\\\\chris\\\\Projects\\\\survival-game; npx tauri build 2>&1 | Select-String -Pattern \"error|warning|Finished|bundle|msi|exe|Compiling\" | Select-Object -Last 30)",
+      "PowerShell($env:PATH = [System.Environment]::GetEnvironmentVariable\\(\"PATH\",\"Machine\"\\) + \";\" + [System.Environment]::GetEnvironmentVariable\\(\"PATH\",\"User\"\\); cd C:\\\\Users\\\\chris\\\\Projects\\\\survival-game; npx tauri build 2>&1 | Select-String -Pattern \"error|Finished|bundle|\\\\.msi|\\\\.exe|Compiling survival\" | Select-Object -Last 20)",
+      "PowerShell(winget install *)",
+      "PowerShell($env:PATH = [System.Environment]::GetEnvironmentVariable\\(\"PATH\",\"Machine\"\\) + \";\" + [System.Environment]::GetEnvironmentVariable\\(\"PATH\",\"User\"\\); cd C:\\\\Users\\\\chris\\\\Projects\\\\survival-game; npx tauri build 2>&1 | Select-String -Pattern \"error|Finished|\\\\.msi|\\\\.exe|Bundling\" | Select-Object -Last 15)"
     ]
   }
 }

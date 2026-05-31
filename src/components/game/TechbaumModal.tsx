@@ -3,6 +3,8 @@ import { RECIPES } from '../../data/recipes';
 import { craftingSystem } from '../../services/game/CraftingSystem';
 import { usePlayerStore } from '../../store/playerStore';
 import { SKILL_LABELS } from '../../types/skills';
+import type { Recipe } from '../../types/crafting';
+import type { Inventory } from '../../types/player';
 
 // ── Constants ─────────────────────────────────────────────────────
 
@@ -52,7 +54,6 @@ export default function TechbaumModal({ onClose }: { onClose: () => void }) {
   const [search, setSearch] = useState('');
 
   const inventory = usePlayerStore(s => s.player.inventory);
-  const knownMaterials = usePlayerStore(s => s.knownMaterials);
 
   // All non-structure, non-campfire recipes — grouped by category
   const allRecipes = RECIPES.filter(r => !STRUCTURE_IDS.has(r.id) && r.requiresTool !== 'campfire_near');
@@ -139,7 +140,7 @@ export default function TechbaumModal({ onClose }: { onClose: () => void }) {
               </h3>
               <div className="grid grid-cols-2 gap-2">
                 {byCategory[cat].map(r => (
-                  <TechCard key={r.id} recipe={r} inventory={inventory} knownMaterials={knownMaterials} />
+                  <TechCard key={r.id} recipe={r} inventory={inventory} />
                 ))}
               </div>
             </div>
@@ -164,10 +165,9 @@ export default function TechbaumModal({ onClose }: { onClose: () => void }) {
 
 // ── TechCard ──────────────────────────────────────────────────────
 
-function TechCard({ recipe, inventory, knownMaterials }: {
-  recipe: ReturnType<typeof RECIPES>[number];
-  inventory: ReturnType<typeof usePlayerStore.getState>['player']['inventory'];
-  knownMaterials: string[];
+function TechCard({ recipe, inventory }: {
+  recipe: Recipe;
+  inventory: Inventory;
 }) {
   const discovered = craftingSystem.isDiscovered(recipe, inventory);
   const canCraft   = discovered && craftingSystem.canCraft(recipe.id, inventory);
@@ -194,8 +194,8 @@ function TechCard({ recipe, inventory, knownMaterials }: {
 
           {discovered && (
             <div className="mt-1.5 flex flex-wrap gap-1">
-              {recipe.inputs.map(inp => {
-                const hasIt = (inventory[inp.resourceId] ?? 0) >= inp.quantity;
+              {recipe.inputs.map((inp: { resourceId: string; quantity: number }) => {
+                const hasIt = ((inventory as unknown as Record<string, number>)[inp.resourceId] ?? 0) >= inp.quantity;
                 return (
                   <span key={inp.resourceId}
                     className={`text-xs px-1.5 py-0.5 rounded ${hasIt ? 'bg-green-900/60 text-green-300' : 'bg-slate-600/60 text-slate-400'}`}>
@@ -208,7 +208,7 @@ function TechCard({ recipe, inventory, knownMaterials }: {
 
           {discovered && recipe.requiresSkill && (
             <p className={`text-xs mt-1 ${hasSkill ? 'text-slate-500' : 'text-purple-400'}`}>
-              {SKILL_LABELS[recipe.requiresSkill.skill]} Stufe {recipe.requiresSkill.level}
+              {SKILL_LABELS[recipe.requiresSkill!.skill]} Stufe {recipe.requiresSkill!.level}
             </p>
           )}
 

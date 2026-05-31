@@ -5446,7 +5446,7 @@ export class GameManager {
   }
 
   // ── Parrots ────────────────────────────────────────────────────────
-  private spawnParrots(world: any) {
+  private spawnParrots(_world: any) {
     const COUNT = 12;
     // Find large tree resource positions
     const resources = useWorldStore.getState().world?.resources ?? [];
@@ -5567,7 +5567,6 @@ export class GameManager {
 
   private drawSeagull(sg: typeof this.seagulls[0]) {
     const g = sg.g; g.clear();
-    const flying = true;
     const wingFlap = Math.sin(Date.now() / 200 + sg.orbitAngle) * 5;
     // body
     g.fillStyle(0xffffff, 0.95); g.fillEllipse(0, 0, 14, 6);
