@@ -182,11 +182,6 @@ export class GameManager {
   private lastDewDay = -1;
   private dewTipShown = false;
 
-  // Fog cache — only redraw when something relevant changes
-  private fogCachePx = -1;
-  private fogCachePy = -1;
-  private fogCacheSight = -1;
-  private fogCacheCampfireKey = '';
   private lowHungerTicks = 0;
 
   private keyPressed = { space: false, e: false, f: false };
@@ -411,7 +406,6 @@ export class GameManager {
       this.game?.loop.wake();
       this.game?.loop.resetDelta(); // discard accumulated time while tab was hidden
       this.skipFrames = 3;
-      this.fogCachePx = -1;         // force fog redraw on return
       this.gameLoop.resume();
     }
   };
@@ -2588,23 +2582,6 @@ export class GameManager {
   private updateFog(px: number, py: number, sightRadius: number) {
     const g = this.fogGraphics!;
     if (!g || !this.scene) return;
-
-    const litCampfireKey = (useWorldStore.getState().world?.structures ?? [])
-      .filter(s => s.type === 'campfire' && (s.fuel ?? 0) > 0)
-      .map(s => `${s.x},${s.y}`)
-      .join('|');
-
-    if (
-      px === this.fogCachePx &&
-      py === this.fogCachePy &&
-      sightRadius === this.fogCacheSight &&
-      litCampfireKey === this.fogCacheCampfireKey
-    ) return; // nothing changed — skip redraw
-
-    this.fogCachePx = px;
-    this.fogCachePy = py;
-    this.fogCacheSight = sightRadius;
-    this.fogCacheCampfireKey = litCampfireKey;
 
     g.clear();
 
