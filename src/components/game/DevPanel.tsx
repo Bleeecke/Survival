@@ -14,6 +14,7 @@ const GIVE_ITEMS: { id: string; label: string; icon: string }[] = [
   { id: 'pebbles',       label: 'Kieselsteine',  icon: '⚪' },
   { id: 'fiber',         label: 'Fasern',        icon: '🧵' },
   { id: 'rope',          label: 'Seil',          icon: '🪢' },
+  { id: 'stone_pickaxe', label: 'Spitzhacke',    icon: '⛏️' },
   { id: 'stone_axe',     label: 'Steinaxt',      icon: '🪓' },
   { id: 'flint_knife',   label: 'Messer',        icon: '🔪' },
   { id: 'stone_spear',   label: 'Speer',         icon: '🗡️' },

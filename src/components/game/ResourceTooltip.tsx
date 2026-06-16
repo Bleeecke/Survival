@@ -19,6 +19,26 @@ const ITEM_NAMES: Record<string, string> = {
   water_container: 'Wassercontainer', cooked_food: 'Gekochtes Essen',
   cooked_fish_meal: 'Gebratener Fisch', herbal_remedy: 'Kräutermittel',
   cooked_mushroom: 'Geb. Pilze',
+  // Bäume & Pflanzen
+  resin_tree: 'Harzbaum', large_tree: 'Großer Baum', banyan_tree: 'Banyanbaum',
+  bamboo: 'Bambus', rubber_tree: 'Kautschukbaum', cacao_tree: 'Kakaobaum',
+  pandanus: 'Pandanus', breadfruit_tree: 'Brotfruchtbaum', berry_bush: 'Beerenstrauch',
+  fern: 'Farn',
+  // Rohstoffe
+  tree_resin: 'Baumharz', coconut: 'Kokosnuss', coconut_shell: 'Kokosschale',
+  coconut_water: 'Kokoswasser', dew_water: 'Tauwasser',
+  obsidian: 'Obsidian', granite: 'Granit',
+  // Tierprod.
+  turtle_meat: 'Schildkrötenfleisch', turtle_shell: 'Schildkrötenpanzer',
+  cooked_turtle: 'Gek. Schildkröte', crab_meat: 'Krabbenfleisch',
+  cooked_crab: 'Gek. Krabbe', boar_meat: 'Wildschweinfleisch',
+  boar_hide: 'Wildschweinfell', cooked_boar: 'Gek. Wildschwein',
+  bone: 'Knochen', hide: 'Tierhaut', fat: 'Tierfett',
+  // Verarbeitetes
+  sharp_flint: 'Gespl. Feuerstein', hardened_stick: 'Gehärteter Ast',
+  bandage: 'Verband', fever_tea: 'Fiebertee', antiparasitic: 'Parasitenmedizin',
+  smoked_meat: 'Geräuchertes Fleisch', dried_fish: 'Getrockneter Fisch',
+  dried_fruit: 'Getrocknete Frucht',
 };
 
 const ITEM_ICON: Record<string, string> = {
@@ -26,6 +46,17 @@ const ITEM_ICON: Record<string, string> = {
   flint: '🔶', driftwood: '🪵', shells: '🐚', palm_leaf: '🌴',
   herbs: '🌿', fiber: '🌾', mushroom: '🍄', exotic_fruit: '🍊',
   vine: '🌿', iron_ore: '🟤', spring: '💧', puddle: '💧', palm_tree: '🌴',
+  fish: '🐟', obsidian: '⬛', granite: '🪨', bamboo: '🎋',
+  resin_tree: '🌳', large_tree: '🌲', banyan_tree: '🌳', rubber_tree: '🌳',
+  cacao_tree: '🌿', pandanus: '🌴', breadfruit_tree: '🌳', berry_bush: '🫐',
+  fern: '🌿', tree_resin: '🫙', coconut: '🥥', coconut_shell: '🥥',
+  coconut_water: '💧', dew_water: '💧',
+  turtle_meat: '🥩', turtle_shell: '🐢', cooked_turtle: '🍖',
+  crab_meat: '🦀', cooked_crab: '🍖', boar_meat: '🥩',
+  boar_hide: '🟫', cooked_boar: '🍖', bone: '🦴', hide: '🟫', fat: '🫙',
+  sharp_flint: '🔷', hardened_stick: '🪵', bandage: '🩹',
+  fever_tea: '🍵', antiparasitic: '💊',
+  smoked_meat: '🍖', dried_fish: '🐟', dried_fruit: '🍊',
 };
 
 const RESOURCE_DESC: Record<string, string> = {
@@ -44,9 +75,28 @@ const RESOURCE_DESC: Record<string, string> = {
   exotic_fruit: 'Exotische Früchte aus dem Dschungel – sehr nahrhaft.',
   vine:         'Lianen – zähe Pflanzenstränge für Seile. Messer nötig.',
   iron_ore:     'Eisenerz aus dem Gebirge – für Metallwerkzeuge. Spitzhacke nötig.',
-  spring:       'Natürliche Wasserquelle – sprudelt unerschöpflich.',
-  puddle:       'Regenpfütze – nur 3 Schlucke Wasser. Wird sofort getrunken, nicht gesammelt.',
-  palm_tree:    'Palme – gibt Palmenblätter beim Ablesen. Mit Messer auch Fasern.',
+  spring:          'Natürliche Wasserquelle – sprudelt unerschöpflich.',
+  puddle:          'Regenpfütze – nur 3 Schlucke Wasser. Wird sofort getrunken, nicht gesammelt.',
+  palm_tree:       'Palme – gibt Palmenblätter beim Ablesen. Mit Messer auch Fasern.',
+  fish:            'Fisch aus dem Meer – rohes Protein. Angel oder Speer zum Fangen nötig.',
+  resin_tree:      'Knorriger Baum mit harzreicher Rinde. Kerbe einritzen, Harz mit Kokosschale auffangen. Regeneriert nach einiger Zeit.',
+  large_tree:      'Mächtiger Urwaldbaum – liefert viel Holz. Nur mit Axt fällbar.',
+  banyan_tree:     'Banyanbaum mit Luftwurzeln – sehr hartes Holz, ergiebig. Benötigt Axt.',
+  bamboo:          'Schnell wachsendes Bambusrohr – vielseitiges Baumaterial.',
+  rubber_tree:     'Kautschukbaum – aus dem Saft lässt sich Kautschuk gewinnen.',
+  cacao_tree:      'Kakaobaum – die Früchte enthalten Kakaobohnen.',
+  pandanus:        'Schraubenpalme mit langen, rasiermesserscharfen Blättern. Früchte essbar.',
+  breadfruit_tree: 'Brotfruchtbaum – die stärkereichen Früchte sättigen gut.',
+  berry_bush:      'Beerenstrauch – trägt wilde Beeren. Regelmäßig ernten.',
+  fern:            'Großer Farn – Blätter sammeln Tau. Bei Regen auffangen möglich.',
+  tree_resin:      'Bernsteinfarbenes Baumharz – Klebstoff, Dichtmasse und Brennstoff.',
+  coconut:         'Kokosnuss – enthält Kokoswasser und Fruchtfleisch.',
+  coconut_shell:   'Halbe Kokosschale – als Auffangbehälter für Harzbäume unverzichtbar.',
+  obsidian:        'Vulkanisches Glas – extrem scharf, schwer abzubauen. Spitzhacke nötig.',
+  granite:         'Hartes Granitgestein – langlebiges Baumaterial. Spitzhacke nötig.',
+  bone:            'Tierknochen – Material für Werkzeuge und Nadeln.',
+  hide:            'Rohe Tierhaut – zum Gerben und Herstellen von Lederausrüstung.',
+  fat:             'Tierfett – für Fackeln, Lampen und als Konservierungsmittel.',
 };
 
 const GATHER_INFO: Record<string, { tool?: string; yield?: string }> = {
@@ -58,7 +108,15 @@ const GATHER_INFO: Record<string, { tool?: string; yield?: string }> = {
   fiber:    { tool: '🔪 Messer empfohlen',         yield: 'Ohne: ×1 | Messer: ×3 | Axt: ×4' },
   vine:     { tool: '🔪 Messer empfohlen',         yield: 'Ohne: ×1 | Messer: ×2' },
   herbs:    { yield: 'Messer: ×2' },
-  palm_tree:{ tool: '🔪 Messer für Fasern',        yield: 'Ohne: ×1 Blatt | Messer: ×2 Blatt +1 Faser' },
+  palm_tree:       { tool: '🔪 Messer für Fasern',           yield: 'Ohne: ×1 Blatt | Messer: ×2 Blatt +1 Faser' },
+  fish:            { tool: '🎣 Angel oder 🏹 Speer',         yield: 'Speer: 40% Chance | Angel: sicher' },
+  resin_tree:      { tool: '🪓 Axt + 🥥 Kokosschale',        yield: '×1–5 Baumharz je nach Vorkommen' },
+  large_tree:      { tool: '🪓 Axt erforderlich',            yield: '×8–12 Holz' },
+  banyan_tree:     { tool: '🪓 Axt erforderlich',            yield: '×10–15 Holz' },
+  bamboo:          { tool: '🔪 Messer empfohlen',            yield: 'Messer: ×3 | Ohne: ×1' },
+  breadfruit_tree: { tool: '🔪 Messer empfohlen',            yield: 'Messer: schneller & mehr' },
+  obsidian:        { tool: '⛏️ Spitzhacke erforderlich',     yield: '×1–2 Obsidian' },
+  granite:         { tool: '⛏️ Spitzhacke erforderlich',     yield: '×2–4 Granit' },
 };
 
 // Circumference of progress circle (r=8)

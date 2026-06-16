@@ -75,6 +75,9 @@ interface GameStore {
   setAwakeningBlur: (v: number) => void;
   setIsNewGame: (v: boolean) => void;
 
+  nextRainDay: number;
+  setNextRainDay: (day: number) => void;
+
   setPhase: (phase: GamePhase) => void;
   setPaused: (paused: boolean) => void;
   setDifficulty: (diff: Difficulty) => void;
@@ -96,6 +99,8 @@ export const useGameStore = create<GameStore>()(
       isPaused: false,
       elapsedTime: 0,
       score: 0,
+      nextRainDay: 2,
+      setNextRainDay: (day) => set({ nextRainDay: day }),
       showSleepMenu: false,
       sleepQuality: 'outdoor' as 'cabin' | 'shelter' | 'spot' | 'outdoor',
       campfireNear: false,
@@ -167,6 +172,7 @@ export const useGameStore = create<GameStore>()(
           isPaused: false,
           elapsedTime: 225_000,
           score: 0,
+          nextRainDay: 2,
           showSleepMenu: false,
           sleepQuality: 'outdoor' as 'cabin' | 'shelter' | 'spot' | 'outdoor',
           gatherMenuOpen: false,

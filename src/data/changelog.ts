@@ -6,6 +6,23 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '2.0',
+    date: '16.06.2026',
+    changes: [
+      'Spieler: neues Sprite mit Trapezrumpf, Füßen, Händen, Ohr & Nase — 8-Frame-Laufanimation (sin-basiert)',
+      'Harzbaum: dynamisches Sprite — unberührt / fließend (Kerbe + Harztropfen) / vernarbt',
+      'Palmendach: realistisches Lean-to mit sichtbaren Ästen als Gerüst und überlappenden Palmenblatt-Reihen',
+      'Äste: drei unterschiedliche Stäbe mit Knoten, Astgabel und Schattenellipse',
+      'Muscheln: drei Typen (liegend, aufgerichtet, flach) mit individuellen Farben und Spiralmustern',
+      'Hover-Tooltip: alle Ressourcen haben jetzt deutsche Namen, Icons und Beschreibungen',
+      'Regen-Bug: nextRainDay wird jetzt im Store persistiert — Reloads schieben den Regen nicht mehr auf',
+      'Regen fällt jetzt garantiert am Abend von Tag 2 (15–22 Uhr Spielzeit)',
+      'DevRain löst jetzt auch knows_basic_shelter aus',
+      'Neues Spiel mit aktivem DevMode überspringt die Intro-Sequenz direkt',
+      'Fix: schwarzer Bildschirm beim ersten Spielstart behoben (GameCanvas-Initialisierungsrace)',
+    ],
+  },
+  {
     version: '1.9',
     date: '31.05.2026',
     changes: [

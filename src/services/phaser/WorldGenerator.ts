@@ -52,6 +52,23 @@ export class WorldGenerator {
     const puddles = this.placePuddles(tileMap, spawnX, spawnY, rng);
     resources.push(...puddles);
 
+    // DEV: 5×5 ore test block north of spawn on the beach
+    const oreTypes = ['stone', 'stone', 'iron_ore', 'stone', 'granite'];
+    for (let dy = -12; dy <= -8; dy++) {
+      for (let dx = -2; dx <= 2; dx++) {
+        const bx = spawnX + dx, by = spawnY + dy;
+        if (bx < 1 || by < 1 || bx >= width - 1 || by >= height - 1) continue;
+        if (resources.some(r => r.x === bx && r.y === by)) continue;
+        const tile = tileMap[by][bx];
+        if (!tile.walkable) continue;
+        const type = oreTypes[(dx + 2 + (dy + 12) * 5) % oreTypes.length];
+        resources.push({
+          id: `dev-ore-${bx}-${by}`, type, x: bx, y: by,
+          quantity: 6, maxQuantity: 6, regenerationTime: 180000, lastHarvestedAt: undefined,
+        });
+      }
+    }
+
     const shipwreck = this.generateShipwreck(tileMap, spawnX, spawnY, rng);
 
     return { seed, width, height, tileMap, resources, structures: [], droppedItems: [], spawnX, spawnY, shipwreck };
@@ -281,10 +298,6 @@ export class WorldGenerator {
         clusterCount: 10, radius: 6, density: 0.18,
         spawnOn: ['forest', 'sparse_forest'], minQ: 1, maxQ: 1, minDistFromSpawn: 20,
       },
-      bamboo: {
-        clusterCount: 12, radius: 5, density: 0.28,
-        spawnOn: ['forest', 'dense_jungle'], minQ: 1, maxQ: 1, minDistFromSpawn: 15,
-      },
       obsidian: {
         clusterCount: 3, radius: 5, density: 0.20,
         spawnOn: ['mountain'], minQ: 1, maxQ: 2, minDistFromSpawn: 80,
@@ -295,7 +308,16 @@ export class WorldGenerator {
       },
     };
 
-    for (const [type, cfg] of Object.entries(configs)) {
+    const bambooPasses: ClusterConfig[] = [
+      { clusterCount: 5,  radius: 12, density: 0.28, spawnOn: ['forest', 'dense_jungle'],              minQ: 1, maxQ: 1, minDistFromSpawn: 20 },
+      { clusterCount: 22, radius: 3,  density: 0.45, spawnOn: ['forest', 'dense_jungle', 'sparse_forest'], minQ: 1, maxQ: 1, minDistFromSpawn: 15 },
+    ];
+    const allConfigs: Array<[string, ClusterConfig]> = [
+      ...Object.entries(configs),
+      ...bambooPasses.map(cfg => ['bamboo', cfg] as [string, ClusterConfig]),
+    ];
+
+    for (const [type, cfg] of allConfigs) {
       const def = RESOURCE_TYPES[type];
       if (!def) continue;
 

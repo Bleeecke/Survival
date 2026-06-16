@@ -30,7 +30,8 @@ export default function MainMenu() {
     const world = new WorldGenerator().generate(seed);
     initializeWorld(world);
     usePlayerStore.getState().movePlayer(world.spawnX, world.spawnY);
-    useGameStore.getState().setIsNewGame(true);
+    const skipIntro = useGameStore.getState().devMode;
+    useGameStore.getState().setIsNewGame(!skipIntro);
     setPhase('playing');
   };
 

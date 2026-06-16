@@ -57,7 +57,6 @@ export class GameManager {
   private placementGraphics: Phaser.GameObjects.Graphics | null = null;
   private placementTileX = -1;
   private placementTileY = -1;
-  private nextRainDay = -1;
   private isRaining = false;
   private rainTimer = 0;
   private rainType: 'drizzle'|'shower'|'rain'|'downpour'|'storm'|'long_rain' = 'rain';
@@ -374,10 +373,9 @@ export class GameManager {
       this.updateFog(player.x, player.y, SIGHT_DAY);
     }
 
-    // Rain scheduling — initialize based on current day so save/reload works
+    // Rain scheduling — nextRainDay is persisted in store, so reloads don't defer rain
     {
       const startDay = Math.floor(useGameStore.getState().elapsedTime / DAY_DURATION_MS);
-      this.nextRainDay = startDay < 2 ? 2 : startDay + 1;
       this.lastGameDay = startDay;
     }
 
@@ -798,7 +796,7 @@ export class GameManager {
       ? res.y + 1  // sort as if they're 1 tile further south (canopy appears in front)
       : res.y;
     g.setDepth(this.objectDepth(res.x, depthTy));
-    this.drawResource(g, res.type, res.x, res.y, res.quantity);
+    this.drawResource(g, res.type, res.x, res.y, res.quantity, res.maxQuantity);
     this.resourceQuantities.set(res.id, res.quantity);
     this.resourceObjects.set(res.id, g);
   }
@@ -983,7 +981,8 @@ export class GameManager {
   private syncResources(world: any) {
     for (const res of world.resources) {
       const hasObj = this.resourceObjects.has(res.id);
-      const alwaysShow = res.type === 'berry_bush' || res.type === 'exotic_fruit' || res.type === 'palm_tree';
+      const alwaysShow = res.type === 'berry_bush' || res.type === 'exotic_fruit' || res.type === 'palm_tree'
+        || res.type === 'stone' || res.type === 'iron_ore' || res.type === 'obsidian' || res.type === 'granite';
       if ((res.quantity > 0 || alwaysShow) && !hasObj) {
         this.createResourceObject(res);
       } else if (res.quantity <= 0 && hasObj && !alwaysShow) {
@@ -996,7 +995,7 @@ export class GameManager {
         if (prev !== res.quantity) {
           const g = this.resourceObjects.get(res.id)!;
           g.clear();
-          this.drawResource(g, res.type, res.x, res.y, res.quantity);
+          this.drawResource(g, res.type, res.x, res.y, res.quantity, res.maxQuantity);
           this.resourceQuantities.set(res.id, res.quantity);
         }
       }
@@ -1133,14 +1132,14 @@ export class GameManager {
     g.fillCircle(cx, cy - 8, 2);
   }
 
-  private drawResource(g: Phaser.GameObjects.Graphics, type: string, tx: number, ty: number, quantity = 0) {
+  private drawResource(g: Phaser.GameObjects.Graphics, type: string, tx: number, ty: number, quantity = 0, maxQuantity = 0) {
     const cx = tx * TS + TS / 2;
     // base = ground anchor at bottom of tile
     const base = ty * TS + TS - 4;
 
-    // Deterministic per-tile size variation for trees (0.75 – 1.25)
+    // Deterministic per-tile size variation for trees (1.2 – 2.1)
     const treeSeed = (tx * 374761 + ty * 914723) % 100;
-    const sc = 0.75 + treeSeed / 200; // 0.75 … 1.25
+    const sc = 1.2 + treeSeed / 111; // 1.2 … 2.1
 
     switch (type) {
       case 'wood': {
@@ -1164,16 +1163,26 @@ export class GameManager {
         break;
       }
       case 'stone': {
-        // Shadow
-        g.fillStyle(0x000000, 0.2);
-        g.fillEllipse(cx, base + 2, 20, 6);
-        // Rock body with slight height
-        g.fillStyle(0x7a7a7a);
-        g.fillEllipse(cx, base - 7, 22, 16);
-        g.fillStyle(0xaaaaaa, 0.6);
-        g.fillEllipse(cx - 4, base - 11, 12, 8);
-        g.fillStyle(0x555555, 0.4);
-        g.fillEllipse(cx + 5, base - 4, 9, 6);
+        const ow = Math.round(30 * sc), oh = Math.round(24 * sc);
+        const otop = base - oh;
+        g.fillStyle(0x000000, 0.28);
+        g.fillEllipse(cx, base + 4, Math.round(38 * sc), Math.round(10 * sc));
+        g.fillStyle(0x404040);
+        g.fillEllipse(cx + Math.round(2*sc), base - oh/2 + Math.round(4*sc), ow, oh);
+        g.fillStyle(0x717171);
+        g.fillEllipse(cx, base - oh/2, ow - Math.round(2*sc), oh - Math.round(2*sc));
+        g.fillStyle(0xaaaaaa, 0.65);
+        g.fillEllipse(cx - Math.round(6*sc), otop + Math.round(7*sc), Math.round(16*sc), Math.round(9*sc));
+        g.fillStyle(0xc8c8c8, 0.35);
+        g.fillEllipse(cx - Math.round(3*sc), otop + Math.round(3*sc), Math.round(20*sc), Math.round(6*sc));
+        g.fillStyle(0x333333, 0.45);
+        g.fillEllipse(cx + Math.round(9*sc), base - Math.round(7*sc), Math.round(9*sc), Math.round(6*sc));
+        // cracks
+        { const dmg = maxQuantity > 0 ? 1 - quantity / maxQuantity : 0;
+          if (dmg > 0.15) { g.lineStyle(Math.round(1.5*sc), 0x000000, 0.7); g.lineBetween(cx, base - Math.round(4*sc), cx - Math.round(8*sc), base - Math.round(16*sc)); g.lineBetween(cx, base - Math.round(4*sc), cx + Math.round(6*sc), base - Math.round(10*sc)); }
+          if (dmg > 0.40) { g.lineStyle(Math.round(1.5*sc), 0x000000, 0.6); g.lineBetween(cx - Math.round(8*sc), base - Math.round(16*sc), cx - Math.round(14*sc), base - Math.round(11*sc)); g.lineBetween(cx + Math.round(6*sc), base - Math.round(10*sc), cx + Math.round(12*sc), base - Math.round(6*sc)); g.lineBetween(cx - Math.round(3*sc), base - Math.round(6*sc), cx - Math.round(10*sc), base - Math.round(3*sc)); }
+          if (dmg > 0.65) { g.lineStyle(Math.round(2*sc), 0x000000, 0.8); g.lineBetween(cx + Math.round(2*sc), base - Math.round(18*sc), cx + Math.round(10*sc), base - Math.round(22*sc)); g.lineBetween(cx - Math.round(12*sc), base - Math.round(8*sc), cx - Math.round(6*sc), base - Math.round(20*sc)); g.fillStyle(0x222222, 0.4); g.fillEllipse(cx - Math.round(2*sc), base - Math.round(10*sc), Math.round(10*sc), Math.round(7*sc)); }
+        }
         break;
       }
       case 'food': {
@@ -1188,10 +1197,27 @@ export class GameManager {
         break;
       }
       case 'sticks': {
-        g.lineStyle(2, 0x8b5e2a, 0.9);
-        g.lineBetween(cx - 7, base, cx + 2, base - 8);
-        g.lineBetween(cx - 2, base + 1, cx + 6, base - 6);
-        g.lineBetween(cx - 5, base - 2, cx + 4, base - 4);
+        // Shadow
+        g.fillStyle(0x000000, 0.12);
+        g.fillEllipse(cx, base + 1, 18, 4);
+        // Stick 1 — thick, dark brown, diagonal
+        g.lineStyle(2.5, 0x6b3f1a, 0.95);
+        g.lineBetween(cx - 8, base + 1, cx + 3, base - 9);
+        // Knot on stick 1
+        g.lineStyle(1.5, 0x4a2a0e, 0.8);
+        g.lineBetween(cx - 5, base - 2, cx - 7, base - 4);
+        // Stick 2 — medium, reddish-brown
+        g.lineStyle(2, 0x8b4a1e, 0.9);
+        g.lineBetween(cx - 2, base + 2, cx + 7, base - 7);
+        // Branch fork on stick 2
+        g.lineStyle(1, 0x7a3e18, 0.75);
+        g.lineBetween(cx + 5, base - 5, cx + 7, base - 3);
+        // Stick 3 — thin, weathered grey-brown, nearly flat
+        g.lineStyle(1.5, 0x9a7a4a, 0.85);
+        g.lineBetween(cx - 6, base - 1, cx + 5, base - 4);
+        // Highlight on stick 3
+        g.lineStyle(1, 0xc4a060, 0.4);
+        g.lineBetween(cx - 5, base - 2, cx + 2, base - 4);
         break;
       }
       case 'pebbles': {
@@ -1348,50 +1374,91 @@ export class GameManager {
         break;
       }
       case 'iron_ore': {
-        g.fillStyle(0x000000, 0.2);
-        g.fillEllipse(cx, base + 2, 18, 5);
-        g.fillStyle(0x4a4040);
-        g.fillEllipse(cx, base - 8, 20, 14);
-        g.fillStyle(0xb45309, 0.9);
-        g.fillEllipse(cx - 3, base - 10, 6, 4);
-        g.fillStyle(0xd97706, 0.7);
-        g.fillEllipse(cx + 4, base - 6, 4, 3);
+        const ow = Math.round(28 * sc), oh = Math.round(22 * sc);
+        const otop = base - oh;
+        g.fillStyle(0x000000, 0.28);
+        g.fillEllipse(cx, base + 4, Math.round(36 * sc), Math.round(9 * sc));
+        // Dark host rock
+        g.fillStyle(0x3a3030);
+        g.fillEllipse(cx + Math.round(2*sc), base - oh/2 + Math.round(3*sc), ow, oh);
+        g.fillStyle(0x524040);
+        g.fillEllipse(cx, base - oh/2, ow - Math.round(2*sc), oh - Math.round(2*sc));
+        // Ore veins — rust/amber streaks
+        g.fillStyle(0x9a3e0a, 0.9);
+        g.fillEllipse(cx - Math.round(5*sc), base - Math.round(10*sc), Math.round(14*sc), Math.round(6*sc));
+        g.fillStyle(0xc45a10, 0.8);
+        g.fillEllipse(cx + Math.round(4*sc), base - Math.round(15*sc), Math.round(9*sc), Math.round(5*sc));
+        g.fillStyle(0xe07020, 0.7);
+        g.fillEllipse(cx - Math.round(2*sc), base - Math.round(18*sc), Math.round(7*sc), Math.round(4*sc));
+        // Surface shimmer
+        g.fillStyle(0xf09030, 0.35);
+        g.fillEllipse(cx - Math.round(7*sc), otop + Math.round(5*sc), Math.round(12*sc), Math.round(5*sc));
+        // cracks
+        { const dmg = maxQuantity > 0 ? 1 - quantity / maxQuantity : 0;
+          if (dmg > 0.15) { g.lineStyle(Math.round(1.5*sc), 0x1a0a00, 0.75); g.lineBetween(cx, base - Math.round(5*sc), cx - Math.round(7*sc), base - Math.round(15*sc)); g.lineBetween(cx, base - Math.round(5*sc), cx + Math.round(8*sc), base - Math.round(9*sc)); }
+          if (dmg > 0.40) { g.lineStyle(Math.round(1.5*sc), 0x1a0a00, 0.65); g.lineBetween(cx - Math.round(7*sc), base - Math.round(15*sc), cx - Math.round(13*sc), base - Math.round(10*sc)); g.lineBetween(cx + Math.round(8*sc), base - Math.round(9*sc), cx + Math.round(11*sc), base - Math.round(4*sc)); g.lineBetween(cx - Math.round(2*sc), base - Math.round(7*sc), cx - Math.round(9*sc), base - Math.round(4*sc)); }
+          if (dmg > 0.65) { g.lineStyle(Math.round(2*sc), 0x1a0a00, 0.85); g.lineBetween(cx + Math.round(2*sc), base - Math.round(17*sc), cx + Math.round(9*sc), base - Math.round(21*sc)); g.lineBetween(cx - Math.round(11*sc), base - Math.round(7*sc), cx - Math.round(5*sc), base - Math.round(19*sc)); g.fillStyle(0x1a0a00, 0.45); g.fillEllipse(cx - Math.round(1*sc), base - Math.round(9*sc), Math.round(9*sc), Math.round(6*sc)); }
+        }
         break;
       }
 
       case 'obsidian': {
-        // Glassy black volcanic rock — sharp angular shards
-        g.fillStyle(0x000000, 0.25);
-        g.fillEllipse(cx, base + 2, 20, 6);
-        g.fillStyle(0x0d0d12);
-        g.fillEllipse(cx, base - 8, 20, 14);
-        g.fillStyle(0x1a1a2e, 0.9);
-        g.fillEllipse(cx - 3, base - 12, 8, 5);
-        // Glassy highlight
-        g.fillStyle(0x6060a0, 0.6);
-        g.fillRect(cx - 5, base - 14, 4, 2);
-        g.fillStyle(0x9090d0, 0.4);
-        g.fillRect(cx - 4, base - 15, 2, 1);
+        const ow = Math.round(26 * sc), oh = Math.round(22 * sc);
+        const otop = base - oh;
+        g.fillStyle(0x000000, 0.35);
+        g.fillEllipse(cx, base + 4, Math.round(34 * sc), Math.round(9 * sc));
+        // Volcanic black mass
+        g.fillStyle(0x050508);
+        g.fillEllipse(cx + Math.round(2*sc), base - oh/2 + Math.round(3*sc), ow, oh);
+        g.fillStyle(0x0d0d18);
+        g.fillEllipse(cx, base - oh/2, ow - Math.round(2*sc), oh - Math.round(2*sc));
+        // Deep blue-purple highlights (glassy surface)
+        g.fillStyle(0x1c1c40, 0.9);
+        g.fillEllipse(cx - Math.round(5*sc), otop + Math.round(7*sc), Math.round(14*sc), Math.round(8*sc));
+        g.fillStyle(0x4040a0, 0.6);
+        g.fillEllipse(cx - Math.round(7*sc), otop + Math.round(4*sc), Math.round(10*sc), Math.round(5*sc));
+        // Bright glassy sheen
+        g.fillStyle(0x9090e0, 0.5);
+        g.fillRect(cx - Math.round(8*sc), otop + Math.round(3*sc), Math.round(5*sc), Math.round(2*sc));
+        g.fillStyle(0xc0c0ff, 0.3);
+        g.fillRect(cx - Math.round(7*sc), otop + Math.round(2*sc), Math.round(3*sc), Math.round(1*sc));
+        // cracks (show as bright purple fractures in glass)
+        { const dmg = maxQuantity > 0 ? 1 - quantity / maxQuantity : 0;
+          if (dmg > 0.15) { g.lineStyle(Math.round(1.5*sc), 0x6060c0, 0.8); g.lineBetween(cx, base - Math.round(4*sc), cx - Math.round(7*sc), base - Math.round(16*sc)); g.lineBetween(cx, base - Math.round(4*sc), cx + Math.round(7*sc), base - Math.round(10*sc)); }
+          if (dmg > 0.40) { g.lineStyle(Math.round(1.5*sc), 0x8080d0, 0.7); g.lineBetween(cx - Math.round(7*sc), base - Math.round(16*sc), cx - Math.round(13*sc), base - Math.round(11*sc)); g.lineBetween(cx + Math.round(7*sc), base - Math.round(10*sc), cx + Math.round(12*sc), base - Math.round(5*sc)); g.lineBetween(cx - Math.round(2*sc), base - Math.round(7*sc), cx - Math.round(9*sc), base - Math.round(4*sc)); }
+          if (dmg > 0.65) { g.lineStyle(Math.round(2*sc), 0xa0a0f0, 0.9); g.lineBetween(cx + Math.round(2*sc), base - Math.round(18*sc), cx + Math.round(10*sc), base - Math.round(22*sc)); g.lineBetween(cx - Math.round(11*sc), base - Math.round(8*sc), cx - Math.round(5*sc), base - Math.round(20*sc)); g.fillStyle(0x2020508, 0.5); g.fillEllipse(cx - Math.round(1*sc), base - Math.round(10*sc), Math.round(10*sc), Math.round(7*sc)); }
+        }
         break;
       }
       case 'granite': {
-        // Grey speckled granite boulder
-        g.fillStyle(0x000000, 0.2);
-        g.fillEllipse(cx, base + 2, 24, 7);
-        g.fillStyle(0x8a8a8a);
-        g.fillEllipse(cx, base - 9, 24, 18);
-        g.fillStyle(0xb0b0b0, 0.5);
-        g.fillEllipse(cx - 5, base - 14, 12, 8);
-        // Pink feldspar specks
-        g.fillStyle(0xc89090, 0.5);
-        g.fillCircle(cx + 3, base - 8, 2);
-        g.fillCircle(cx - 6, base - 6, 2);
+        const ow = Math.round(32 * sc), oh = Math.round(26 * sc);
+        const otop = base - oh;
+        g.fillStyle(0x000000, 0.25);
+        g.fillEllipse(cx, base + 4, Math.round(40 * sc), Math.round(11 * sc));
+        g.fillStyle(0x5a5050);
+        g.fillEllipse(cx + Math.round(2*sc), base - oh/2 + Math.round(4*sc), ow, oh);
+        g.fillStyle(0x888080);
+        g.fillEllipse(cx, base - oh/2, ow - Math.round(2*sc), oh - Math.round(2*sc));
+        g.fillStyle(0xb0a8a8, 0.6);
+        g.fillEllipse(cx - Math.round(7*sc), otop + Math.round(7*sc), Math.round(18*sc), Math.round(10*sc));
+        g.fillStyle(0xc8c0c0, 0.35);
+        g.fillEllipse(cx - Math.round(3*sc), otop + Math.round(3*sc), Math.round(22*sc), Math.round(7*sc));
+        // Pink feldspar patches
+        g.fillStyle(0xc89090, 0.55);
+        g.fillCircle(cx + Math.round(5*sc), base - Math.round(9*sc), Math.round(3*sc));
+        g.fillCircle(cx - Math.round(8*sc), base - Math.round(7*sc), Math.round(3*sc));
+        g.fillCircle(cx + Math.round(2*sc), base - Math.round(17*sc), Math.round(2*sc));
         // Dark mica flecks
-        g.fillStyle(0x333333, 0.4);
-        g.fillCircle(cx + 6, base - 12, 1);
-        g.fillCircle(cx - 2, base - 5, 1);
-        g.fillStyle(0x606060, 0.4);
-        g.fillEllipse(cx + 5, base - 4, 8, 5);
+        g.fillStyle(0x333333, 0.5);
+        g.fillCircle(cx + Math.round(8*sc), base - Math.round(14*sc), Math.round(1.5*sc));
+        g.fillCircle(cx - Math.round(4*sc), base - Math.round(6*sc), Math.round(1.5*sc));
+        g.fillCircle(cx + Math.round(11*sc), base - Math.round(8*sc), Math.round(1.5*sc));
+        // cracks
+        { const dmg = maxQuantity > 0 ? 1 - quantity / maxQuantity : 0;
+          if (dmg > 0.15) { g.lineStyle(Math.round(1.5*sc), 0x222222, 0.7); g.lineBetween(cx, base - Math.round(5*sc), cx - Math.round(8*sc), base - Math.round(18*sc)); g.lineBetween(cx, base - Math.round(5*sc), cx + Math.round(7*sc), base - Math.round(11*sc)); }
+          if (dmg > 0.40) { g.lineStyle(Math.round(1.5*sc), 0x222222, 0.6); g.lineBetween(cx - Math.round(8*sc), base - Math.round(18*sc), cx - Math.round(15*sc), base - Math.round(12*sc)); g.lineBetween(cx + Math.round(7*sc), base - Math.round(11*sc), cx + Math.round(13*sc), base - Math.round(6*sc)); g.lineBetween(cx - Math.round(3*sc), base - Math.round(8*sc), cx - Math.round(11*sc), base - Math.round(4*sc)); }
+          if (dmg > 0.65) { g.lineStyle(Math.round(2*sc), 0x111111, 0.85); g.lineBetween(cx + Math.round(3*sc), base - Math.round(20*sc), cx + Math.round(11*sc), base - Math.round(24*sc)); g.lineBetween(cx - Math.round(13*sc), base - Math.round(9*sc), cx - Math.round(6*sc), base - Math.round(22*sc)); g.fillStyle(0x1a1a1a, 0.45); g.fillEllipse(cx - Math.round(2*sc), base - Math.round(11*sc), Math.round(11*sc), Math.round(7*sc)); }
+        }
         break;
       }
 
@@ -1463,12 +1530,37 @@ export class GameManager {
         break;
       }
       case 'shells': {
-        g.fillStyle(0xf0e8d8);
-        g.fillEllipse(cx - 4, base - 2, 8, 5);
-        g.fillStyle(0xe8dfc8, 0.9);
-        g.fillEllipse(cx + 4, base - 4, 7, 4);
-        g.fillStyle(0xfff8ee, 0.8);
-        g.fillEllipse(cx, base, 6, 4);
+        // Shadow
+        g.fillStyle(0x000000, 0.12);
+        g.fillEllipse(cx, base + 1, 20, 4);
+
+        // Muschel 1 — links, flach liegend, cremeweiß mit Spirallinien
+        g.fillStyle(0xf4ead8);
+        g.fillEllipse(cx - 5, base - 2, 10, 6);
+        g.fillStyle(0xe0d0b8, 0.6);
+        g.fillEllipse(cx - 5, base - 2, 7, 4);
+        // Spirallinien
+        g.lineStyle(0.8, 0xb8a888, 0.7);
+        g.lineBetween(cx - 8, base - 1, cx - 3, base - 4);
+        g.lineBetween(cx - 7, base - 3, cx - 4, base - 1);
+        g.lineStyle(0.6, 0xfff8ee, 0.5);
+        g.lineBetween(cx - 6, base - 2, cx - 4, base - 3);
+
+        // Muschel 2 — rechts, aufgerichtet (schmal = Seitenansicht), rosé
+        g.fillStyle(0xe8c8b8);
+        g.fillEllipse(cx + 5, base - 4, 5, 9);
+        g.fillStyle(0xd4a898, 0.7);
+        g.fillEllipse(cx + 5, base - 4, 3, 6);
+        g.lineStyle(0.7, 0xc09080, 0.6);
+        g.lineBetween(cx + 5, base - 7, cx + 5, base - 1);
+
+        // Muschel 3 — vorne mittig, gelblich, flach
+        g.fillStyle(0xf0dfa0);
+        g.fillEllipse(cx, base + 1, 8, 4);
+        g.fillStyle(0xe8d080, 0.5);
+        g.fillEllipse(cx, base + 1, 5, 2.5);
+        g.lineStyle(0.7, 0xc8b060, 0.55);
+        g.lineBetween(cx - 3, base + 1, cx + 3, base);
         break;
       }
       case 'palm_leaf': {
@@ -1666,20 +1758,64 @@ export class GameManager {
         break;
       }
       case 'resin_tree': {
-        const th = Math.round(18 * sc);
+        const th = Math.round(22 * sc);
+        const tapped = quantity < maxQuantity; // ever harvested
+        const flowing = quantity > 0 && tapped;
+        const exhausted = quantity === 0;
+
+        // Shadow
         g.fillStyle(0x000000, 0.15);
-        g.fillEllipse(cx, base + 2, Math.round(22 * sc), Math.round(5 * sc));
-        g.fillStyle(0x4a2a10);
-        g.fillRect(cx - Math.round(4*sc), base - th, Math.round(8*sc), th);
-        g.fillStyle(0xd4820a, 0.9);
-        g.fillRect(cx - Math.round(2*sc), base - Math.round(14*sc), Math.round(3*sc), Math.round(6*sc));
-        g.fillStyle(0xf0a020, 0.7);
-        g.fillRect(cx + Math.round(sc),   base - Math.round(10*sc), Math.round(2*sc), Math.round(4*sc));
-        g.fillStyle(0x1e5010);
-        g.fillCircle(cx, base - th - 4, Math.round(9*sc));
-        g.fillStyle(0x285c18, 0.8);
-        g.fillCircle(cx - Math.round(4*sc), base - th,     Math.round(6*sc));
-        g.fillCircle(cx + Math.round(4*sc), base - th - 2, Math.round(6*sc));
+        g.fillEllipse(cx, base + 2, Math.round(26 * sc), Math.round(6 * sc));
+
+        // Trunk — conical (wider at base)
+        g.fillStyle(tapped ? 0x3a2008 : 0x5a3010);
+        g.fillTriangle(
+          cx - Math.round(5*sc), base,
+          cx + Math.round(5*sc), base,
+          cx + Math.round(2*sc), base - th,
+        );
+        g.fillTriangle(
+          cx - Math.round(5*sc), base,
+          cx - Math.round(2*sc), base - th,
+          cx + Math.round(2*sc), base - th,
+        );
+        // Bark texture lines
+        g.lineStyle(Math.round(sc), tapped ? 0x1e0f00 : 0x2e1800, 0.5);
+        g.lineBetween(cx - Math.round(1*sc), base, cx - Math.round(1*sc), base - th);
+        g.lineBetween(cx + Math.round(2*sc), base, cx + Math.round(2*sc), base - th);
+
+        if (tapped) {
+          // V-shaped tapping cuts into bark
+          g.lineStyle(Math.round(1.5*sc), 0x100800, 0.85);
+          g.lineBetween(cx - Math.round(3*sc), base - Math.round(9*sc), cx, base - Math.round(12*sc));
+          g.lineBetween(cx + Math.round(3*sc), base - Math.round(9*sc), cx, base - Math.round(12*sc));
+          // Hardened resin scar below cut
+          g.fillStyle(exhausted ? 0x8b5a00 : 0xb87010, 0.75);
+          g.fillEllipse(cx, base - Math.round(8*sc), Math.round(4*sc), Math.round(3*sc));
+        }
+
+        if (flowing) {
+          // Resin drip — amber drop running down from cut
+          g.fillStyle(0xe8920a, 0.95);
+          g.fillEllipse(cx, base - Math.round(10*sc), Math.round(3*sc), Math.round(5*sc));
+          g.fillStyle(0xf5b830, 0.6);
+          g.fillCircle(cx - Math.round(sc), base - Math.round(12*sc), Math.round(sc));
+          // Thin drip trail
+          g.lineStyle(Math.round(1.5*sc), 0xd4820a, 0.8);
+          g.lineBetween(cx, base - Math.round(8*sc), cx, base - Math.round(5*sc));
+          // Puddle at base of trunk
+          g.fillStyle(0xd4820a, 0.5);
+          g.fillEllipse(cx + Math.round(sc), base - Math.round(2*sc), Math.round(5*sc), Math.round(2*sc));
+        }
+
+        // Canopy — 3 layered circles for depth
+        g.fillStyle(exhausted ? 0x2a5a1a : 0x1e5c0e);
+        g.fillCircle(cx - Math.round(4*sc), base - th - Math.round(2*sc), Math.round(8*sc));
+        g.fillCircle(cx + Math.round(4*sc), base - th - Math.round(3*sc), Math.round(7*sc));
+        g.fillStyle(exhausted ? 0x347020 : 0x267018, 0.9);
+        g.fillCircle(cx, base - th - Math.round(6*sc), Math.round(10*sc));
+        g.fillStyle(exhausted ? 0x3a8028 : 0x1a4a0a, 0.5);
+        g.fillCircle(cx, base - th - Math.round(2*sc), Math.round(7*sc)); // darker underside
         break;
       }
       case 'pandanus': {
@@ -1760,35 +1896,69 @@ export class GameManager {
         break;
       }
       case 'bamboo': {
-        g.fillStyle(0x000000, 0.15);
-        g.fillEllipse(cx, base + 2, Math.round(22*sc), Math.round(5*sc));
-        const seed2 = (tx * 7 + ty * 13) % 5;
-        const halms = [
-          { ox: -6,  h: 38 + seed2 * 2,    w: 4 },
-          { ox:  4,  h: 34 + (seed2+1) * 2, w: 3.5 },
-          { ox: -1,  h: 42 + seed2,          w: 4 },
-          { ox:  9,  h: 28 + seed2 * 3,     w: 3 },
-          { ox: -10, h: 30 + seed2,          w: 3 },
-        ];
-        for (const h of halms) {
-          const hx = cx + Math.round(h.ox * sc);
-          const hh = Math.round(h.h * sc);
-          const hw = Math.max(2, Math.round(h.w * sc));
-          const segH = Math.round(8 * sc);
-          const segments = Math.floor(hh / segH);
-          g.fillStyle(0x4a9020, 0.92);
-          g.fillRect(hx - hw / 2, base - hh, hw, hh);
-          g.fillStyle(0x6ab830, 0.45);
-          g.fillRect(hx - hw / 2 + 0.5, base - hh, hw * 0.4, hh);
-          g.fillStyle(0x386010, 0.7);
-          for (let s = 1; s < segments; s++) {
-            g.fillRect(hx - hw / 2 - 1, base - s * segH, hw + 2, 1.5);
+        // Dense bamboo grove: many stalks of varied height/width spread across a wider area
+        const bseed = (tx * 1319 + ty * 5003);
+        const bRng = (n: number) => ((bseed * (n + 1) * 2654435761) >>> 0) / 0x100000000;
+
+        // Shadow under the whole grove
+        g.fillStyle(0x000000, 0.18);
+        g.fillEllipse(cx, base + 3, Math.round(28 * sc), Math.round(7 * sc));
+
+        // 6 stalks per tile — neighbouring tiles fill in the forest feel
+        const stalkCount = 6;
+        for (let i = 0; i < stalkCount; i++) {
+          const ox   = (bRng(i * 5 + 0) - 0.5) * 24;          // spread ±12px (tighter so gaps show)
+          const hPct = 0.4 + bRng(i * 5 + 1) * 0.6;           // 40–100% of max height
+          const maxH = 72;
+          const hh   = Math.round(maxH * hPct * sc);
+          const wPct = 0.5 + bRng(i * 5 + 2) * 0.5;
+          const hw   = Math.max(2, Math.round(5 * wPct * sc));
+          const lean  = (bRng(i * 5 + 3) - 0.5) * 4;           // slight lean in px at top
+          const hx   = cx + Math.round(ox * sc);
+          const topX = hx + Math.round(lean);
+          const segH  = Math.round(9 * sc);
+          const segs  = Math.max(1, Math.floor(hh / segH));
+
+          // Draw stem as a thin quad (leaned)
+          g.fillStyle(0x4a9020, 0.93);
+          g.fillPoints([
+            { x: hx - hw / 2,    y: base },
+            { x: hx + hw / 2,    y: base },
+            { x: topX + hw / 2,  y: base - hh },
+            { x: topX - hw / 2,  y: base - hh },
+          ] as Phaser.Types.Math.Vector2Like[], true);
+          // Highlight stripe
+          g.fillStyle(0x6ab830, 0.40);
+          g.fillPoints([
+            { x: hx - hw / 2,          y: base },
+            { x: hx - hw / 2 + hw * 0.35, y: base },
+            { x: topX - hw / 2 + hw * 0.35, y: base - hh },
+            { x: topX - hw / 2,         y: base - hh },
+          ] as Phaser.Types.Math.Vector2Like[], true);
+          // Node rings
+          g.fillStyle(0x2e6c0a, 0.75);
+          for (let s = 1; s < segs; s++) {
+            const ry = base - s * segH;
+            const rx = hx + Math.round(lean * (s / segs));
+            g.fillRect(rx - hw / 2 - 1, ry - 1, hw + 2, 2);
           }
-          g.fillStyle(0x50a828, 0.85);
-          g.fillTriangle(hx, base - hh - Math.round(10*sc), hx - Math.round(8*sc), base - hh + Math.round(2*sc), hx + Math.round(2*sc), base - hh + Math.round(4*sc));
-          g.fillTriangle(hx, base - hh - Math.round(8*sc),  hx + Math.round(9*sc), base - hh + Math.round(3*sc), hx - Math.round(sc),    base - hh + Math.round(5*sc));
-          g.fillStyle(0x68c038, 0.6);
-          g.fillTriangle(hx - Math.round(2*sc), base - hh - Math.round(6*sc), hx - Math.round(10*sc), base - hh + Math.round(6*sc), hx + Math.round(2*sc), base - hh + Math.round(2*sc));
+          // Leaves at top (2–3 blades)
+          const leafCount = 2 + (bRng(i * 5 + 4) > 0.5 ? 1 : 0);
+          for (let l = 0; l < leafCount; l++) {
+            const lAngle = (l / leafCount) * Math.PI - Math.PI / 2 + (bRng(i + l * 7) - 0.5) * 1.2;
+            const lLen   = Math.round((14 + bRng(i + l * 3) * 10) * sc);
+            const lW     = Math.round(4 * sc);
+            const lx1 = topX;
+            const ly1 = base - hh;
+            const lx2 = lx1 + Math.round(Math.cos(lAngle) * lLen);
+            const ly2 = ly1 + Math.round(Math.sin(lAngle) * lLen);
+            const lxM = lx1 + Math.round(Math.cos(lAngle) * lLen * 0.5 + Math.cos(lAngle + Math.PI / 2) * lW);
+            const lyM = ly1 + Math.round(Math.sin(lAngle) * lLen * 0.5 + Math.sin(lAngle + Math.PI / 2) * lW);
+            g.fillStyle(0x50a828, 0.88);
+            g.fillTriangle(lx1, ly1, lxM, lyM, lx2, ly2);
+            g.fillStyle(0x70c840, 0.50);
+            g.fillTriangle(lx1, ly1, lxM - 1, lyM - 1, lx2, ly2);
+          }
         }
         break;
       }
@@ -2052,37 +2222,98 @@ export class GameManager {
 
     } else if (type === 'palm_shelter') {
       // 2 tiles wide — cx is center of the full 2-tile span
-      const w2 = TS; // half of 2-tile span = 1 tile
+      const hw = TS + 10; // half-width: slightly wider than 1 tile for a realistic lean-to
+      const roofTop = base - 68;
+      const roofBase = base - 28;
+
       // Shadow
-      g.fillStyle(0x000000, 0.2);
-      g.fillEllipse(cx, base + 3, 58, 10);
-      // Back wall (palm leaves woven together)
-      g.fillStyle(0x4a7a18);
-      g.fillRect(cx - w2, base - 30, w2 * 2, 30);
-      // Leaf texture stripes
-      g.fillStyle(0x5a9020, 0.5);
-      for (let i = 0; i < 5; i++) {
-        g.fillRect(cx - w2 + 4 + i * 12, base - 30, 5, 30);
-      }
-      // Roof (wide triangle)
-      g.fillStyle(0x3a6a10);
-      g.fillTriangle(cx - w2 - 6, base - 28, cx, base - 52, cx + w2 + 6, base - 28);
-      g.fillStyle(0x4a8a18);
-      g.fillTriangle(cx - w2, base - 28, cx, base - 48, cx + w2, base - 28);
-      // Roof highlight
-      g.fillStyle(0x5aa020, 0.6);
-      g.fillTriangle(cx - w2 + 6, base - 28, cx, base - 44, cx + w2 - 6, base - 28);
-      // Two support posts
-      g.fillStyle(0x7a5a28);
-      g.fillRect(cx - w2 + 4, base - 28, 7, 28);
-      g.fillRect(cx + w2 - 11, base - 28, 7, 28);
-      // Vine lashings
-      g.fillStyle(0x5a4a20);
-      g.fillRect(cx - w2 + 2, base - 20, 12, 3);
-      g.fillRect(cx + w2 - 14, base - 20, 12, 3);
-      // Open front (dark interior)
-      g.fillStyle(0x0a0a05, 0.65);
-      g.fillRect(cx - w2 + 14, base - 26, w2 * 2 - 28, 26);
+      g.fillStyle(0x000000, 0.22);
+      g.fillEllipse(cx, base + 4, hw * 2 + 8, 12);
+
+      // ── Support posts (Äste) ──────────────────────────────────────
+      // Back two tall posts
+      g.fillStyle(0x6b4a1e);
+      g.fillRect(cx - hw + 6,  base - 60, 6, 60);
+      g.fillRect(cx + hw - 12, base - 60, 6, 60);
+      // Front two shorter posts (lean-to is higher at back, lower at front)
+      g.fillStyle(0x7a5528);
+      g.fillRect(cx - hw + 6,  base - 38, 5, 38);
+      g.fillRect(cx + hw - 11, base - 38, 5, 38);
+      // Horizontal ridge pole across the top
+      g.fillStyle(0x5a3a14);
+      g.fillRect(cx - hw + 2, base - 61, hw * 2 - 4, 5);
+      // Front horizontal cross-beam
+      g.fillStyle(0x6b4a1e);
+      g.fillRect(cx - hw + 2, base - 39, hw * 2 - 4, 4);
+
+      // ── Vine lashings at joints ───────────────────────────────────
+      g.fillStyle(0x8b6a30);
+      // Back post tops
+      g.fillRect(cx - hw + 4,  base - 64, 10, 6);
+      g.fillRect(cx + hw - 14, base - 64, 10, 6);
+      // Front post / beam joints
+      g.fillRect(cx - hw + 4,  base - 42, 9, 5);
+      g.fillRect(cx + hw - 13, base - 42, 9, 5);
+
+      // ── Roof: layered palm leaves ─────────────────────────────────
+      // Lean-to slope: back-top to front-lower
+      // Draw leaves from bottom row up so upper rows overlap lower
+      const leafColors = [0x2d6a12, 0x3a7e18, 0x4a9420, 0x347010];
+      const rows = [
+        { y: roofBase,      overhang: 10 }, // bottom row — hangs over front edge
+        { y: roofBase - 10, overhang: 6  },
+        { y: roofBase - 20, overhang: 4  },
+        { y: roofBase - 30, overhang: 2  },
+      ];
+
+      rows.forEach((row, ri) => {
+        // Slope: back is higher by ~30px total across the 4 rows
+        const backY  = row.y - 30 + ri * 7;
+        const frontY = row.y;
+
+        // Base fill for this row (parallelogram-ish via two triangles)
+        g.fillStyle(leafColors[ri % leafColors.length]);
+        g.fillTriangle(
+          cx - hw - row.overhang, frontY + 8,
+          cx - hw - row.overhang, frontY,
+          cx + hw + row.overhang, backY,
+        );
+        g.fillTriangle(
+          cx - hw - row.overhang, frontY + 8,
+          cx + hw + row.overhang, backY,
+          cx + hw + row.overhang, backY + 8,
+        );
+
+        // Individual leaf blades across the row
+        g.lineStyle(1.5, leafColors[(ri + 2) % leafColors.length], 0.7);
+        const leafCount = Math.floor((hw * 2 + row.overhang * 2) / 8);
+        for (let i = 0; i <= leafCount; i++) {
+          const lx = cx - hw - row.overhang + i * 8;
+          // interpolate y along slope
+          const t  = i / leafCount;
+          const ly = frontY + (backY - frontY) * t;
+          // Blade droops down
+          g.lineBetween(lx, ly, lx - 3, ly + 9);
+          g.lineBetween(lx, ly, lx + 3, ly + 9);
+        }
+
+        // Midrib line per blade group
+        g.lineStyle(1, 0x1a4a08, 0.45);
+        for (let i = 0; i <= leafCount; i++) {
+          const lx = cx - hw - row.overhang + i * 8;
+          const t  = i / leafCount;
+          const ly = frontY + (backY - frontY) * t;
+          g.lineBetween(lx, ly, lx, ly + 9);
+        }
+      });
+
+      // Top ridge: darker cap row
+      g.fillStyle(0x1e4a0a);
+      g.fillRect(cx - hw, roofTop + 4, hw * 2, 8);
+
+      // ── Dark interior / back wall ─────────────────────────────────
+      g.fillStyle(0x080806, 0.6);
+      g.fillRect(cx - hw + 11, roofBase - 26, hw * 2 - 22, 26);
 
     } else if (type === 'campfire') {
       // Shadow
@@ -2279,16 +2510,13 @@ export class GameManager {
       return;
     }
 
-    // Walk-cycle offsets
-    const f = this.walkFrame;
-    // Body bob: frames 1&3 bob up 1px
-    const bob = (f === 1 || f === 3) ? -1 : 0;
-    // Leg offsets: [leftFwd, rightFwd] per frame
-    const legFwd  = [0, 3, 0, -3];  // left leg forward offset
-    const legBack = [0, -3, 0, 3];  // right leg forward offset
-    // Arm swing (opposite to legs)
-    const armFwd  = [0, -2, 0, 2];
-    const armBack = [0, 2, 0, -2];
+    // ── Walk-cycle — 8 frames, sin-based for smooth feel ─────────────
+    const f = this.walkFrame; // 0–7
+    const phase = (f / 8) * Math.PI * 2;
+    const stride    = this.isMoving ? Math.sin(phase) : 0;
+    const bob       = this.isMoving ? Math.round(Math.abs(Math.sin(phase)) * -1.5) : 0;
+    const legSwing  = this.isMoving ? stride * 5 : 0;   // front/back leg swing ±5px
+    const armSwing  = this.isMoving ? -stride * 4 : 0;  // arms opposite to legs
 
     // Update y-sort depth so player walks behind tall objects
     const tileY = Math.floor(this.playerPy / TS);
@@ -2296,71 +2524,135 @@ export class GameManager {
 
     g.clear();
 
-    // Drop shadow (flattens when bobbing)
-    g.fillStyle(0x000000, 0.22);
-    g.fillEllipse(cx, cy + 10, 18, 7 - Math.abs(bob));
+    // ── Shadow ────────────────────────────────────────────────────────
+    g.fillStyle(0x000000, 0.20);
+    g.fillEllipse(cx, cy + 11, 16, 5);
+
+    const side = direction === 'left' || direction === 'right';
+    const facingLeft = direction === 'left';
 
     // ── Legs ──────────────────────────────────────────────────────────
-    g.fillStyle(0x2c3e50);
-    if (direction === 'left' || direction === 'right') {
-      // Side view: legs fore/back
-      g.fillRect(cx - 3, cy + 6 + bob, 5, 7 + legFwd[f]);
-      g.fillStyle(0x1a252f);
-      g.fillRect(cx + 0, cy + 6 + bob, 4, 7 + legBack[f]);
+    if (side) {
+      // Side view: back leg first (darker), then front leg
+      const backLegY  = cy + 6 + bob - legSwing * 0.5;
+      const frontLegY = cy + 6 + bob + legSwing * 0.5;
+
+      // Back leg (darker)
+      g.fillStyle(0x1e2d3a);
+      g.fillRect(cx - 2, backLegY, 4, 7);
+      g.fillStyle(0x2a1f14); // shoe
+      g.fillEllipse(cx + (facingLeft ? -3 : 2), backLegY + 7, 6, 3);
+
+      // Front leg
+      g.fillStyle(0x2c3e50);
+      g.fillRect(cx - 2, frontLegY, 4, 7);
+      g.fillStyle(0x3a2810); // shoe
+      g.fillEllipse(cx + (facingLeft ? -3 : 2), frontLegY + 7, 6, 3);
     } else {
-      // Front/back: legs side by side
-      g.fillRect(cx - 4, cy + 6 + bob, 4, 6 + legFwd[f]);
+      // Front/back: two legs side by side
+      const lLegLen = 7 + Math.round(legSwing * 0.6);
+      const rLegLen = 7 - Math.round(legSwing * 0.6);
+
+      g.fillStyle(0x2c3e50);
+      g.fillRect(cx - 5, cy + 6 + bob, 4, lLegLen);
       g.fillStyle(0x1a252f);
-      g.fillRect(cx + 1, cy + 6 + bob, 4, 6 + legBack[f]);
+      g.fillRect(cx + 1, cy + 6 + bob, 4, rLegLen);
+      // Feet
+      g.fillStyle(0x3a2810);
+      g.fillEllipse(cx - 3, cy + 6 + bob + lLegLen, 6, 3);
+      g.fillStyle(0x2a1f14);
+      g.fillEllipse(cx + 3, cy + 6 + bob + rLegLen, 6, 3);
     }
 
-    // ── Body (shirt) ──────────────────────────────────────────────────
+    // ── Body (shirt — trapezoid: wide shoulders, narrower hips) ───────
     g.fillStyle(0x2471a3);
-    g.fillRect(cx - 5, cy - 2 + bob, 10, 9);
-    // Shirt detail
-    g.fillStyle(0x1a5f8a, 0.6);
+    g.fillTriangle(cx - 6, cy - 2 + bob, cx + 6, cy - 2 + bob, cx + 4, cy + 7 + bob);
+    g.fillTriangle(cx - 6, cy - 2 + bob, cx + 4, cy + 7 + bob, cx - 4, cy + 7 + bob);
+    // Shirt crease / collar shadow
+    g.fillStyle(0x1a5f8a, 0.5);
     g.fillRect(cx - 1, cy - 1 + bob, 2, 7);
+    // Shoulder highlights
+    g.fillStyle(0x3a8fc0, 0.4);
+    g.fillRect(cx - 5, cy - 2 + bob, 2, 3);
+    if (!side) g.fillRect(cx + 3, cy - 2 + bob, 2, 3);
 
-    // ── Arms ─────────────────────────────────────────────────────────
-    g.fillStyle(0xfde3a7);
-    if (direction === 'left' || direction === 'right') {
-      g.fillRect(cx - 7, cy - 1 + bob + armFwd[f], 3, 6);
-      g.fillRect(cx + 4, cy - 1 + bob + armBack[f], 3, 6);
+    // ── Arms ──────────────────────────────────────────────────────────
+    const skinColor = 0xf0c88a;
+    const skinDark  = 0xd4a870;
+    if (side) {
+      // One visible arm (front)
+      const ax = facingLeft ? cx - 7 : cx + 4;
+      g.fillStyle(skinColor);
+      g.fillRect(ax, cy - 1 + bob + Math.round(armSwing), 3, 6);
+      // Hand
+      g.fillStyle(skinDark);
+      g.fillCircle(ax + 1, cy + 5 + bob + Math.round(armSwing), 2);
     } else {
-      g.fillRect(cx - 7, cy - 1 + bob + armFwd[f], 3, 7);
-      g.fillRect(cx + 4, cy - 1 + bob + armBack[f], 3, 7);
+      // Both arms visible
+      g.fillStyle(skinColor);
+      g.fillRect(cx - 8, cy - 1 + bob + Math.round(armSwing),  3, 6);
+      g.fillRect(cx + 5, cy - 1 + bob - Math.round(armSwing),  3, 6);
+      // Hands
+      g.fillStyle(skinDark);
+      g.fillCircle(cx - 7, cy + 5 + bob + Math.round(armSwing), 2);
+      g.fillCircle(cx + 6, cy + 5 + bob - Math.round(armSwing), 2);
     }
 
-    // ── Head ─────────────────────────────────────────────────────────
-    g.fillStyle(0xfde3a7);
-    g.fillCircle(cx, cy - 5 + bob, 6);
+    // ── Neck ──────────────────────────────────────────────────────────
+    g.fillStyle(skinColor);
+    g.fillRect(cx - 1, cy - 4 + bob, 3, 4);
 
-    // ── Hair ─────────────────────────────────────────────────────────
+    // ── Head ──────────────────────────────────────────────────────────
+    g.fillStyle(skinColor);
+    g.fillCircle(cx, cy - 7 + bob, 6);
+
+    // Ear (side view only)
+    if (side) {
+      const earX = facingLeft ? cx + 4 : cx - 4;
+      g.fillStyle(skinDark);
+      g.fillCircle(earX, cy - 7 + bob, 2);
+    }
+
+    // ── Hair ──────────────────────────────────────────────────────────
     g.fillStyle(0x5d3e2a);
-    g.fillCircle(cx, cy - 10 + bob, 5);
-    g.fillRect(cx - 5, cy - 11 + bob, 10, 4);
+    g.fillCircle(cx, cy - 11 + bob, 5);
+    g.fillRect(cx - 5, cy - 13 + bob, 11, 5);
     if (direction !== 'up') {
-      // Side/front hair fringe
-      g.fillRect(cx - 5, cy - 9 + bob, 3, 3);
+      // Front fringe
+      g.fillRect(cx - 5, cy - 10 + bob, 4, 3);
+      if (side) {
+        // Side fringe hangs toward face
+        const fringeX = facingLeft ? cx - 4 : cx + 1;
+        g.fillRect(fringeX, cy - 10 + bob, 3, 4);
+      }
     }
 
-    // ── Eyes / face ──────────────────────────────────────────────────
+    // ── Face ──────────────────────────────────────────────────────────
     if (direction !== 'up') {
       g.fillStyle(0x2c1810);
       if (direction === 'left') {
-        g.fillCircle(cx - 3, cy - 5 + bob, 1.2);
-        // Mouth hint
-        g.fillStyle(0xc07060, 0.7);
-        g.fillRect(cx - 5, cy - 3 + bob, 3, 1);
+        g.fillCircle(cx - 3, cy - 7 + bob, 1.2);
+        // Nose hint
+        g.fillStyle(skinDark);
+        g.fillRect(cx - 6, cy - 8 + bob, 1, 2);
+        g.fillStyle(0xc07060, 0.8);
+        g.fillRect(cx - 5, cy - 5 + bob, 3, 1);
       } else if (direction === 'right') {
-        g.fillCircle(cx + 3, cy - 5 + bob, 1.2);
-        g.fillStyle(0xc07060, 0.7);
-        g.fillRect(cx + 2, cy - 3 + bob, 3, 1);
+        g.fillCircle(cx + 3, cy - 7 + bob, 1.2);
+        g.fillStyle(skinDark);
+        g.fillRect(cx + 5, cy - 8 + bob, 1, 2);
+        g.fillStyle(0xc07060, 0.8);
+        g.fillRect(cx + 2, cy - 5 + bob, 3, 1);
       } else {
-        g.fillCircle(cx - 2, cy - 5 + bob, 1.2);
-        g.fillCircle(cx + 2, cy - 5 + bob, 1.2);
-        g.fillStyle(0xc07060, 0.7);
-        g.fillRect(cx - 2, cy - 3 + bob, 4, 1);
+        // Front: two eyes + mouth
+        g.fillCircle(cx - 2, cy - 7 + bob, 1.2);
+        g.fillCircle(cx + 2, cy - 7 + bob, 1.2);
+        // Eye whites
+        g.fillStyle(0xffffff, 0.6);
+        g.fillCircle(cx - 2, cy - 7.5 + bob, 0.7);
+        g.fillCircle(cx + 2, cy - 7.5 + bob, 0.7);
+        g.fillStyle(0xc07060, 0.8);
+        g.fillRect(cx - 2, cy - 5 + bob, 4, 1);
       }
     }
 
@@ -4121,10 +4413,10 @@ export class GameManager {
       useGameStore.getState().closeGatherMenu();
     }
 
-    // Walk animation timer
+    // Walk animation timer — 8 frames at 90ms = ~720ms per stride cycle
     this.walkTimer += delta;
-    if (this.walkTimer >= 140) {
-      this.walkFrame = (this.walkFrame + 1) % 4;
+    if (this.walkTimer >= 90) {
+      this.walkFrame = (this.walkFrame + 1) % 8;
       this.walkTimer = 0;
     }
 
@@ -4395,9 +4687,10 @@ export class GameManager {
     this.lastGameDay = currentDay;
 
     // Rain trigger — checked every tick so it fires as soon as daytime arrives
-    if (!this.isRaining && currentDay >= this.nextRainDay) {
+    const nextRainDay = useGameStore.getState().nextRainDay;
+    if (!this.isRaining && currentDay >= nextRainDay) {
       const rainHour = (gameState.elapsedTime % DAY_DURATION_MS) / DAY_DURATION_MS * 24;
-      if (rainHour >= 7 && rainHour < 19) {
+      if (rainHour >= 15 && rainHour < 22) {
         const worldState = useWorldStore.getState();
         this.pickRainType();
         this.isRaining = true;
@@ -4405,7 +4698,7 @@ export class GameManager {
         const containers = worldState.world?.structures.filter(s => s.type === 'water_container') ?? [];
         for (const c of containers) worldState.updateStructure(c.id, { fuel: 2 });
         if (GameManager.FIRE_EXTINGUISHING_TYPES.has(this.rainType)) this.extinguishCampfires();
-        this.nextRainDay = currentDay + 3 + Math.floor(Math.random() * 4);
+        useGameStore.getState().setNextRainDay(currentDay + 3 + Math.floor(Math.random() * 4));
         this.checkRainKnowledge();
       }
     }
@@ -4420,6 +4713,7 @@ export class GameManager {
         const containers = useWorldStore.getState().world?.structures.filter(s => s.type === 'water_container') ?? [];
         for (const c of containers) useWorldStore.getState().updateStructure(c.id, { fuel: 2 });
         if (GameManager.FIRE_EXTINGUISHING_TYPES.has(this.rainType)) this.extinguishCampfires();
+        this.checkRainKnowledge();
       } else {
         this.rainTimer = 500; // keep in full-rain zone
       }
@@ -4711,6 +5005,10 @@ export class GameManager {
                    : resource.type === 'cacao_tree'         ? 'food'
                    : resource.type;
 
+    // Mining sound for hard materials
+    const isMineType = ['stone', 'iron_ore', 'obsidian', 'granite'].includes(resource.type);
+    if (isMineType) this.playMiningSound(resource.type === 'obsidian' || resource.type === 'iron_ore');
+
     // Always 1 per click
     const amount = Math.min(1, resource.quantity);
     if (addToInventory(giveType, amount)) {
@@ -4960,6 +5258,37 @@ export class GameManager {
 
     const res = world.resources.find(r => r.x === tx && r.y === ty && r.quantity > 0) ?? null;
     useGameStore.getState().setHoveredResource(res);
+  }
+
+  // ── Mining sound (Web Audio API, no asset files needed) ──────────
+
+  private playMiningSound(hard = false) {
+    try {
+      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      // Impact thud
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(hard ? 320 : 220, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(hard ? 60 : 40, ctx.currentTime + 0.12);
+      gain.gain.setValueAtTime(0.28, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.18);
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.start(); osc.stop(ctx.currentTime + 0.18);
+      // Metallic noise burst
+      const sr = ctx.sampleRate;
+      const buf = ctx.createBuffer(1, Math.floor(sr * 0.06), sr);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1);
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      const g2 = ctx.createGain();
+      g2.gain.setValueAtTime(hard ? 0.18 : 0.12, ctx.currentTime);
+      g2.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.06);
+      src.connect(g2); g2.connect(ctx.destination);
+      src.start();
+      setTimeout(() => ctx.close(), 400);
+    } catch (_) {}
   }
 
   // ── Floating text popup ───────────────────────────────────────────

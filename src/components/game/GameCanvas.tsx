@@ -9,8 +9,19 @@ export default function GameCanvas() {
 
   useEffect(() => {
     if (!containerRef.current) return;
-    gameManagerRef.current = new GameManager(containerRef.current);
-    return () => { gameManagerRef.current?.destroy(); };
+    let destroyed = false;
+    // Defer by one frame so StrictMode double-invoke completes before we create Phaser.
+    // Also ensures the container div has its final layout dimensions.
+    const raf = requestAnimationFrame(() => {
+      if (destroyed || !containerRef.current) return;
+      gameManagerRef.current = new GameManager(containerRef.current);
+    });
+    return () => {
+      destroyed = true;
+      cancelAnimationFrame(raf);
+      gameManagerRef.current?.destroy();
+      gameManagerRef.current = null;
+    };
   }, []);
 
   return (
