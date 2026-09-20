@@ -1,3 +1,6 @@
+import { buildBlockReason, buildDuration, buildMaterialQuantity } from '../../services/game/BuildingSystem';
+import { useWorldStore } from '../../store/worldStore';
+import { craftingSystem } from '../../services/game/CraftingSystem';
 import { useState } from 'react';
 import {
   BUILD_DEFINITIONS, BUILD_CATEGORY_LABELS,
@@ -49,6 +52,10 @@ export default function BuildBar() {
 
   const inventory      = usePlayerStore(s => s.player.inventory);
   const knownMaterials = usePlayerStore(s => s.knownMaterials);
+  useWorldStore(s => s.world?.structures);
+  useWorldStore(s => s.world?.droppedItems);
+  usePlayerStore(s => s.player.x);
+  usePlayerStore(s => s.player.y);
   const knowledge      = usePlayerStore(s => s.knowledge);
   const skills         = usePlayerStore(s => s.player.skills ?? DEFAULT_SKILLS);
   const freeCraft      = useGameStore(s => s.freeCraft);
@@ -141,7 +148,7 @@ export default function BuildBar() {
 
         {/* Spacer so bar doesn't feel cramped */}
         <div className="flex-1" />
-        <span className="text-slate-600 text-[10px] pr-1 self-center">Klick → Platzieren</span>
+        <span className="text-slate-400 text-[10px] pr-1 self-center">Klick → Bauplan setzen</span>
       </div>
     </div>
   );
@@ -161,19 +168,15 @@ function BuildCard({ def, inventory, knowledge, skills, freeCraft, onSelect }: {
   const vis = getVisibility(def, knownMaterials, knowledge, skills, freeCraft);
   const locked = vis === 'locked';
 
-  const eq = usePlayerStore.getState().player.equipment;
-  const hasTool = freeCraft || def.requiredTools.length === 0 || def.requiredTools.every(tool =>
-    inventory.items.some(i => i.resourceId === tool) ||
-    eq?.leftHand?.resourceId === tool ||
-    eq?.rightHand?.resourceId === tool
-  );
+  usePlayerStore(s => s.player.equipment);
+  const hasTool = freeCraft || def.requiredTools.every(tool => craftingSystem.hasRequiredTool({ requiresTool: tool }, inventory));
 
   const matStatus = def.requiredMaterials.map(m => ({
     ...m,
-    have: inventory.items.find(i => i.resourceId === m.item)?.quantity ?? 0,
+    have: buildMaterialQuantity(m.item),
   }));
   const hasMats = freeCraft || matStatus.every(m => m.have >= m.amount);
-  const canBuild = !locked && hasMats && hasTool;
+  const canBuild = !locked && hasMats && hasTool && !buildBlockReason(def.id);
 
   const missingKnowledge = locked ? def.requiredKnowledge.filter(f => !knowledge[f]) : [];
   const missingSkills    = locked ? def.requiredSkills.filter(r => (skills?.[r.skill]?.level ?? 1) < r.level) : [];
@@ -185,7 +188,7 @@ function BuildCard({ def, inventory, knowledge, skills, freeCraft, onSelect }: {
         canBuild  ? 'border-green-700 bg-slate-800 hover:bg-slate-700' :
                     'border-slate-600 bg-slate-800/80 hover:bg-slate-750'
       }`}
-      onClick={!locked ? onSelect : undefined}
+      onClick={onSelect}
       title={locked ? 'Voraussetzungen nicht erfüllt' : def.description}
     >
       {/* Header */}
@@ -193,7 +196,7 @@ function BuildCard({ def, inventory, knowledge, skills, freeCraft, onSelect }: {
         <span className="text-xl leading-none">{def.icon}</span>
         <div className="flex-1 min-w-0">
           <div className="text-white font-bold text-xs leading-tight truncate">{def.name}</div>
-          <div className="text-slate-500 text-[10px]">{def.buildTime}s Bauzeit</div>
+          <div className="text-slate-500 text-[10px]">{Math.ceil(buildDuration(def.id) / 1000)}s Bauzeit</div>
         </div>
         {canBuild && <span className="text-green-400 text-xs">✓</span>}
         {locked    && <span className="text-slate-600 text-xs">🔒</span>}

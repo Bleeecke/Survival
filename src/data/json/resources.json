@@ -61,5 +61,6 @@
   { "id": "rubber_tree",    "name": "Kautschukbaum",        "spriteIndex": 0,  "gatherTime": 3000, "maxStack": 1,  "regenerates": true,  "regenerationTime": 600000 },
   { "id": "cacao_tree",     "name": "Kakaobaum",            "spriteIndex": 0,  "gatherTime": 2000, "maxStack": 1,  "regenerates": true,  "regenerationTime": 600000 },
   { "id": "pandanus",       "name": "Pandanus",             "spriteIndex": 0,  "gatherTime": 1500, "maxStack": 1,  "regenerates": true,  "regenerationTime": 300000 },
-  { "id": "breadfruit_tree","name": "Brotfruchtbaum",       "spriteIndex": 0,  "gatherTime": 2000, "maxStack": 1,  "regenerates": true,  "regenerationTime": 600000 }
+  { "id": "breadfruit_tree","name": "Brotfruchtbaum",       "spriteIndex": 0,  "gatherTime": 2000, "maxStack": 1,  "regenerates": true,  "regenerationTime": 600000 },
+  { "id": "grass_tuft",    "name": "Grasbüschel",           "spriteIndex": 19, "gatherTime": 0,    "maxStack": 1,  "regenerates": true,  "regenerationTime": 120000 }
 ]

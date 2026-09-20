@@ -6,7 +6,16 @@ export type Direction = 'up' | 'down' | 'left' | 'right';
 
 export type EquipSlot = 'head' | 'chest' | 'legs' | 'leftHand' | 'rightHand' | `belt${0|1|2}`;
 
-export interface EquippedItem {
+export type ItemQuality = 'rough' | 'standard' | 'good';
+
+export interface ItemCondition {
+  quality?: ItemQuality;
+  durability?: number;
+  maxDurability?: number;
+  addedAt?: number;
+}
+
+export interface EquippedItem extends ItemCondition {
   resourceId: string;
   durability?: number; // current uses remaining; undefined = no durability tracking
 }
@@ -35,7 +44,7 @@ export interface PlayerStats {
   woundedUntil?: number;    // real timestamp ms — Schnittwunde (Feuerstein)
 }
 
-export interface InventoryItem {
+export interface InventoryItem extends ItemCondition {
   id: string;
   resourceId: string;
   quantity: number;

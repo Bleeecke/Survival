@@ -1,4 +1,6 @@
-import { useState, useRef } from 'react';
+import ResourceIcon from './ResourceIcon';
+import { itemCondition } from '../../services/game/inventory';
+import { QUALITY_LABELS } from '../../data/craftingBalance';
 import { usePlayerStore } from '../../store/playerStore';
 import { useWorldStore } from '../../store/worldStore';
 import { useGameStore } from '../../store/gameStore';
@@ -6,9 +8,6 @@ import type { PlayerStats } from '../../types';
 import { calcWeight, MAX_CARRY_KG } from '../../data/weights';
 import { getDefaultSlot } from './CharacterPanel';
 import { FOOD_SPOIL_TIME } from '../../data/foodDecay';
-import { RECIPES } from '../../data/recipes';
-import { craftingSystem } from '../../services/game/CraftingSystem';
-import { useJournalStore } from '../../store/journalStore';
 
 // Items that can be used from the inventory
 export const USABLE: Record<string, {
@@ -301,17 +300,19 @@ export default function InventoryPanel() {
 
   const elapsedTime = useGameStore(s => s.elapsedTime);
   const dropItem   = useWorldStore(s => s.dropItem);
-  const playerX    = usePlayerStore(s => s.player.x);
-  const playerY    = usePlayerStore(s => s.player.y);
 
   const currentWeight = calcWeight(inventory.items);
   const weightPct     = Math.min(100, (currentWeight / MAX_CARRY_KG) * 100);
   const weightFull    = currentWeight >= MAX_CARRY_KG * 0.95;
   const weightWarn    = currentWeight >= MAX_CARRY_KG * 0.80;
 
-  function handleDrop(resourceId: string, quantity: number) {
-    const placed = dropItem(resourceId, quantity, playerX, playerY);
-    if (placed) removeResource(resourceId, quantity);
+  function handleDrop(item: typeof inventory.items[number]) {
+    const current = usePlayerStore.getState().player;
+    const index = current.inventory.items.findIndex(i => i.id === item.id);
+    const selected = current.inventory.items[index];
+    if (!selected) return;
+    const placed = dropItem(selected.resourceId, selected.quantity, current.x, current.y, itemCondition(selected));
+    if (placed) usePlayerStore.getState().removeFromInventory(index, selected.quantity);
   }
 
   const FOOD_IDS = new Set([
@@ -332,9 +333,6 @@ export default function InventoryPanel() {
   return (
     <div className="p-4">
       <h3 className="text-base font-bold text-white mb-2">Inventar</h3>
-
-      {/* Quick craft — anywhere recipes */}
-      <QuickCraft />
 
       {/* Weight bar */}
       <div className="mb-3">
@@ -364,16 +362,15 @@ export default function InventoryPanel() {
           {inventory.items.map(item => {
             const usable = USABLE[item.resourceId];
             const passive = PASSIVE_DESC[item.resourceId];
-            const name = ITEM_NAMES[item.resourceId] ?? item.resourceId.replace(/_/g, ' ');
+            const name = (ITEM_NAMES[item.resourceId] ?? item.resourceId.replace(/_/g, ' ')) + (item.quality ? ` - ${QUALITY_LABELS[item.quality]}` : '') + (item.durability !== undefined ? ` (${item.durability}/${item.maxDurability})` : '');
 
             return (
               <div
                 key={item.id}
                 className="bg-slate-700 rounded-lg px-3 py-2 flex items-center gap-2"
               >
-                {/* Icon placeholder */}
                 <span className="text-lg w-6 text-center select-none">
-                  {ITEM_ICON[item.resourceId] ?? '📦'}
+                  <ResourceIcon id={item.resourceId} fallback={ITEM_ICON[item.resourceId]} />
                 </span>
 
                 {/* Name + description */}
@@ -421,7 +418,7 @@ export default function InventoryPanel() {
 
                 {/* Drop button */}
                 <button
-                  onClick={() => handleDrop(item.resourceId, item.quantity)}
+                  onClick={() => handleDrop(item)}
                   title="Ablegen"
                   className="px-2 py-1 text-xs font-bold rounded-lg text-slate-400 hover:text-white bg-slate-600 hover:bg-red-800 transition-colors"
                 >
@@ -441,7 +438,7 @@ export default function InventoryPanel() {
                   if (isEquipped) return null;
                   return (
                     <button
-                      onClick={() => equip(slot, item.resourceId)}
+                      onClick={() => equip(slot, item.resourceId, item.id)}
                       className="px-2 py-1 text-xs font-bold rounded-lg text-white bg-violet-700 hover:bg-violet-600 transition-colors"
                     >
                       Anlegen
@@ -529,97 +526,3 @@ const ITEM_ICON: Record<string, string> = {
   furnace:          '🏭',
 };
 
-// Recipe IDs that can be crafted anywhere (no tool/location required)
-const HAND_CRAFT_IDS = [
-  'palm_leaf_to_fiber', 'knap_flint',
-  'rope_fiber', 'bandage', 'herbal_remedy', 'antiparasitic',
-  'shell_knife', 'flint_knife', 'stone_axe', 'stone_spear',
-  'stone_pickaxe', 'torch_carry', 'fishing_rod',
-];
-
-const HAND_CRAFT_RECIPES = RECIPES.filter(r => HAND_CRAFT_IDS.includes(r.id));
-
-function QuickCraft() {
-  const inventory  = usePlayerStore(s => s.player.inventory);
-  const freeCraft  = useGameStore(s => s.freeCraft);
-  const tickTime   = useGameStore(s => s.tickTime);
-
-  const [craftingId, setCraftingId] = useState<string | null>(null);
-  const [progress, setProgress]     = useState(0);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  const available = HAND_CRAFT_RECIPES.filter(r =>
-    craftingSystem.hasRequiredKnowledge(r) &&
-    craftingSystem.canCraft(r.id, inventory)
-  );
-
-  if (available.length === 0) return null;
-
-  function startCraft(recipe: typeof RECIPES[0]) {
-    if (craftingId) return;
-    if (!freeCraft) {
-      for (const input of recipe.inputs) usePlayerStore.getState().removeResource(input.resourceId, input.quantity);
-    }
-    setCraftingId(recipe.id);
-    setProgress(0);
-    const steps = 20;
-    const stepTime = recipe.craftingTime / steps;
-    let step = 0;
-    intervalRef.current = setInterval(() => {
-      step++;
-      setProgress(step / steps);
-      tickTime(stepTime / steps);
-      if (step >= steps) {
-        clearInterval(intervalRef.current!);
-        for (const output of recipe.outputs) usePlayerStore.getState().addToInventory(output.resourceId, output.quantity);
-        craftingSystem.awardSkillXp(recipe);
-        craftingSystem.grantKnowledge(recipe);
-        // Journal events
-        if (recipe.id === 'knap_flint') useJournalStore.getState().triggerJournalEvent('first_knapping');
-        if (recipe.id === 'flint_knife') useJournalStore.getState().triggerJournalEvent('first_knife');
-        setCraftingId(null);
-        setProgress(0);
-      }
-    }, 80);
-  }
-
-  return (
-    <div className="mb-3 border border-slate-700 rounded-xl overflow-hidden">
-      <div className="px-3 py-1.5 bg-slate-900/60 text-slate-400 text-[10px] font-bold uppercase tracking-widest">
-        ✋ Überall herstellen
-      </div>
-      <div className="divide-y divide-slate-700/50">
-        {available.map(recipe => {
-          const isRunning = craftingId === recipe.id;
-          return (
-            <div key={recipe.id} className="px-3 py-2">
-              <div className="flex items-center gap-2">
-                <span className="text-base">{recipe.icon}</span>
-                <div className="flex-1 min-w-0">
-                  <div className="text-white text-xs font-semibold leading-tight">{recipe.name}</div>
-                  <div className="text-slate-500 text-[10px] leading-tight">
-                    {recipe.inputs.map(i => `${i.quantity}× ${i.resourceId}`).join(' + ')}
-                  </div>
-                </div>
-                <button
-                  onClick={() => startCraft(recipe)}
-                  disabled={!!craftingId}
-                  className={`px-2.5 py-1 text-[10px] font-bold rounded-lg transition-colors shrink-0 ${
-                    !craftingId ? 'bg-slate-600 hover:bg-slate-500 text-white' : 'bg-slate-700 text-slate-500 cursor-not-allowed'
-                  }`}
-                >
-                  {isRunning ? `${Math.round(progress * 100)}%` : 'Herstellen'}
-                </button>
-              </div>
-              {isRunning && (
-                <div className="mt-1.5 h-1 bg-slate-700 rounded-full overflow-hidden">
-                  <div className="h-full bg-amber-500 transition-all duration-75 rounded-full" style={{ width: `${Math.round(progress * 100)}%` }} />
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}

@@ -1,15 +1,9 @@
 import { usePlayerStore } from '../../store/playerStore';
-import { SKILL_IDS, SKILL_LABELS, DEFAULT_SKILLS } from '../../types/skills';
+import { SKILL_IDS, SKILL_LABELS, SKILL_DESCRIPTIONS, DEFAULT_SKILLS } from '../../types/skills';
 
 const SKILL_ICONS: Record<string, string> = {
-  flintknapping:   '🪨',
-  woodworking:     '🪵',
-  cordage:         '🧵',
-  firemaking:      '🔥',
-  foraging:        '🌿',
-  cooking:         '🍖',
-  hunting:         '🗡️',
-  shelterbuilding: '🏠',
+  survival: '🔥', crafting: '🔨', building: '🏠', naturelore: '🌿',
+  hunting: '🏹', cooking: '🍖', medicine: '🩹', body: '🏃',
 };
 
 function levelLabel(level: number): string {
@@ -52,7 +46,7 @@ export default function SkillsBar() {
             const xpNeeded = skill.level * 20;
             const pct = Math.min(100, (skill.xp / xpNeeded) * 100);
             return (
-              <div key={id} className="flex flex-col gap-0.5">
+              <div key={id} title={`${SKILL_DESCRIPTIONS[id]} · ${skill.xp}/${xpNeeded} XP · ${["crafting", "building", "survival", "cooking", "medicine", "hunting"].includes(id) ? Math.min(45, (skill.level - 1) * 5) + "% kürzere zugeordnete Herstellungszeit" : "Erfahrung durch passende Tätigkeiten"}`} className="flex flex-col gap-0.5">
                 <div className="flex items-center gap-1">
                   <span className="leading-none" style={{ fontSize: 11 }}>{SKILL_ICONS[id]}</span>
                   <span className="text-slate-300 truncate leading-none" style={{ fontSize: 9 }}>

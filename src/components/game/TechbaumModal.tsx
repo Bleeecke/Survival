@@ -54,17 +54,22 @@ export default function TechbaumModal({ onClose }: { onClose: () => void }) {
   const [search, setSearch] = useState('');
 
   const inventory = usePlayerStore(s => s.player.inventory);
+  usePlayerStore(s => s.knowledge);
+  usePlayerStore(s => s.knownMaterials);
+  usePlayerStore(s => s.player.skills);
+  usePlayerStore(s => s.player.equipment);
 
   // All non-structure, non-campfire recipes — grouped by category
-  const allRecipes = RECIPES.filter(r => !STRUCTURE_IDS.has(r.id) && r.requiresTool !== 'campfire_near');
+  const allRecipes = RECIPES.filter(r => !STRUCTURE_IDS.has(r.id));
 
   const filtered = allRecipes.filter(r => {
     const discovered = craftingSystem.isDiscovered(r, inventory);
-    if (filter === 'craftable') return discovered && craftingSystem.canCraft(r.id, inventory);
+    if (filter === 'craftable') return discovered && !craftingSystem.getCraftBlockReason(r);
     if (filter === 'locked') return !discovered;
     return true;
   }).filter(r => {
     if (!search) return true;
+    if (!craftingSystem.isDiscovered(r, inventory)) return false;
     const name = r.name.toLowerCase();
     return name.includes(search.toLowerCase());
   });
@@ -82,7 +87,7 @@ export default function TechbaumModal({ onClose }: { onClose: () => void }) {
   const otherCategories = Object.keys(byCategory).filter(c => !categoryOrder.includes(c));
 
   const totalDiscovered = allRecipes.filter(r => craftingSystem.isDiscovered(r, inventory)).length;
-  const totalCraftable = allRecipes.filter(r => craftingSystem.canCraft(r.id, inventory)).length;
+  const totalCraftable = allRecipes.filter(r => craftingSystem.isDiscovered(r, inventory) && !craftingSystem.getCraftBlockReason(r)).length;
 
   return (
     <div
@@ -170,7 +175,7 @@ function TechCard({ recipe, inventory }: {
   inventory: Inventory;
 }) {
   const discovered = craftingSystem.isDiscovered(recipe, inventory);
-  const canCraft   = discovered && craftingSystem.canCraft(recipe.id, inventory);
+  const canCraft   = discovered && !craftingSystem.getCraftBlockReason(recipe);
   const hasTool    = craftingSystem.hasRequiredTool(recipe, inventory);
   const hasSkill   = craftingSystem.hasRequiredSkill(recipe);
 
@@ -195,7 +200,7 @@ function TechCard({ recipe, inventory }: {
           {discovered && (
             <div className="mt-1.5 flex flex-wrap gap-1">
               {recipe.inputs.map((inp: { resourceId: string; quantity: number }) => {
-                const hasIt = ((inventory as unknown as Record<string, number>)[inp.resourceId] ?? 0) >= inp.quantity;
+                const hasIt = craftingSystem.getItemQuantity(inventory, inp.resourceId) >= inp.quantity;
                 return (
                   <span key={inp.resourceId}
                     className={`text-xs px-1.5 py-0.5 rounded ${hasIt ? 'bg-green-900/60 text-green-300' : 'bg-slate-600/60 text-slate-400'}`}>

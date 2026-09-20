@@ -1,3 +1,5 @@
+import ResourceIcon from './ResourceIcon';
+import { itemCondition } from '../../services/game/inventory';
 import { useGameStore } from '../../store/gameStore';
 import { useWorldStore } from '../../store/worldStore';
 import { usePlayerStore } from '../../store/playerStore';
@@ -34,9 +36,9 @@ export default function PickupMenu() {
   if (!pickupMenuOpen || nearbyDrops.length === 0) return null;
 
   function handlePickup(id: string) {
-    const item = pickupDroppedItem(id);
-    if (item) {
-      addToInventory(item.resourceId, item.quantity);
+    const item = useWorldStore.getState().world?.droppedItems.find(d => d.id === id);
+    if (item && addToInventory(item.resourceId, item.quantity, itemCondition(item))) {
+      pickupDroppedItem(id);
       // Close menu if no more drops nearby
       const remaining = nearbyDrops.filter(d => d.id !== id);
       if (remaining.length === 0) closePickupMenu();
@@ -69,7 +71,7 @@ export default function PickupMenu() {
                 key={drop.id}
                 className="flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-800"
               >
-                <span className="text-lg w-7 text-center">{icon}</span>
+                <span className="text-lg w-7 text-center"><ResourceIcon id={drop.resourceId} fallback={icon} /></span>
                 <div className="flex-1 min-w-0">
                   <div className="text-white text-sm font-medium">{name}</div>
                 </div>

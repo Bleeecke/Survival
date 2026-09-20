@@ -5,6 +5,7 @@ import InventoryPanel from '../game/InventoryPanel';
 import CraftingModal from '../game/CraftingModal';
 import TechbaumModal from '../game/TechbaumModal';
 import BuildBar from '../game/BuildMenu';
+import ConstructionPanel from '../game/ConstructionPanel';
 import CampfireModal from '../game/CampfireModal';
 import PalmShelterModal from '../game/PalmShelterModal';
 import SleepModal from '../game/SleepModal';
@@ -224,6 +225,7 @@ export default function GameScreen() {
 
         {/* RimWorld-style build bar – bottom of canvas */}
         <BuildBar />
+        <ConstructionPanel />
       </div>
 
       {/* Right Sidebar */}
@@ -272,7 +274,8 @@ export default function GameScreen() {
       {placementMode && (
         <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 pointer-events-none">
           <div className="bg-black/70 border border-green-500/50 rounded-xl px-5 py-3 text-center backdrop-blur-sm">
-            <div className="text-green-400 font-bold text-sm mb-0.5">Platzierungsmodus</div>
+              <div className="text-green-400 font-bold text-sm mb-0.5">{placementMode.sourceId ? 'Ziel zum Versetzen wählen' : 'Bauplan platzieren'}</div>
+              <div className="text-sky-200 text-xs">Blaue Umrandung: Platzbedarf des bekannten Ausbaus. Nach dem Platzieren optional reservieren.</div>
             <div className="text-slate-300 text-xs">Klicken zum Platzieren &nbsp;·&nbsp; <span className="text-slate-400">Esc = Abbrechen</span></div>
           </div>
         </div>

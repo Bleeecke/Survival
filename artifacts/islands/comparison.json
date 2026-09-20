@@ -1,0 +1,290 @@
+[
+  {
+    "profile": "gentle",
+    "seed": 42,
+    "landPercent": 58,
+    "levels": [
+      26251,
+      23753,
+      9372,
+      2655,
+      469
+    ],
+    "biomes": {
+      "water": 26251,
+      "beach": 5010,
+      "grass": 5878,
+      "tall_grass": 6956,
+      "sparse_forest": 6422,
+      "forest": 2874,
+      "dense_jungle": 6457,
+      "hills": 797,
+      "mountain": 1572,
+      "impassable": 283
+    },
+    "coastlineEdges": 1208,
+    "cliffEdges": 938,
+    "ramps": 24,
+    "heightJumps": 0,
+    "reachablePercent": 100,
+    "unreachable": 0,
+    "resources": 6412,
+    "generationMs": 471
+  },
+  {
+    "profile": "balanced",
+    "seed": 42,
+    "landPercent": 57.62,
+    "levels": [
+      26489,
+      20385,
+      9766,
+      4981,
+      879
+    ],
+    "biomes": {
+      "water": 26489,
+      "beach": 3457,
+      "grass": 5441,
+      "sparse_forest": 5296,
+      "tall_grass": 6744,
+      "forest": 4813,
+      "dense_jungle": 6393,
+      "hills": 720,
+      "mountain": 2700,
+      "impassable": 447
+    },
+    "coastlineEdges": 1250,
+    "cliffEdges": 1146,
+    "ramps": 32,
+    "heightJumps": 0,
+    "reachablePercent": 100,
+    "unreachable": 0,
+    "resources": 6444,
+    "generationMs": 270
+  },
+  {
+    "profile": "rugged",
+    "seed": 42,
+    "landPercent": 56.95,
+    "levels": [
+      26906,
+      16517,
+      9867,
+      7828,
+      1382
+    ],
+    "biomes": {
+      "water": 26906,
+      "beach": 2704,
+      "sparse_forest": 4111,
+      "grass": 4728,
+      "tall_grass": 5680,
+      "forest": 7266,
+      "dense_jungle": 5652,
+      "mountain": 4203,
+      "hills": 639,
+      "impassable": 611
+    },
+    "coastlineEdges": 1292,
+    "cliffEdges": 1410,
+    "ramps": 41,
+    "heightJumps": 0,
+    "reachablePercent": 100,
+    "unreachable": 0,
+    "resources": 6279,
+    "generationMs": 268
+  },
+  {
+    "profile": "gentle",
+    "seed": 137,
+    "landPercent": 56.14,
+    "levels": [
+      27411,
+      22861,
+      9171,
+      2598,
+      459
+    ],
+    "biomes": {
+      "water": 27411,
+      "beach": 4521,
+      "grass": 8449,
+      "tall_grass": 5508,
+      "sparse_forest": 5548,
+      "forest": 4578,
+      "dense_jungle": 4724,
+      "mountain": 1522,
+      "hills": 168,
+      "impassable": 71
+    },
+    "coastlineEdges": 1052,
+    "cliffEdges": 1042,
+    "ramps": 25,
+    "heightJumps": 0,
+    "reachablePercent": 100,
+    "unreachable": 0,
+    "resources": 6397,
+    "generationMs": 286
+  },
+  {
+    "profile": "balanced",
+    "seed": 137,
+    "landPercent": 56.11,
+    "levels": [
+      27432,
+      19773,
+      9559,
+      4875,
+      861
+    ],
+    "biomes": {
+      "water": 27432,
+      "beach": 3204,
+      "grass": 7715,
+      "tall_grass": 4640,
+      "sparse_forest": 5872,
+      "forest": 5662,
+      "dense_jungle": 4016,
+      "mountain": 3479,
+      "hills": 243,
+      "impassable": 237
+    },
+    "coastlineEdges": 1138,
+    "cliffEdges": 1194,
+    "ramps": 30,
+    "heightJumps": 0,
+    "reachablePercent": 100,
+    "unreachable": 0,
+    "resources": 6346,
+    "generationMs": 262
+  },
+  {
+    "profile": "rugged",
+    "seed": 137,
+    "landPercent": 55.98,
+    "levels": [
+      27515,
+      16351,
+      9638,
+      7646,
+      1350
+    ],
+    "biomes": {
+      "water": 27515,
+      "beach": 2859,
+      "grass": 6020,
+      "tall_grass": 3831,
+      "sparse_forest": 5627,
+      "forest": 6240,
+      "dense_jungle": 3585,
+      "mountain": 5471,
+      "hills": 920,
+      "impassable": 432
+    },
+    "coastlineEdges": 1330,
+    "cliffEdges": 1434,
+    "ramps": 36,
+    "heightJumps": 0,
+    "reachablePercent": 100,
+    "unreachable": 0,
+    "resources": 6137,
+    "generationMs": 239
+  },
+  {
+    "profile": "gentle",
+    "seed": 2026,
+    "landPercent": 58,
+    "levels": [
+      26251,
+      23739,
+      9382,
+      2658,
+      470
+    ],
+    "biomes": {
+      "water": 26251,
+      "beach": 4974,
+      "grass": 6522,
+      "tall_grass": 6116,
+      "sparse_forest": 6491,
+      "dense_jungle": 7556,
+      "forest": 3148,
+      "mountain": 959,
+      "impassable": 18,
+      "hills": 465
+    },
+    "coastlineEdges": 1084,
+    "cliffEdges": 900,
+    "ramps": 27,
+    "heightJumps": 0,
+    "reachablePercent": 100,
+    "unreachable": 0,
+    "resources": 6692,
+    "generationMs": 293
+  },
+  {
+    "profile": "balanced",
+    "seed": 2026,
+    "landPercent": 58,
+    "levels": [
+      26251,
+      20520,
+      9830,
+      5014,
+      885
+    ],
+    "biomes": {
+      "water": 26251,
+      "beach": 3482,
+      "grass": 6257,
+      "tall_grass": 5980,
+      "dense_jungle": 6977,
+      "sparse_forest": 5348,
+      "forest": 5867,
+      "mountain": 1647,
+      "impassable": 67,
+      "hills": 624
+    },
+    "coastlineEdges": 1180,
+    "cliffEdges": 1100,
+    "ramps": 32,
+    "heightJumps": 0,
+    "reachablePercent": 100,
+    "unreachable": 0,
+    "resources": 6657,
+    "generationMs": 245
+  },
+  {
+    "profile": "rugged",
+    "seed": 2026,
+    "landPercent": 57.06,
+    "levels": [
+      26839,
+      16576,
+      9871,
+      7831,
+      1383
+    ],
+    "biomes": {
+      "water": 26839,
+      "beach": 2756,
+      "tall_grass": 4893,
+      "grass": 5220,
+      "dense_jungle": 5723,
+      "forest": 8459,
+      "sparse_forest": 4767,
+      "mountain": 3023,
+      "impassable": 125,
+      "hills": 695
+    },
+    "coastlineEdges": 1270,
+    "cliffEdges": 1328,
+    "ramps": 37,
+    "heightJumps": 0,
+    "reachablePercent": 100,
+    "unreachable": 0,
+    "resources": 6398,
+    "generationMs": 231
+  }
+]

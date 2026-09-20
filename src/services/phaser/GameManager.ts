@@ -1,18 +1,25 @@
+import { buildTrails, drawTrails, type TrailSegment } from './TrailArt';
+import { findSite, expansionTarget, planConstruction } from '../game/ConstructionSystem';
+import { buildWidth } from '../../data/construction';
+import { drawCliffs } from './CliffArt';
+import { drawCamp, drawConstruction } from './CampArt';
+import { SpriteFactory } from './SpriteFactory';
+import { drawResourceArt } from './ResourceArt';
+import { drawTreeArt } from './TreeArt';
+import { drawTerrain, drawTerrainEdges, artHash } from './TerrainArt';
+import { canPlaceBuilding } from '../game/BuildingSystem';
+import { useCraftingStore } from '../../store/craftingStore';
 import Phaser from 'phaser';
 import { GameLoop } from '../game/GameLoop';
 import { useGameStore } from '../../store/gameStore';
 import { usePlayerStore } from '../../store/playerStore';
 import { useWorldStore } from '../../store/worldStore';
 import { WORLD_CONFIG, DAY_DURATION_MS } from '../../data/worldConfig';
-import { WorldGenerator } from './WorldGenerator';
-import { RECIPES } from '../../data/recipes';
-import { BUILD_DEFINITIONS } from '../../data/buildDefinitions';
-import type { KnowledgeFlag } from '../../data/knowledge';
+import { restoreWorld } from './restoreWorld';
 import { RAIN_KNOWLEDGE_GRANTS } from '../../data/knowledge';
 import { useTutorialStore } from '../../store/tutorialStore';
-import { craftingSystem } from '../game/CraftingSystem';
 import { FootstepAudio } from '../game/FootstepAudio';
-import { GATHER_SKILL_XP, type SkillId } from '../../types/skills';
+import { GATHER_SKILL_XP } from '../../types/skills';
 import { TOOL_DAMAGE_ON_GATHER, SPEAR_DAMAGE_PER_HIT } from '../../data/toolDurability';
 import { calcWeight, MAX_CARRY_KG } from '../../data/weights';
 import { FOOD_SPOIL_TIME, FOOD_ITEM_NAMES } from '../../data/foodDecay';
@@ -29,8 +36,10 @@ const CAMPFIRE_SIGHT = 5; // extra tiles lit around a campfire at night
 export class GameManager {
   private game: Phaser.Game | null = null;
   private gameLoop = new GameLoop();
+  private craftingDelta = 0;
   private scene: Phaser.Scene | null = null;
   private worldUnsubscribe: (() => void) | null = null;
+  private gameUnsubscribe: (() => void) | null = null;
 
   // Depth system:
   //   tiles=0, obj_shadow=ty*1000+1, obj=ty*1000+2, player=ty*1000+3
@@ -42,7 +51,7 @@ export class GameManager {
   private lightGraphics: Phaser.GameObjects.Graphics | null = null;
 
   // Individual y-sorted objects
-  private resourceObjects = new Map<string, Phaser.GameObjects.Graphics>();
+  private resourceObjects = new Map<string, Phaser.GameObjects.Graphics | Phaser.GameObjects.Image>();
   private resourceQuantities = new Map<string, number>();
   private structureObjects = new Map<string, Phaser.GameObjects.Graphics>();
   private droppedItemObjects = new Map<string, Phaser.GameObjects.Graphics>();
@@ -55,6 +64,8 @@ export class GameManager {
   private readonly AWAKENING_DURATION = 16000; // 16s total
   private awakeningPose = 0; // 0=lying, 1=standing
   private placementGraphics: Phaser.GameObjects.Graphics | null = null;
+  private constructionGraphics: Phaser.GameObjects.Graphics | null = null;
+  private constructionArtKey = "";
   private placementTileX = -1;
   private placementTileY = -1;
   private isRaining = false;
@@ -175,7 +186,12 @@ export class GameManager {
   private exploredTiles: boolean[][] = [];
   private lastTileViewTx = -1;
   private lastTileViewTy = -1;
+  private trails: TrailSegment[] = [];
   private cachedWorld: any = null;
+  // Pre-built list of solid blockers {x,y in px, radius} — rebuilt once on world load
+  private solidBlockers: Array<{ cx: number; cy: number; r: number }> = [];
+  // Fast lookup for grass_tuft tile positions — drawn inline in tile layer, no Phaser objects
+  private grassTuftSet = new Set<number>(); // encoded as x + y * mapWidth
   // Fern dew tracking — keys "x,y", reset each new game day
   private dewHarvestedFerns = new Set<string>();
   private lastDewDay = -1;
@@ -188,7 +204,7 @@ export class GameManager {
   private playerPx = 0;
   private playerPy = 0;
   private walkFrame = 0;
-  private walkTimer = 0;
+  private gatherPoseUntil = 0;
   private isMoving = false;
   private lastSaveTime = 0;
   private readonly autoSaveInterval = 30_000;
@@ -226,6 +242,9 @@ export class GameManager {
       width: Math.floor(window.innerWidth * 0.75),
       height: window.innerHeight,
       backgroundColor: '#0a0a14',
+      // Phaser's focus cooldown otherwise advances only 16.7 ms per frame at low FPS.
+      // onUpdate already caps long frame gaps to prevent catch-up jumps.
+      fps: { smoothStep: false },
       physics: { default: 'arcade', arcade: { gravity: { x: 0, y: 0 }, debug: false } },
       scene: {
         preload: () => {},
@@ -245,8 +264,7 @@ export class GameManager {
 
     // Regenerate tileMap from seed if loaded from save (not persisted)
     if (!world.tileMap || world.tileMap.length === 0) {
-      const fresh = new WorldGenerator().generate(world.seed);
-      world = { ...fresh, structures: world.structures, resources: world.resources, spawnX: world.spawnX ?? fresh.spawnX, spawnY: world.spawnY ?? fresh.spawnY };
+      world = restoreWorld(world);
       worldStoreState.initializeWorld(world);
     }
 
@@ -259,6 +277,9 @@ export class GameManager {
 
     this.tileGraphics = this.scene.add.graphics().setDepth(0);
     this.renderTiles(world);
+
+    // Build collision cache + grass tuft lookup before creating objects
+    this.rebuildSolidBlockers(world.resources);
 
     // Create individual y-sorted objects for resources and structures
     for (const res of world.resources) {
@@ -295,8 +316,11 @@ export class GameManager {
       0, 0, this.game!.scale.width, this.game!.scale.height, 0x000000
     ).setScrollFactor(0).setDepth(700_000).setOrigin(0, 0).setAlpha(0);
 
+    this.updateConstructionArt();
+
     // Placement preview graphics — drawn in world space above fog
     this.placementGraphics = this.scene.add.graphics().setDepth(600_500);
+    this.constructionGraphics = this.scene.add.graphics();
 
     // Awakening overlay — above everything, starts fully black (only for new games)
     const isNewGame = useGameStore.getState().isNewGame;
@@ -344,6 +368,20 @@ export class GameManager {
         this.confirmPlacement(pm.recipeId, this.placementTileX, this.placementTileY);
         return;
       }
+      const w = useWorldStore.getState().world;
+      const tx = Math.floor(this.mouseWorldX / TS), ty = Math.floor(this.mouseWorldY / TS);
+      const site = w?.constructionSites?.find(s => ty === s.y && tx >= s.x && tx < s.x + s.width);
+      const building = w?.structures.find(s => ty === s.y && tx >= s.x && tx < s.x + (s.width ?? 1));
+      if (!site && building?.type === 'arbeitsplatz') {
+        const p = usePlayerStore.getState().player;
+        if (Math.abs(p.x - building.x) <= 1 && Math.abs(p.y - building.y) <= 1 && w?.tileMap[p.y]?.[p.x]?.elevation === w?.tileMap[building.y]?.[building.x]?.elevation) {
+          useGameStore.setState({ constructionSelected: null, craftingOpen: true });
+        } else {
+          this.spawnFloatingText('Gehe zum Arbeitsplatz, um herzustellen.', building.x, building.y, '#fbbf24');
+        }
+        return;
+      }
+      if (site || building) { useGameStore.setState({ constructionSelected: (site ?? building)!.id }); return; }
       this.handleWeaponClick(this.mouseWorldX, this.mouseWorldY);
     });
 
@@ -379,16 +417,19 @@ export class GameManager {
       this.lastGameDay = startDay;
     }
 
-    this.worldUnsubscribe = useWorldStore.subscribe((state) => {
+    this.worldUnsubscribe = useWorldStore.subscribe((state, prev) => {
       if (state.world) {
-        this.syncResources(state.world);
-        this.syncStructures(state.world);
-        this.syncDroppedItems(state.world);
+        if (state.world.resources !== prev.world?.resources) {
+          this.syncResources(state.world);
+          this.rebuildSolidBlockers(state.world.resources);
+        }
+        if (state.world.structures !== prev.world?.structures) this.syncStructures(state.world);
+        if (state.world.droppedItems !== prev.world?.droppedItems) this.syncDroppedItems(state.world);
       }
     });
 
     // Pause/resume GameLoop when store isPaused changes
-    useGameStore.subscribe((state, prev) => {
+    this.gameUnsubscribe = useGameStore.subscribe((state, prev) => {
       if (state.isPaused !== prev.isPaused) {
         if (state.isPaused) this.gameLoop.pause();
         else this.gameLoop.resume();
@@ -397,6 +438,30 @@ export class GameManager {
 
     this.setupInput();
     this.setupVisibilityPause();
+    this.updateWorldVisibility();
+  }
+
+  private static readonly BLOCKER_RADII: Record<string, number> = {
+    palm_tree: 5, large_tree: 6, banyan_tree: 7, resin_tree: 5, wood: 5,
+    stone: 13, granite: 13, iron_ore: 12, obsidian: 12,
+  };
+
+  private rebuildSolidBlockers(resources: any[]) {
+    const radii = GameManager.BLOCKER_RADII;
+    this.solidBlockers = [];
+    this.grassTuftSet.clear();
+    for (const r of resources) {
+      if (r.type === 'grass_tuft') {
+        this.grassTuftSet.add(r.x + r.y * WORLD_CONFIG.width);
+      } else if (radii[r.type] !== undefined) {
+        const isTree = r.type === 'palm_tree' || r.type === 'large_tree' || r.type === 'banyan_tree' || r.type === 'resin_tree' || r.type === 'wood';
+        this.solidBlockers.push({
+          cx: r.x * TS + TS / 2,
+          cy: r.y * TS + TS / 2 + (isTree ? 4 : 0),
+          r: radii[r.type],
+        });
+      }
+    }
   }
 
   private setupVisibilityPause() {
@@ -419,6 +484,7 @@ export class GameManager {
 
   private renderTiles(world: any) {
     this.cachedWorld = world;
+    this.trails = buildTrails(world.tileMap, world.resources);
     this.renderVisibleTiles();
   }
 
@@ -437,352 +503,52 @@ export class GameManager {
     for (let ty = ty0; ty <= ty1; ty++) {
       for (let tx = tx0; tx <= tx1; tx++) {
         this.drawTile(g, world.tileMap[ty][tx].type, tx, ty);
+        if (this.grassTuftSet.has(tx + ty * WORLD_CONFIG.width)) {
+          this.drawResource(g, 'grass_tuft', tx, ty, 1, 1);
+        }
       }
     }
     this.renderTileBlendingViewport(g, world, tx0, ty0, tx1, ty1);
+    drawTrails(g, this.trails, tx0, ty0, tx1, ty1, TS);
     this.renderCliffFaces(g, world, tx0, ty0, tx1, ty1);
 
     this.lastTileViewTx = Math.floor(cam.worldView.x / TS);
     this.lastTileViewTy = Math.floor(cam.worldView.y / TS);
   }
 
-  // Biome color used for blending overlays
-  private biomeBlendColor(type: string): number | null {
-    switch (type) {
-      case 'water':        return 0x1a6eb5;
-      case 'beach': case 'sand': return 0xd4b87a;
-      case 'grass':        return 0x2d8a3e;
-      case 'tall_grass':   return 0x267a32;
-      case 'sparse_forest': return 0x2a7030;
-      case 'dense_jungle': return 0x0f3d14;
-      case 'hills':        return 0x7a8a40;
-      case 'mountain':     return 0x6a6050;
-      case 'impassable':   return 0x2a2520;
-      default:             return null;
-    }
-  }
-
   private renderTileBlendingViewport(g: Phaser.GameObjects.Graphics, world: any, tx0: number, ty0: number, tx1: number, ty1: number) {
     for (let ty = ty0; ty <= ty1; ty++) {
       for (let tx = tx0; tx <= tx1; tx++) {
-        const here = world.tileMap[ty][tx].type;
-        const x = tx * TS, y = ty * TS;
-        if (tx + 1 <= tx1) {
-          const right = world.tileMap[ty][tx + 1].type;
-          if (right !== here) {
-            const col = this.biomeBlendColor(right);
-            if (col !== null) { g.fillStyle(col, 0.22); g.fillRect(x + TS - 7, y, 7, TS); }
-          }
-        }
-        if (ty + 1 <= ty1) {
-          const below = world.tileMap[ty + 1][tx].type;
-          if (below !== here) {
-            const col = this.biomeBlendColor(below);
-            if (col !== null) { g.fillStyle(col, 0.22); g.fillRect(x, y + TS - 7, TS, 7); }
-          }
-        }
+        drawTerrainEdges(g, world.tileMap, tx, ty, TS);
       }
     }
   }
-
 
   private renderCliffFaces(g: Phaser.GameObjects.Graphics, world: any, tx0: number, ty0: number, tx1: number, ty1: number) {
-    // South faces — high tile above, lower tile below (the main Zelda cliff face)
-    for (let ty = ty0; ty < ty1; ty++) {
-      for (let tx = tx0; tx <= tx1; tx++) {
-        const here = world.tileMap[ty]?.[tx];
-        const below = world.tileMap[ty + 1]?.[tx];
-        if (!here || !below) continue;
-        const diff = (here.elevation ?? 0) - (below.elevation ?? 0);
-        if (diff <= 0) continue;
-        this.drawCliffSouth(g, tx, ty, diff);
-      }
-    }
-
-    // East/West faces — high tile left, lower tile right (and vice-versa)
-    for (let ty = ty0; ty <= ty1; ty++) {
-      for (let tx = tx0; tx < tx1; tx++) {
-        const left  = world.tileMap[ty]?.[tx];
-        const right = world.tileMap[ty]?.[tx + 1];
-        if (!left || !right) continue;
-        const diff = (left.elevation ?? 0) - (right.elevation ?? 0);
-        if      (diff > 0) this.drawCliffEast(g, tx,     ty, diff);
-        else if (diff < 0) this.drawCliffWest(g, tx + 1, ty, -diff);
-      }
-    }
+    drawCliffs(g, world.tileMap, tx0, ty0, tx1, ty1, TS);
   }
 
-  private drawCliffSouth(g: Phaser.GameObjects.Graphics, tx: number, ty: number, diff: number) {
-    const x = tx * TS;
-    const y = ty * TS;
-    const impassable = diff >= 2;
-    const faceH = impassable ? 20 : 12;
-    const rockColor  = impassable ? 0x3e3228 : 0x7c6b50;
-    const lipColor   = impassable ? 0x5a4a38 : 0xb0a080;
-    const shadowAlpha = impassable ? 0.90 : 0.75;
-    const hash = (tx * 7 + ty * 13) % 8;
-    const fy   = y + TS - 2;
-
-    g.fillStyle(rockColor);
-    g.fillRect(x, fy, TS, faceH);
-
-    // Top highlight (cliff lip)
-    g.fillStyle(lipColor, 0.85);
-    g.fillRect(x, fy, TS, 3);
-
-    // Bottom shadow
-    g.fillStyle(0x0e0a04, shadowAlpha);
-    g.fillRect(x, fy + faceH - 4, TS, 5);
-
-    // Mid-tone band
-    if (impassable) {
-      g.fillStyle(0x2a2018, 0.60);
-      g.fillRect(x, fy + Math.floor(faceH / 2), TS, 3);
-    }
-
-    // Vertical cracks
-    const crackCount = impassable ? 5 : 3;
-    for (let i = 0; i < crackCount; i++) {
-      const cx = x + ((hash * 5 + i * 7 + tx % 6) % (TS - 4));
-      g.fillStyle(0x1a1208, impassable ? 0.65 : 0.45);
-      g.fillRect(cx, fy + 3, 2, faceH - 6);
-    }
-  }
-
-  private drawCliffEast(g: Phaser.GameObjects.Graphics, tx: number, ty: number, diff: number) {
-    const x = tx * TS;
-    const y = ty * TS;
-    const impassable = diff >= 2;
-    const faceW = impassable ? 14 : 8;
-    const rockColor = impassable ? 0x3e3228 : 0x5a4c38;
-
-    g.fillStyle(rockColor);
-    g.fillRect(x + TS - 2, y, faceW, TS);
-
-    g.fillStyle(0x0e0a04, impassable ? 0.85 : 0.65);
-    g.fillRect(x + TS - 2 + faceW - 3, y, 4, TS);
-
-    g.fillStyle(impassable ? 0x5a4a38 : 0x9a8a68, 0.65);
-    g.fillRect(x + TS - 2, y, 3, TS);
-  }
-
-  private drawCliffWest(g: Phaser.GameObjects.Graphics, tx: number, ty: number, diff: number) {
-    const x = tx * TS;
-    const y = ty * TS;
-    const impassable = diff >= 2;
-    const faceW = impassable ? 14 : 8;
-    const rockColor = impassable ? 0x3e3228 : 0x5a4c38;
-
-    g.fillStyle(rockColor);
-    g.fillRect(x - faceW + 2, y, faceW, TS);
-
-    g.fillStyle(0x0e0a04, impassable ? 0.85 : 0.65);
-    g.fillRect(x - faceW + 2, y, 4, TS);
-
-    g.fillStyle(impassable ? 0x5a4a38 : 0x9a8a68, 0.65);
-    g.fillRect(x - 2, y, 3, TS);
+  // Movement gate: can the player step from `from` tile onto `to` tile?
+  // Rules (Zelda/Pokemon style):
+  //   same elevation  → always allowed
+  //   going DOWN 1 tier → allowed (ledge jump)
+  //   going UP 1 tier  → only via a ramp tile
+  //   diff > 1 in either direction → always blocked
+  private canMoveTo(from: { elevation?: number; isRamp?: boolean } | null | undefined,
+                    to:   { walkable?: boolean; elevation?: number; isRamp?: boolean } | null | undefined): boolean {
+    if (!to?.walkable) return false;
+    const fromE = from?.elevation ?? 1;
+    const toE   = to.elevation   ?? 1;
+    const diff  = toE - fromE;
+    if (diff === 0)  return true;
+    if (diff === -1) return true; // ledge down — always allowed
+    if (diff === 1 && (to.isRamp || from?.isRamp)) return true; // staircase up
+    return false;
   }
 
   private drawTile(g: Phaser.GameObjects.Graphics, type: string, tx: number, ty: number) {
-    const x = tx * TS;
-    const y = ty * TS;
-    const hasCanopyTree = this.jungleCanopyTiles.has(`${tx},${ty}`);
-    // Deterministic per-tile variation (no randomness, reproducible)
-    const h = (tx * 7 + ty * 13) % 8;
-
-    switch (type) {
-      case 'grass': {
-        g.fillStyle(0x2d8a3e);
-        g.fillRect(x, y, TS, TS);
-        g.fillStyle(0x3aad50, 0.5);
-        g.fillRect(x + (h * 3) % 20, y + (h * 5) % 20, 6, 4);
-        g.fillStyle(0x1a6b28, 0.4);
-        g.fillRect(x + (h * 11) % 22, y + (h * 7) % 18, 4, 6);
-        break;
-      }
-      case 'water': {
-        g.fillStyle(0x1a6eb5);
-        g.fillRect(x, y, TS, TS);
-        g.fillStyle(0x3090d4, 0.45);
-        g.fillRect(x, y + (h % 3) * 9, TS, 3);
-        g.fillRect(x, y + (h % 3) * 9 + 5, TS, 2);
-        break;
-      }
-      case 'sand': {
-        g.fillStyle(0xd4a853);
-        g.fillRect(x, y, TS, TS);
-        g.fillStyle(0xe8c070, 0.4);
-        g.fillCircle(x + 8 + (h * 4) % 14, y + 8 + (h * 7) % 14, 3);
-        g.fillStyle(0xb88d3a, 0.3);
-        g.fillCircle(x + 18 + (h * 3) % 10, y + 16 + (h * 5) % 12, 2);
-        break;
-      }
-      case 'forest': {
-        g.fillStyle(0x1a5c1a);
-        g.fillRect(x, y, TS, TS);
-        g.fillStyle(0x2d8a2d, 0.9);
-        g.fillCircle(x + 10 + (h % 3) * 4, y + 10 + (h % 2) * 5, 8);
-        g.fillStyle(0x1f701f, 0.7);
-        g.fillCircle(x + 20 - (h % 3) * 3, y + 18 + (h % 2) * 4, 7);
-        break;
-      }
-      case 'rock': {
-        g.fillStyle(0x787878);
-        g.fillRect(x, y, TS, TS);
-        g.fillStyle(0x5a5a5a, 0.5);
-        g.fillRect(x + 4 + (h % 4) * 3, y + 6, 10, 7);
-        g.fillStyle(0x9a9a9a, 0.35);
-        g.fillRect(x + 14, y + 4 + (h % 3) * 4, 8, 5);
-        break;
-      }
-
-      // ── New biomes ───────────────────────────────────────────────────
-      case 'beach': {
-        g.fillStyle(0xd4b87a);
-        g.fillRect(x, y, TS, TS);
-        g.fillStyle(0xe8cc90, 0.5);
-        g.fillCircle(x + 7  + (h * 4) % 16, y + 8  + (h * 7) % 14, 3);
-        g.fillCircle(x + 20 + (h * 3) % 9,  y + 19 + (h * 5) % 10, 2);
-        g.fillStyle(0xb89a50, 0.3);
-        g.fillCircle(x + 14 + (h * 2) % 12, y + 14 + (h * 3) % 12, 2);
-        // Beach micro-variation: shells, damp patches, drift traces
-        if (h % 2 === 0) {
-          g.fillStyle(0xf4e3be, 0.45);
-          g.fillCircle(x + 5 + (h * 5) % 20, y + 22 - (h % 3) * 4, 1.8);
-          g.fillCircle(x + 22 - (h * 2) % 9, y + 7 + (h % 4) * 3, 1.5);
-        }
-        if (h % 3 === 0) {
-          g.fillStyle(0xb9a06a, 0.22);
-          g.fillEllipse(x + 10 + (h * 3) % 12, y + 18, 14, 5);
-        }
-        if (h % 4 === 1) {
-          g.fillStyle(0x9b7a45, 0.3);
-          g.fillRect(x + 3 + (h * 2) % 18, y + 10 + (h % 3) * 4, 8, 2);
-        }
-        break;
-      }
-      case 'tall_grass': {
-        g.fillStyle(0x267a32);
-        g.fillRect(x, y, TS, TS);
-        // Taller, denser blades with mixed tones
-        g.lineStyle(1, 0x3db050, 0.92);
-        for (let i = 0; i < 8; i++) {
-          const bx = x + 4 + ((h * 5 + i * 7) % 22);
-          g.lineBetween(bx, y + TS, bx + ((h + i) % 3) - 1, y + 2 + (i * 2) % 10);
-        }
-        g.lineStyle(1, 0x2f963e, 0.8);
-        for (let i = 0; i < 4; i++) {
-          const bx = x + 3 + ((h * 9 + i * 5) % 24);
-          g.lineBetween(bx, y + TS - 1, bx - 1 + ((h + i) % 4), y + 6 + (i * 3) % 9);
-        }
-        g.fillStyle(0x1a5c24, 0.4);
-        g.fillRect(x + (h * 9) % 18, y + (h * 7) % 18, 5, 8);
-        // Wildflower accents
-        if (h % 3 === 1) {
-          g.fillStyle(0xeab308, 0.8);
-          g.fillCircle(x + 8 + (h * 3) % 14, y + 9 + (h % 4) * 3, 1.5);
-          g.fillStyle(0xf8fafc, 0.75);
-          g.fillCircle(x + 20 - (h * 2) % 10, y + 13 + (h % 3) * 3, 1.2);
-        }
-        break;
-      }
-      case 'sparse_forest': {
-        g.fillStyle(0x2a7030);
-        g.fillRect(x, y, TS, TS);
-        g.fillStyle(0x3d9040, 0.7);
-        g.fillCircle(x + 9  + (h % 3) * 5, y + 9  + (h % 2) * 6, 7);
-        g.fillStyle(0x1f5c22, 0.5);
-        g.fillCircle(x + 21 - (h % 3) * 4, y + 20 + (h % 2) * 4, 5);
-        g.fillStyle(0x4aad54, 0.35);
-        g.fillCircle(x + 15 + (h % 2) * 3, y + 7  + (h % 3) * 4, 4);
-        break;
-      }
-      case 'dense_jungle': {
-        // Darker, cooler jungle ground so canopy trees stand out clearly
-        g.fillStyle(0x0a2a11);
-        g.fillRect(x, y, TS, TS);
-        if (hasCanopyTree) {
-          g.fillStyle(0x12371a, 0.25);
-          g.fillRect(x + 2, y + 2, TS - 4, TS - 4);
-          break;
-        }
-        // Understory-only jungle tile: ferns, leaf clusters, damp patches
-        g.fillStyle(0x0f3316, 0.55);
-        g.fillEllipse(x + 8 + (h * 3) % 16, y + 9 + (h % 4) * 3, 12, 7);
-        g.fillEllipse(x + 20 - (h * 2) % 11, y + 20 - (h % 3) * 2, 10, 6);
-
-        g.fillStyle(0x1e5a2a, 0.6);
-        g.fillRect(x + 3 + (h % 4) * 3, y + 18, 9, 3);
-        g.fillRect(x + 14 + (h % 3) * 2, y + 22, 8, 2);
-
-        g.lineStyle(1, 0x2f7f3a, 0.75);
-        for (let i = 0; i < 4; i++) {
-          const fx = x + 5 + ((h * 5 + i * 6) % 20);
-          g.lineBetween(fx, y + 26, fx + ((i % 2) ? 2 : -2), y + 18 - (i % 3));
-        }
-
-        g.fillStyle(0x3f8a46, 0.35);
-        g.fillCircle(x + 7 + (h * 4) % 16, y + 24 - (h % 3) * 2, 2);
-        g.fillCircle(x + 22 - (h * 3) % 12, y + 12 + (h % 4) * 2, 1.8);
-        break;
-      }
-      case 'hills': {
-        g.fillStyle(0x7a8a40);
-        g.fillRect(x, y, TS, TS);
-        g.fillStyle(0x9aaa50, 0.6);
-        g.fillEllipse(x + 8  + (h * 3) % 14, y + 10 + (h % 3) * 4, 20, 10);
-        g.fillStyle(0x5a6a30, 0.5);
-        g.fillEllipse(x + 18 + (h * 2) % 10, y + 18 - (h % 2) * 3, 16,  8);
-        g.fillStyle(0xb0c060, 0.25);
-        g.fillRect(x + (h * 5) % 16, y + (h * 9) % 16, 6, 3);
-        break;
-      }
-      case 'mountain': {
-        g.fillStyle(0x6a6050);
-        g.fillRect(x, y, TS, TS);
-        g.fillStyle(0x857a68, 0.7);
-        g.fillRect(x + 2 + (h % 4) * 3, y + 4, 14, 10);
-        g.fillStyle(0x504840, 0.6);
-        g.fillRect(x + 8 + (h % 3) * 2, y + 14, 10,  8);
-        g.fillStyle(0x9a9080, 0.35);
-        g.fillRect(x + 4, y + 2 + (h % 3) * 3, 8, 4);
-        // Snow hint on peaks
-        g.fillStyle(0xffffff, 0.15);
-        g.fillRect(x + 6 + (h % 4) * 2, y + 1, 6, 3);
-        break;
-      }
-      case 'impassable': {
-        g.fillStyle(0x2a2520);
-        g.fillRect(x, y, TS, TS);
-        g.fillStyle(0x3d3530, 0.8);
-        g.fillRect(x + 1, y + 2, 14, 12);
-        g.fillRect(x + 14, y + 8, 16, 18);
-        g.fillStyle(0x1a1510, 0.6);
-        g.fillRect(x + 5  + (h % 4) * 3, y + 3, 10, 7);
-        g.fillRect(x + 8  + (h % 3) * 2, y + 16, 8, 10);
-        // Ice/snow in cracks
-        g.fillStyle(0xc0d0e0, 0.2);
-        g.fillRect(x + (h * 3) % 20, y + (h * 5) % 20, 4, 2);
-        break;
-      }
-
-      default: {
-        g.fillStyle(0x555555);
-        g.fillRect(x, y, TS, TS);
-      }
-    }
-
-    // Per-tile lighting for more depth (no visible grid lines)
-    const v = (tx * 23 + ty * 37) % 9;
-    if (v < 2) { g.fillStyle(0x000000, 0.05); g.fillRect(x, y, TS, TS); }
-    else if (v > 6) { g.fillStyle(0xffffff, 0.03); g.fillRect(x, y, TS, TS); }
-    g.fillStyle(0xffffff, 0.04);
-    g.fillRect(x + 1, y + 1, TS - 2, 2);
-    g.fillStyle(0x000000, 0.08);
-    g.fillRect(x + 1, y + TS - 3, TS - 2, 2);
+    drawTerrain(g, type, tx, ty, TS);
   }
-
-  // ── Resource & structure y-sorted objects ─────────────────────────
 
   private objectDepth(_tx: number, ty: number) {
     return ty * 1000 + 2;
@@ -790,13 +556,18 @@ export class GameManager {
 
   private createResourceObject(res: any) {
     if (!this.scene) return;
-    const g = this.scene.add.graphics();
-    // Large trees need depth offset so canopy renders correctly relative to nearby objects
-    const depthTy = (res.type === 'large_tree' || res.type === 'banyan_tree')
-      ? res.y + 1  // sort as if they're 1 tile further south (canopy appears in front)
-      : res.y;
+    // grass_tuft is drawn inline during tile rendering — no persistent Phaser object needed
+    if (res.type === 'grass_tuft') return;
+    const texture = SpriteFactory.texture(this.scene, res.type, artHash(res.x, res.y) % 3, res.quantity);
+    const layout = SpriteFactory.layout(res.type);
+    const g = texture
+      ? this.scene.add.image(res.x * TS + TS / 2, res.y * TS + TS - 4, texture).setOrigin(0.5, layout.base / layout.height)
+      : this.scene.add.graphics();
+    const depthTy = (res.type === 'large_tree' || res.type === 'banyan_tree') ? res.y + 1 : res.y;
     g.setDepth(this.objectDepth(res.x, depthTy));
-    this.drawResource(g, res.type, res.x, res.y, res.quantity, res.maxQuantity);
+    if (g instanceof Phaser.GameObjects.Graphics) {
+      this.drawResource(g, res.type, res.x, res.y, res.quantity, res.maxQuantity);
+    }
     this.resourceQuantities.set(res.id, res.quantity);
     this.resourceObjects.set(res.id, g);
   }
@@ -804,8 +575,14 @@ export class GameManager {
   private createStructureObject(s: any) {
     if (!this.scene) return;
     const g = this.scene.add.graphics();
-    g.setDepth(this.objectDepth(s.x, s.y));
+    // A leaf bed lies on the terrain, below characters on every adjacent row.
+    g.setDepth(s.type === 'sleeping_spot' ? 1.5 : this.objectDepth(s.x, s.y));
     this.drawStructure(g, s.type, s.x, s.y, s.fuel);
+    if (['wooden_shelter', 'log_cabin'].includes(s.type) && (s.width ?? 1) > 1) {
+      g.setScale(s.width, 1);
+      g.setPosition(s.x * TS * (1 - s.width), 0);
+    }
+    g.setData('buildType', s.type);
     this.structureObjects.set(s.id, g);
   }
 
@@ -870,80 +647,22 @@ export class GameManager {
   }
 
   private drawJungleCanopyTree(g: Phaser.GameObjects.Graphics, tx: number, ty: number, seed: number, stripped: boolean) {
-    const baseX = tx * TS + TS / 2 + ((seed % 3) - 1) * 3;
-    const baseY = ty * TS + TS - 2;
-    const trunkH = 44 + (seed % 10); // taller trunk
-
-    // Ground root spread
-    g.fillStyle(0x3a2010, 0.7);
-    g.fillEllipse(baseX, baseY + 2, 18, 6);
-    g.fillStyle(0x4a7a3f, 0.4);
-    g.fillEllipse(baseX, baseY + 1, 30, 10);
-
-    // Ground shadow (cast shadow to the side, world-space depth)
-    g.fillStyle(0x000000, 0.18);
-    g.fillEllipse(baseX + 8, baseY + 4, 36, 10);
-
-    // Main trunk — wider, darker
-    g.fillStyle(0x4a2c15, 0.98);
-    g.fillRect(baseX - 5, baseY - trunkH, 10, trunkH);
-    // Bark highlight
-    g.fillStyle(0x7a4b2b, 0.45);
-    g.fillRect(baseX - 2, baseY - trunkH, 3, trunkH);
-    // Root buttresses
-    g.fillStyle(0x3d2010, 0.8);
-    g.fillTriangle(baseX - 5, baseY, baseX - 12, baseY + 5, baseX - 5, baseY - 12);
-    g.fillTriangle(baseX + 5, baseY, baseX + 12, baseY + 5, baseX + 5, baseY - 12);
-
-    // Canopy — large, multi-layer, extends 1.5–2 tiles in all directions
-    const cr = 26 + (seed % 6); // base canopy radius ~26-31px (~1 tile)
-    const topY = baseY - trunkH;
-
-    // Dark base layer (largest, lowest)
-    g.fillStyle(0x0d3a11, 0.95);
-    g.fillCircle(baseX, topY - 4, cr);
-    // Secondary off-center lobes
-    g.fillStyle(0x154a19, 0.92);
-    g.fillCircle(baseX - cr * 0.6, topY - cr * 0.3, cr * 0.82);
-    g.fillCircle(baseX + cr * 0.55, topY - cr * 0.25, cr * 0.78);
-    g.fillCircle(baseX - cr * 0.2, topY - cr * 0.7, cr * 0.72);
-    // Mid greens
-    g.fillStyle(0x1f6123, 0.88);
-    g.fillCircle(baseX + cr * 0.3, topY - cr * 0.55, cr * 0.65);
-    g.fillCircle(baseX - cr * 0.45, topY - cr * 0.6, cr * 0.58);
-    // Bright top highlights
-    g.fillStyle(0x2f8734, 0.75);
-    g.fillCircle(baseX - cr * 0.15, topY - cr * 0.85, cr * 0.45);
-    g.fillCircle(baseX + cr * 0.2, topY - cr * 0.4, cr * 0.38);
-    // Very bright tip
-    g.fillStyle(0x3da040, 0.5);
-    g.fillCircle(baseX, topY - cr, cr * 0.28);
-
-    // Hanging vines from canopy
-    const drawVine = (sx: number, sy: number, bend: number, len: number, col: number, alpha: number) => {
-      g.lineStyle(1.5, col, alpha);
-      let px = sx;
-      let py = sy;
-      for (let k = 1; k <= len; k++) {
-        const nx = sx + Math.sin((k + bend) * 0.5) * bend * 1.1;
-        const ny = sy + k * 2.2;
-        g.lineBetween(px, py, nx, ny);
-        px = nx; py = ny;
-      }
-      g.fillStyle(0x45ba4e, alpha * 0.9);
-      g.fillCircle(px, py, 1.5);
-    };
-
+    const cx = tx * TS + TS / 2, base = ty * TS + TS - 2;
+    drawTreeArt(g, 'vine_tree', cx, base, seed % 3, 1);
     if (!stripped) {
-      const vineRootY = topY + cr * 0.2;
-      drawVine(baseX - 8,  vineRootY,      1.8, 16, 0x2f8a36, 0.88);
-      drawVine(baseX + 4,  vineRootY + 2,  2.3, 14, 0x3aa342, 0.80);
-      drawVine(baseX - 18, vineRootY + 4,  1.4, 12, 0x2f8a36, 0.72);
-      if (seed % 2 === 0) {
-        drawVine(baseX + 14, vineRootY + 3, 1.9, 13, 0x38b040, 0.68);
-      }
-      if (seed % 3 === 0) {
-        drawVine(baseX - 2,  vineRootY + 6, 2.5, 10, 0x2f8a36, 0.6);
+      for (let i = 0; i < 5; i++) {
+        const x = cx - 35 + i * 17, top = base - 72 - (i % 2) * 9;
+        g.lineStyle(1.5, 0x72915a);
+        g.beginPath(); g.moveTo(x, top);
+        for (let j = 1; j <= 10; j++) {
+          g.lineTo(x + Math.sin(j * 0.65 + i) * 4, top + j * 5);
+        }
+        g.strokePath();
+        for (let j = 2; j < 10; j += 3) {
+          const lx = x + Math.sin(j * 0.65 + i) * 4, ly = top + j * 5;
+          g.fillStyle(0x819b58);
+          g.fillTriangle(lx, ly, lx + (i % 2 ? -7 : 7), ly - 3, lx + 2, ly + 4);
+        }
       }
     }
   }
@@ -994,8 +713,13 @@ export class GameManager {
         const prev = this.resourceQuantities.get(res.id);
         if (prev !== res.quantity) {
           const g = this.resourceObjects.get(res.id)!;
-          g.clear();
-          this.drawResource(g, res.type, res.x, res.y, res.quantity, res.maxQuantity);
+          if (g instanceof Phaser.GameObjects.Image && this.scene) {
+            const texture = SpriteFactory.texture(this.scene, res.type, artHash(res.x, res.y) % 3, res.quantity);
+            if (texture) g.setTexture(texture);
+          } else if (g instanceof Phaser.GameObjects.Graphics) {
+            g.clear();
+            this.drawResource(g, res.type, res.x, res.y, res.quantity, res.maxQuantity);
+          }
           this.resourceQuantities.set(res.id, res.quantity);
         }
       }
@@ -1009,6 +733,9 @@ export class GameManager {
     }
     for (const s of world.structures) {
       if (!this.structureObjects.has(s.id)) {
+        this.createStructureObject(s);
+      } else if (this.structureObjects.get(s.id)!.getData('buildType') !== s.type) {
+        this.structureObjects.get(s.id)!.destroy();
         this.createStructureObject(s);
       } else if (s.type === 'water_container') {
         // Redraw when fuel changes so water level updates visually
@@ -1107,6 +834,10 @@ export class GameManager {
   private drawDroppedItem(g: Phaser.GameObjects.Graphics, resourceId: string, tx: number, ty: number) {
     const cx = tx * TS + TS / 2;
     const cy = ty * TS + TS / 2;
+    if (['flint', 'pebbles', 'sticks', 'fiber', 'coconut'].includes(resourceId)) {
+      drawResourceArt(g, resourceId, cx, cy + 7, 0, 1);
+      return;
+    }
     const color = GameManager.DROP_COLORS[resourceId] ?? 0x888888;
 
     // Shadow
@@ -1136,32 +867,13 @@ export class GameManager {
     const cx = tx * TS + TS / 2;
     // base = ground anchor at bottom of tile
     const base = ty * TS + TS - 4;
+    if (drawResourceArt(g, type, cx, base, artHash(tx, ty) % 3, quantity)) return;
 
     // Deterministic per-tile size variation for trees (1.2 – 2.1)
     const treeSeed = (tx * 374761 + ty * 914723) % 100;
     const sc = 1.2 + treeSeed / 111; // 1.2 … 2.1
 
     switch (type) {
-      case 'wood': {
-        const th = Math.round(14 * sc);
-        const cr = Math.round(13 * sc);
-        g.fillStyle(0x000000, 0.22);
-        g.fillEllipse(cx, base + 3, Math.round(22 * sc), Math.round(7 * sc));
-        g.fillStyle(0x6b3a1f);
-        g.fillRect(cx - Math.round(3 * sc), base - th, Math.round(6 * sc), th);
-        g.fillStyle(0x4a2010, 0.5);
-        g.fillRect(cx - Math.round(sc), base - th, Math.round(2 * sc), th);
-        g.fillStyle(0x1a5c1a);
-        g.fillCircle(cx, base - th - 12, cr);
-        g.fillStyle(0x2d8a2d, 0.9);
-        g.fillCircle(cx - Math.round(5 * sc), base - th - 18, Math.round(10 * sc));
-        g.fillCircle(cx + Math.round(5 * sc), base - th - 18, Math.round(10 * sc));
-        g.fillStyle(0x3aad50, 0.8);
-        g.fillCircle(cx, base - th - 24, Math.round(9 * sc));
-        g.fillStyle(0x4acc60, 0.4);
-        g.fillCircle(cx - Math.round(2 * sc), base - th - 26, Math.round(5 * sc));
-        break;
-      }
       case 'stone': {
         const ow = Math.round(30 * sc), oh = Math.round(24 * sc);
         const otop = base - oh;
@@ -1188,124 +900,12 @@ export class GameManager {
       case 'food': {
         g.fillStyle(0x000000, 0.15);
         g.fillEllipse(cx, base + 2, 18, 5);
-        g.fillStyle(0x2d8a2d, 0.9);
+        g.fillStyle(0x577949, 0.9);
         g.fillCircle(cx, base - 10, 10);
         g.fillStyle(0xe74c3c);
         g.fillCircle(cx - 4, base - 12, 3);
         g.fillCircle(cx + 4, base - 11, 3);
         g.fillCircle(cx, base - 6, 3);
-        break;
-      }
-      case 'sticks': {
-        // Shadow
-        g.fillStyle(0x000000, 0.12);
-        g.fillEllipse(cx, base + 1, 18, 4);
-        // Stick 1 — thick, dark brown, diagonal
-        g.lineStyle(2.5, 0x6b3f1a, 0.95);
-        g.lineBetween(cx - 8, base + 1, cx + 3, base - 9);
-        // Knot on stick 1
-        g.lineStyle(1.5, 0x4a2a0e, 0.8);
-        g.lineBetween(cx - 5, base - 2, cx - 7, base - 4);
-        // Stick 2 — medium, reddish-brown
-        g.lineStyle(2, 0x8b4a1e, 0.9);
-        g.lineBetween(cx - 2, base + 2, cx + 7, base - 7);
-        // Branch fork on stick 2
-        g.lineStyle(1, 0x7a3e18, 0.75);
-        g.lineBetween(cx + 5, base - 5, cx + 7, base - 3);
-        // Stick 3 — thin, weathered grey-brown, nearly flat
-        g.lineStyle(1.5, 0x9a7a4a, 0.85);
-        g.lineBetween(cx - 6, base - 1, cx + 5, base - 4);
-        // Highlight on stick 3
-        g.lineStyle(1, 0xc4a060, 0.4);
-        g.lineBetween(cx - 5, base - 2, cx + 2, base - 4);
-        break;
-      }
-      case 'pebbles': {
-        g.fillStyle(0x9a9a9a);
-        g.fillCircle(cx - 5, base - 1, 3);
-        g.fillStyle(0xb0b0b0);
-        g.fillCircle(cx + 4, base - 2, 3.5);
-        g.fillStyle(0x888888);
-        g.fillCircle(cx, base - 6, 2.5);
-        break;
-      }
-      case 'palm_tree': {
-        const th = Math.round(30 * sc);
-        // Shadow
-        g.fillStyle(0x000000, 0.20);
-        g.fillEllipse(cx, base + 3, Math.round(18 * sc), Math.round(6 * sc));
-        // Trunk
-        g.fillStyle(0x8b6914);
-        g.fillRect(cx - Math.round(2 * sc), base - th, Math.round(5 * sc), th);
-        g.fillStyle(0xa07820, 0.6);
-        g.fillRect(cx - Math.round(sc), base - th, Math.round(2 * sc), th);
-        g.fillStyle(0x6b5010, 0.4);
-        for (let i = 0; i < 5; i++) {
-          g.fillRect(cx - Math.round(2 * sc), base - Math.round(6 * sc) - i * Math.round(6 * sc), Math.round(5 * sc), 2);
-        }
-        // Fronds — smooth leaf polygons with quadratic droop
-        const top = base - th;
-        const fLen = Math.round(22 * sc);
-        // Draws a natural leaf shape: wide belly, tapers to 0 at both ends,
-        // with the tip pulled downward by `droop` pixels (quadratic gravity curve)
-        const drawFrond = (angleDeg: number, droop: number, color: number, alpha: number, lenMult = 1.0) => {
-          const rad = angleDeg * Math.PI / 180;
-          const len = fLen * lenMult;
-          const cosA = Math.cos(rad), sinA = Math.sin(rad);
-          // perpendicular to the frond axis (for width)
-          const nx = -sinA, ny = cosA;
-          const maxHW = 4.5 * sc;
-          const N = 10;
-          const pts: { x: number; y: number }[] = [];
-          // right side: base → tip
-          for (let i = 0; i <= N; i++) {
-            const t = i / N;
-            const sx = cx + cosA * len * t;
-            const sy = top + sinA * len * t + droop * sc * t * t; // quadratic droop
-            const hw = maxHW * Math.sin(t * Math.PI); // 0 at both ends, peak at midpoint
-            pts.push({ x: sx + nx * hw, y: sy + ny * hw });
-          }
-          // left side: tip → base
-          for (let i = N; i >= 0; i--) {
-            const t = i / N;
-            const sx = cx + cosA * len * t;
-            const sy = top + sinA * len * t + droop * sc * t * t;
-            const hw = maxHW * Math.sin(t * Math.PI);
-            pts.push({ x: sx - nx * hw, y: sy - ny * hw });
-          }
-          g.fillStyle(color, alpha);
-          g.fillPoints(pts as Phaser.Math.Vector2[], true);
-          // midrib: thin lighter strip along spine
-          const rib: { x: number; y: number }[] = [];
-          const rw = 0.8 * sc;
-          for (let i = 0; i <= N; i++) {
-            const t = i / N;
-            rib.push({ x: cx + cosA*len*t + nx*rw, y: top + sinA*len*t + droop*sc*t*t + ny*rw });
-          }
-          for (let i = N; i >= 0; i--) {
-            const t = i / N;
-            rib.push({ x: cx + cosA*len*t - nx*rw, y: top + sinA*len*t + droop*sc*t*t - ny*rw });
-          }
-          g.fillStyle(0x7ee830, alpha * 0.45);
-          g.fillPoints(rib as Phaser.Math.Vector2[], true);
-        };
-        // Crown knob
-        g.fillStyle(0x4a7a10, 1.0);
-        g.fillCircle(cx, top, Math.round(3 * sc));
-        // Always-visible: 3 upward fronds
-        drawFrond(-90,   2, 0x33b01e, 0.95);
-        drawFrond(-120,  6, 0x2ca01a, 0.92, 0.95);
-        drawFrond(-60,   6, 0x2ca01a, 0.92, 0.95);
-        // Mid fronds (qty >= 3): spread sideways, moderate droop
-        if (quantity >= 3) {
-          drawFrond(-150, 12, 0x259016, 0.85, 0.92);
-          drawFrond(-30,  12, 0x259016, 0.85, 0.92);
-        }
-        // Lower drooping fronds (qty >= 1): hang below crown
-        if (quantity >= 1) {
-          drawFrond(-170, 20, 0x1e7812, 0.78, 0.88);
-          drawFrond(-10,  20, 0x1e7812, 0.78, 0.88);
-        }
         break;
       }
       case 'spring': {
@@ -1463,69 +1063,95 @@ export class GameManager {
       }
 
       // ── New resources (base-anchored) ─────────────────────────────────
-      case 'flint': {
-        g.fillStyle(0x3a3530);
-        g.fillRect(cx - 5, base - 5, 10, 6);
-        g.fillStyle(0x706860, 0.9);
-        g.fillRect(cx - 4, base - 7, 6, 4);
-        g.fillStyle(0xd0c8b8, 0.7);
-        g.fillRect(cx - 3, base - 9, 3, 2);
-        g.lineStyle(1, 0x908878, 0.8);
-        g.lineBetween(cx - 5, base - 4, cx + 2, base - 8);
-        break;
-      }
       case 'driftwood': {
         const ds = (tx * 531 + ty * 317) % 100;
-        const ox = (ds % 7) - 3; // horizontal offset variation
-        const large = ds > 35;
-        // Shadow
-        g.fillStyle(0x000000, 0.15);
-        g.fillEllipse(cx + ox, base + 3, large ? 36 : 20, 6);
-        if (large) {
-          // Main log body — fat horizontal ellipse, bleached grey-white
-          g.fillStyle(0xd8cdb8, 0.97);
-          g.fillEllipse(cx + ox, base - 5, 34, 11);
-          // Dark shadow underside
-          g.fillStyle(0x9a8868, 0.5);
-          g.fillEllipse(cx + ox, base - 2, 30, 6);
-          // Bleached top highlight
-          g.fillStyle(0xeee8d8, 0.7);
-          g.fillEllipse(cx + ox - 2, base - 8, 20, 5);
-          // Bark crack lines
-          g.lineStyle(1, 0xa09070, 0.6);
-          g.lineBetween(cx + ox - 10, base - 5, cx + ox - 4, base - 7);
-          g.lineBetween(cx + ox + 3,  base - 4, cx + ox + 9,  base - 6);
-          // End knots
-          g.fillStyle(0xb0a080, 0.9);
-          g.fillCircle(cx + ox - 16, base - 5, 5);
-          g.fillStyle(0x8a7858, 0.6);
-          g.fillCircle(cx + ox - 16, base - 5, 3);
-          g.fillStyle(0xb0a080, 0.9);
-          g.fillCircle(cx + ox + 16, base - 5, 4);
-          g.fillStyle(0x8a7858, 0.6);
-          g.fillCircle(cx + ox + 16, base - 5, 2);
-          // Occasional small branch stub
-          if (ds % 3 !== 0) {
-            g.lineStyle(2, 0xb8a888, 0.8);
-            g.lineBetween(cx + ox + 4, base - 10, cx + ox + 10, base - 16);
-            g.lineStyle(1.5, 0xc8b898, 0.5);
-            g.lineBetween(cx + ox + 10, base - 16, cx + ox + 14, base - 13);
+        const variant = ds % 3; // 0 = large diagonal log, 1 = medium flat, 2 = branch bundle
+
+        if (variant === 0) {
+          // Large bleached log lying diagonally — darkish grey-brown
+          g.fillStyle(0x000000, 0.18);
+          g.fillEllipse(cx + 2, base + 3, 40, 7);
+          // Main body — rotated look via stacked ellipses
+          g.fillStyle(0x8a7255, 1.0);
+          g.fillEllipse(cx - 2, base - 4, 38, 13);
+          // Underside shadow
+          g.fillStyle(0x4a3c28, 0.6);
+          g.fillEllipse(cx - 1, base - 1, 34, 7);
+          // Surface grain — lighter strip along top
+          g.fillStyle(0xb09870, 0.55);
+          g.fillEllipse(cx - 4, base - 8, 24, 5);
+          // Bark cracks
+          g.lineStyle(1, 0x3a2e1e, 0.7);
+          g.lineBetween(cx - 14, base - 4, cx - 6, base - 7);
+          g.lineBetween(cx + 2,  base - 3, cx + 10, base - 6);
+          g.lineBetween(cx - 2,  base - 5, cx + 3,  base - 3);
+          // Left end — cross-section ring
+          g.fillStyle(0x6a5538, 0.95);
+          g.fillEllipse(cx - 18, base - 4, 11, 13);
+          g.fillStyle(0x4a3820, 0.8);
+          g.fillEllipse(cx - 18, base - 4, 7, 9);
+          g.fillStyle(0x7a6040, 0.5);
+          g.fillEllipse(cx - 18, base - 5, 4, 5);
+          // Right end
+          g.fillStyle(0x6a5538, 0.9);
+          g.fillEllipse(cx + 18, base - 4, 9, 11);
+          g.fillStyle(0x4a3820, 0.75);
+          g.fillEllipse(cx + 18, base - 4, 5, 7);
+          // Branch stub
+          if (ds % 5 !== 0) {
+            g.lineStyle(3, 0x5a4530, 0.85);
+            g.lineBetween(cx + 6, base - 10, cx + 14, base - 18);
+            g.lineStyle(2, 0x6a5540, 0.6);
+            g.lineBetween(cx + 14, base - 18, cx + 18, base - 14);
           }
+
+        } else if (variant === 1) {
+          // Medium flat chunk — shorter, rounder, lying flat
+          g.fillStyle(0x000000, 0.15);
+          g.fillEllipse(cx + 1, base + 2, 28, 6);
+          g.fillStyle(0x7a6245, 1.0);
+          g.fillEllipse(cx, base - 4, 28, 11);
+          g.fillStyle(0x3e2e18, 0.55);
+          g.fillEllipse(cx, base - 1, 24, 5);
+          g.fillStyle(0xa08860, 0.5);
+          g.fillEllipse(cx - 2, base - 7, 14, 4);
+          // Bark texture
+          g.lineStyle(1, 0x2e2010, 0.65);
+          g.lineBetween(cx - 8, base - 4, cx - 2, base - 6);
+          g.lineBetween(cx + 3,  base - 3, cx + 8,  base - 5);
+          // End caps
+          g.fillStyle(0x5e4828, 0.9);
+          g.fillEllipse(cx - 13, base - 4, 9, 11);
+          g.fillStyle(0x3e2e18, 0.7);
+          g.fillEllipse(cx - 13, base - 4, 5, 7);
+          g.fillStyle(0x5e4828, 0.85);
+          g.fillEllipse(cx + 13, base - 4, 8, 10);
+          g.fillStyle(0x3e2e18, 0.65);
+          g.fillEllipse(cx + 13, base - 4, 4, 6);
+
         } else {
-          // Small piece — short chunk or branch
-          g.fillStyle(0xd0c4a8, 0.95);
-          g.fillEllipse(cx + ox, base - 4, 18, 8);
-          g.fillStyle(0x9a8868, 0.45);
-          g.fillEllipse(cx + ox, base - 2, 14, 4);
-          g.fillStyle(0xe4dac4, 0.6);
-          g.fillEllipse(cx + ox - 1, base - 6, 9, 4);
-          // End
-          g.fillStyle(0xb0a080, 0.85);
-          g.fillCircle(cx + ox + 8, base - 4, 4);
-          g.fillStyle(0x8a7858, 0.55);
-          g.fillCircle(cx + ox + 8, base - 4, 2.5);
-          g.lineStyle(1, 0xa09070, 0.5);
-          g.lineBetween(cx + ox - 5, base - 4, cx + ox + 3, base - 6);
+          // Small branch bundle — 3 thin pieces at slightly different angles
+          g.fillStyle(0x000000, 0.12);
+          g.fillEllipse(cx + 1, base + 2, 22, 4);
+          // Back branch (darker)
+          g.lineStyle(4, 0x4a3820, 0.9);
+          g.lineBetween(cx - 10, base, cx + 12, base - 8);
+          g.lineStyle(3, 0x6a5030, 0.7);
+          g.lineBetween(cx - 10, base, cx + 12, base - 8);
+          // Middle branch
+          g.lineStyle(4, 0x5a4228, 0.95);
+          g.lineBetween(cx - 11, base - 3, cx + 11, base - 3);
+          g.lineStyle(3, 0x7a5e38, 0.65);
+          g.lineBetween(cx - 11, base - 3, cx + 11, base - 3);
+          // Front branch (lighter)
+          g.lineStyle(3, 0x6a5030, 0.9);
+          g.lineBetween(cx - 9, base - 6, cx + 10, base + 2);
+          g.lineStyle(2, 0x8a6e48, 0.6);
+          g.lineBetween(cx - 9, base - 6, cx + 10, base + 2);
+          // Knot dots
+          g.fillStyle(0x3a2810, 0.8);
+          g.fillCircle(cx - 3, base - 3, 2);
+          g.fillCircle(cx + 4,  base - 5, 1.5);
         }
         break;
       }
@@ -1570,16 +1196,6 @@ export class GameManager {
         g.fillEllipse(cx + 3, base - 3, 12, 5);
         g.lineStyle(1, 0x1a5808, 0.8);
         g.lineBetween(cx - 7, base - 1, cx + 6, base - 11);
-        break;
-      }
-      case 'herbs': {
-        g.fillStyle(0x2aaa50, 0.9);
-        g.fillCircle(cx, base - 10, 5);
-        g.fillStyle(0x3acc60, 0.7);
-        g.fillCircle(cx - 4, base - 6, 3);
-        g.fillCircle(cx + 4, base - 6, 3);
-        g.lineStyle(1, 0x1a7838, 0.9);
-        g.lineBetween(cx, base, cx, base - 8);
         break;
       }
       case 'fern': {
@@ -1666,13 +1282,21 @@ export class GameManager {
         }
         break;
       }
-      case 'fiber': {
-        g.lineStyle(2, 0xc8b060, 0.9);
-        g.lineBetween(cx - 5, base + 2, cx - 3, base - 8);
-        g.lineBetween(cx - 1, base + 2, cx + 1, base - 9);
-        g.lineBetween(cx + 4, base + 2, cx + 3, base - 7);
-        g.lineStyle(1, 0xe0c870, 0.7);
-        g.lineBetween(cx - 3, base + 2, cx - 1, base - 7);
+      case 'grass_tuft': {
+        // Purely decorative — not gatherable, very short tuft
+        g.fillStyle(0x000000, 0.08);
+        g.fillEllipse(cx, base + 2, 14, 3);
+        const gtBlades: [number, number, number, number][] = [
+          [cx - 4, base + 1, cx - 6,  base - 7],
+          [cx - 1, base + 1, cx - 1,  base - 9],
+          [cx + 2, base + 1, cx + 4,  base - 7],
+        ];
+        g.lineStyle(1, 0x4a7a20, 0.5);
+        for (const [x1, y1, x2, y2] of gtBlades) g.lineBetween(x1, y1 + 1, x2 + 1, y2 + 1);
+        g.lineStyle(1, 0x6aaa30, 0.9);
+        for (const [x1, y1, x2, y2] of gtBlades) g.lineBetween(x1, y1, x2, y2);
+        g.lineStyle(1, 0x8acc50, 0.6);
+        g.lineBetween(cx, base + 1, cx + 1, base - 8);
         break;
       }
       case 'mushroom': {
@@ -1758,64 +1382,17 @@ export class GameManager {
         break;
       }
       case 'resin_tree': {
-        const th = Math.round(22 * sc);
-        const tapped = quantity < maxQuantity; // ever harvested
-        const flowing = quantity > 0 && tapped;
-        const exhausted = quantity === 0;
-
-        // Shadow
-        g.fillStyle(0x000000, 0.15);
-        g.fillEllipse(cx, base + 2, Math.round(26 * sc), Math.round(6 * sc));
-
-        // Trunk — conical (wider at base)
-        g.fillStyle(tapped ? 0x3a2008 : 0x5a3010);
-        g.fillTriangle(
-          cx - Math.round(5*sc), base,
-          cx + Math.round(5*sc), base,
-          cx + Math.round(2*sc), base - th,
-        );
-        g.fillTriangle(
-          cx - Math.round(5*sc), base,
-          cx - Math.round(2*sc), base - th,
-          cx + Math.round(2*sc), base - th,
-        );
-        // Bark texture lines
-        g.lineStyle(Math.round(sc), tapped ? 0x1e0f00 : 0x2e1800, 0.5);
-        g.lineBetween(cx - Math.round(1*sc), base, cx - Math.round(1*sc), base - th);
-        g.lineBetween(cx + Math.round(2*sc), base, cx + Math.round(2*sc), base - th);
-
-        if (tapped) {
-          // V-shaped tapping cuts into bark
-          g.lineStyle(Math.round(1.5*sc), 0x100800, 0.85);
-          g.lineBetween(cx - Math.round(3*sc), base - Math.round(9*sc), cx, base - Math.round(12*sc));
-          g.lineBetween(cx + Math.round(3*sc), base - Math.round(9*sc), cx, base - Math.round(12*sc));
-          // Hardened resin scar below cut
-          g.fillStyle(exhausted ? 0x8b5a00 : 0xb87010, 0.75);
-          g.fillEllipse(cx, base - Math.round(8*sc), Math.round(4*sc), Math.round(3*sc));
+        drawTreeArt(g, 'wood', cx, base, artHash(tx, ty) % 3, quantity);
+        if (quantity < maxQuantity) {
+          g.lineStyle(1.5, 0x453929);
+          g.lineBetween(cx - 3, base - 17, cx, base - 20);
+          g.lineBetween(cx + 3, base - 17, cx, base - 20);
+          g.fillStyle(quantity > 0 ? 0xdca348 : 0x8c6337);
+          g.fillEllipse(cx, base - 15, 3, quantity > 0 ? 7 : 3);
+          if (quantity > 0) {
+            g.fillStyle(0xf1cf7b); g.fillEllipse(cx - 0.5, base - 17, 1, 3);
+          }
         }
-
-        if (flowing) {
-          // Resin drip — amber drop running down from cut
-          g.fillStyle(0xe8920a, 0.95);
-          g.fillEllipse(cx, base - Math.round(10*sc), Math.round(3*sc), Math.round(5*sc));
-          g.fillStyle(0xf5b830, 0.6);
-          g.fillCircle(cx - Math.round(sc), base - Math.round(12*sc), Math.round(sc));
-          // Thin drip trail
-          g.lineStyle(Math.round(1.5*sc), 0xd4820a, 0.8);
-          g.lineBetween(cx, base - Math.round(8*sc), cx, base - Math.round(5*sc));
-          // Puddle at base of trunk
-          g.fillStyle(0xd4820a, 0.5);
-          g.fillEllipse(cx + Math.round(sc), base - Math.round(2*sc), Math.round(5*sc), Math.round(2*sc));
-        }
-
-        // Canopy — 3 layered circles for depth
-        g.fillStyle(exhausted ? 0x2a5a1a : 0x1e5c0e);
-        g.fillCircle(cx - Math.round(4*sc), base - th - Math.round(2*sc), Math.round(8*sc));
-        g.fillCircle(cx + Math.round(4*sc), base - th - Math.round(3*sc), Math.round(7*sc));
-        g.fillStyle(exhausted ? 0x347020 : 0x267018, 0.9);
-        g.fillCircle(cx, base - th - Math.round(6*sc), Math.round(10*sc));
-        g.fillStyle(exhausted ? 0x3a8028 : 0x1a4a0a, 0.5);
-        g.fillCircle(cx, base - th - Math.round(2*sc), Math.round(7*sc)); // darker underside
         break;
       }
       case 'pandanus': {
@@ -1920,21 +1497,21 @@ export class GameManager {
           const segs  = Math.max(1, Math.floor(hh / segH));
 
           // Draw stem as a thin quad (leaned)
-          g.fillStyle(0x4a9020, 0.93);
+          g.fillStyle(0x71874b, 0.93);
           g.fillPoints([
             { x: hx - hw / 2,    y: base },
             { x: hx + hw / 2,    y: base },
             { x: topX + hw / 2,  y: base - hh },
             { x: topX - hw / 2,  y: base - hh },
-          ] as Phaser.Types.Math.Vector2Like[], true);
+          ].map(p => new Phaser.Math.Vector2(p.x, p.y)), true);
           // Highlight stripe
-          g.fillStyle(0x6ab830, 0.40);
+          g.fillStyle(0x9ca96a, 0.40);
           g.fillPoints([
             { x: hx - hw / 2,          y: base },
             { x: hx - hw / 2 + hw * 0.35, y: base },
             { x: topX - hw / 2 + hw * 0.35, y: base - hh },
             { x: topX - hw / 2,         y: base - hh },
-          ] as Phaser.Types.Math.Vector2Like[], true);
+          ].map(p => new Phaser.Math.Vector2(p.x, p.y)), true);
           // Node rings
           g.fillStyle(0x2e6c0a, 0.75);
           for (let s = 1; s < segs; s++) {
@@ -2068,11 +1645,11 @@ export class GameManager {
         g.fillRect(cx + Math.round(3*lsc), base - Math.round(58*lsc), Math.round(3*lsc), Math.round(58*lsc));
 
         // Outer canopy — darkest, widest
-        g.fillStyle(0x0f4a0f, 0.92);
+        g.fillStyle(0x2c4935, 0.92);
         g.fillEllipse(cx - Math.round(4*lsc), base - Math.round(88*lsc), Math.round(110*lsc), Math.round(72*lsc));
 
         // Mid canopy
-        g.fillStyle(0x1a6e1a, 0.88);
+        g.fillStyle(0x3c603a, 0.88);
         g.fillEllipse(cx + Math.round(6*lsc), base - Math.round(98*lsc), Math.round(88*lsc), Math.round(60*lsc));
 
         // Side bulges — natural irregular canopy
@@ -2173,171 +1750,8 @@ export class GameManager {
     const cx  = tx * TS + TS / 2;
     const base = ty * TS + TS - 2; // ground anchor
 
-    if (type === 'arbeitsplatz') {
-      const top  = ty * TS + 3;
-      const left = tx * TS + 3;
-      const w = TS - 6;
-      const h = TS - 6;
-      const my = ty * TS + TS / 2;
-      // Palm-leaf mat (green base)
-      g.fillStyle(0x4a7c3f, 0.35);
-      g.fillRect(left, top, w, h);
-      // Stone border — 4 corner stones
-      g.fillStyle(0x8a8a7a, 0.9);
-      g.fillRect(left,       top,       7, 5); // TL
-      g.fillRect(left + w - 7, top,     7, 5); // TR
-      g.fillRect(left,       top + h - 5, 7, 5); // BL
-      g.fillRect(left + w - 7, top + h - 5, 7, 5); // BR
-      // Center working stone (flat)
-      g.fillStyle(0x9a9080, 0.85);
-      g.fillEllipse(cx, my, 14, 8);
-      g.lineStyle(1, 0x6a6060, 0.7);
-      g.strokeEllipse(cx, my, 14, 8);
-      // Crossed-tool mark on stone
-      g.lineStyle(1.5, 0x4a3a2a, 0.6);
-      g.lineBetween(cx - 4, my - 3, cx + 4, my + 3);
-      g.lineBetween(cx + 4, my - 3, cx - 4, my + 3);
-
-    } else if (type === 'sleeping_spot') {
-      // Soft palm-leaf mat on the ground
-      const top  = ty * TS + 6;
-      const left = tx * TS + 3;
-      const w    = TS - 6;
-      const h    = TS - 10;
-      // Shadow
-      g.fillStyle(0x000000, 0.12);
-      g.fillEllipse(cx, base + 2, w + 4, 6);
-      // Mat base — warm sandy tone
-      g.fillStyle(0x8fba40, 0.55);
-      g.fillRoundedRect(left, top, w, h, 4);
-      // Leaf texture lines
-      g.lineStyle(1, 0x5a8a20, 0.6);
-      for (let i = 0; i < 4; i++) {
-        const lx = left + 4 + i * ((w - 8) / 3);
-        g.lineBetween(lx, top + 3, lx + 2, top + h - 3);
-      }
-      // Border
-      g.lineStyle(1, 0x6aaa30, 0.8);
-      g.strokeRoundedRect(left, top, w, h, 4);
-
-    } else if (type === 'palm_shelter') {
-      // 2 tiles wide — cx is center of the full 2-tile span
-      const hw = TS + 10; // half-width: slightly wider than 1 tile for a realistic lean-to
-      const roofTop = base - 68;
-      const roofBase = base - 28;
-
-      // Shadow
-      g.fillStyle(0x000000, 0.22);
-      g.fillEllipse(cx, base + 4, hw * 2 + 8, 12);
-
-      // ── Support posts (Äste) ──────────────────────────────────────
-      // Back two tall posts
-      g.fillStyle(0x6b4a1e);
-      g.fillRect(cx - hw + 6,  base - 60, 6, 60);
-      g.fillRect(cx + hw - 12, base - 60, 6, 60);
-      // Front two shorter posts (lean-to is higher at back, lower at front)
-      g.fillStyle(0x7a5528);
-      g.fillRect(cx - hw + 6,  base - 38, 5, 38);
-      g.fillRect(cx + hw - 11, base - 38, 5, 38);
-      // Horizontal ridge pole across the top
-      g.fillStyle(0x5a3a14);
-      g.fillRect(cx - hw + 2, base - 61, hw * 2 - 4, 5);
-      // Front horizontal cross-beam
-      g.fillStyle(0x6b4a1e);
-      g.fillRect(cx - hw + 2, base - 39, hw * 2 - 4, 4);
-
-      // ── Vine lashings at joints ───────────────────────────────────
-      g.fillStyle(0x8b6a30);
-      // Back post tops
-      g.fillRect(cx - hw + 4,  base - 64, 10, 6);
-      g.fillRect(cx + hw - 14, base - 64, 10, 6);
-      // Front post / beam joints
-      g.fillRect(cx - hw + 4,  base - 42, 9, 5);
-      g.fillRect(cx + hw - 13, base - 42, 9, 5);
-
-      // ── Roof: layered palm leaves ─────────────────────────────────
-      // Lean-to slope: back-top to front-lower
-      // Draw leaves from bottom row up so upper rows overlap lower
-      const leafColors = [0x2d6a12, 0x3a7e18, 0x4a9420, 0x347010];
-      const rows = [
-        { y: roofBase,      overhang: 10 }, // bottom row — hangs over front edge
-        { y: roofBase - 10, overhang: 6  },
-        { y: roofBase - 20, overhang: 4  },
-        { y: roofBase - 30, overhang: 2  },
-      ];
-
-      rows.forEach((row, ri) => {
-        // Slope: back is higher by ~30px total across the 4 rows
-        const backY  = row.y - 30 + ri * 7;
-        const frontY = row.y;
-
-        // Base fill for this row (parallelogram-ish via two triangles)
-        g.fillStyle(leafColors[ri % leafColors.length]);
-        g.fillTriangle(
-          cx - hw - row.overhang, frontY + 8,
-          cx - hw - row.overhang, frontY,
-          cx + hw + row.overhang, backY,
-        );
-        g.fillTriangle(
-          cx - hw - row.overhang, frontY + 8,
-          cx + hw + row.overhang, backY,
-          cx + hw + row.overhang, backY + 8,
-        );
-
-        // Individual leaf blades across the row
-        g.lineStyle(1.5, leafColors[(ri + 2) % leafColors.length], 0.7);
-        const leafCount = Math.floor((hw * 2 + row.overhang * 2) / 8);
-        for (let i = 0; i <= leafCount; i++) {
-          const lx = cx - hw - row.overhang + i * 8;
-          // interpolate y along slope
-          const t  = i / leafCount;
-          const ly = frontY + (backY - frontY) * t;
-          // Blade droops down
-          g.lineBetween(lx, ly, lx - 3, ly + 9);
-          g.lineBetween(lx, ly, lx + 3, ly + 9);
-        }
-
-        // Midrib line per blade group
-        g.lineStyle(1, 0x1a4a08, 0.45);
-        for (let i = 0; i <= leafCount; i++) {
-          const lx = cx - hw - row.overhang + i * 8;
-          const t  = i / leafCount;
-          const ly = frontY + (backY - frontY) * t;
-          g.lineBetween(lx, ly, lx, ly + 9);
-        }
-      });
-
-      // Top ridge: darker cap row
-      g.fillStyle(0x1e4a0a);
-      g.fillRect(cx - hw, roofTop + 4, hw * 2, 8);
-
-      // ── Dark interior / back wall ─────────────────────────────────
-      g.fillStyle(0x080806, 0.6);
-      g.fillRect(cx - hw + 11, roofBase - 26, hw * 2 - 22, 26);
-
-    } else if (type === 'campfire') {
-      // Shadow
-      g.fillStyle(0x000000, 0.2);
-      g.fillEllipse(cx, base + 1, 22, 6);
-      // Stone ring
-      g.fillStyle(0x777777);
-      g.fillCircle(cx - 7, base - 2, 4);
-      g.fillCircle(cx + 7, base - 2, 4);
-      g.fillCircle(cx, base + 1,    4);
-      g.fillStyle(0x999999, 0.7);
-      g.fillCircle(cx - 7, base - 3, 2.5);
-      g.fillCircle(cx + 6, base - 3, 2.5);
-      // Logs
-      g.fillStyle(0x5c3317);
-      g.fillRect(cx - 8, base - 4, 16, 4);
-      g.fillStyle(0x7a4a28, 0.6);
-      g.fillRect(cx - 6, base - 5, 12, 3);
-      // Embers (always visible even without fuel)
-      g.fillStyle(0x8b2500, 0.9);
-      g.fillCircle(cx - 2, base - 5, 2.5);
-      g.fillCircle(cx + 3, base - 5, 2);
-
-    } else if (type === 'water_container') {
+    if (drawCamp(g, type, tx * TS, base, TS)) return;
+    if (type === 'water_container') {
       // Kokosschale mit Palmenblatt — Regensammler
       const water = fuel ?? 0;
       // Shadow
@@ -2511,12 +1925,17 @@ export class GameManager {
     }
 
     // ── Walk-cycle — 8 frames, sin-based for smooth feel ─────────────
-    const f = this.walkFrame; // 0–7
+    const f = this.walkFrame; // continuous phase, based on distance walked
     const phase = (f / 8) * Math.PI * 2;
     const stride    = this.isMoving ? Math.sin(phase) : 0;
-    const bob       = this.isMoving ? Math.round(Math.abs(Math.sin(phase)) * -1.5) : 0;
+    const { job, message } = useCraftingStore.getState();
+    const carrying = job?.building?.siteId && findSite(job.building.siteId)?.phase === 'carry';
+    const working = !this.isMoving && !!job && job.elapsed < job.duration && !message && !carrying && !useGameStore.getState().isPaused;
+    const gathering = !this.isMoving && this.scene.time.now < this.gatherPoseUntil;
+    const workSwing = working ? Math.sin(this.scene.time.now / 140) * 2 : gathering ? 2 : 0;
+    const bob = this.isMoving ? -Math.abs(Math.sin(phase)) : -Math.abs(workSwing) * 0.3;
     const legSwing  = this.isMoving ? stride * 5 : 0;   // front/back leg swing ±5px
-    const armSwing  = this.isMoving ? -stride * 4 : 0;  // arms opposite to legs
+    const armSwing  = this.isMoving ? -stride * 4 : workSwing;  // arms opposite to legs
 
     // Update y-sort depth so player walks behind tall objects
     const tileY = Math.floor(this.playerPy / TS);
@@ -2565,14 +1984,14 @@ export class GameManager {
     }
 
     // ── Body (shirt — trapezoid: wide shoulders, narrower hips) ───────
-    g.fillStyle(0x2471a3);
+    g.fillStyle(0x527c86);
     g.fillTriangle(cx - 6, cy - 2 + bob, cx + 6, cy - 2 + bob, cx + 4, cy + 7 + bob);
     g.fillTriangle(cx - 6, cy - 2 + bob, cx + 4, cy + 7 + bob, cx - 4, cy + 7 + bob);
     // Shirt crease / collar shadow
-    g.fillStyle(0x1a5f8a, 0.5);
+    g.fillStyle(0x345762, 0.5);
     g.fillRect(cx - 1, cy - 1 + bob, 2, 7);
     // Shoulder highlights
-    g.fillStyle(0x3a8fc0, 0.4);
+    g.fillStyle(0x8faeb0, 0.4);
     g.fillRect(cx - 5, cy - 2 + bob, 2, 3);
     if (!side) g.fillRect(cx + 3, cy - 2 + bob, 2, 3);
 
@@ -2583,19 +2002,19 @@ export class GameManager {
       // One visible arm (front)
       const ax = facingLeft ? cx - 7 : cx + 4;
       g.fillStyle(skinColor);
-      g.fillRect(ax, cy - 1 + bob + Math.round(armSwing), 3, 6);
+      g.fillRect(ax, cy - 1 + bob + armSwing, 3, 6);
       // Hand
       g.fillStyle(skinDark);
-      g.fillCircle(ax + 1, cy + 5 + bob + Math.round(armSwing), 2);
+      g.fillCircle(ax + 1, cy + 5 + bob + armSwing, 2);
     } else {
       // Both arms visible
       g.fillStyle(skinColor);
-      g.fillRect(cx - 8, cy - 1 + bob + Math.round(armSwing),  3, 6);
-      g.fillRect(cx + 5, cy - 1 + bob - Math.round(armSwing),  3, 6);
+      g.fillRect(cx - 8, cy - 1 + bob + armSwing,  3, 6);
+      g.fillRect(cx + 5, cy - 1 + bob - armSwing,  3, 6);
       // Hands
       g.fillStyle(skinDark);
-      g.fillCircle(cx - 7, cy + 5 + bob + Math.round(armSwing), 2);
-      g.fillCircle(cx + 6, cy + 5 + bob - Math.round(armSwing), 2);
+      g.fillCircle(cx - 7, cy + 5 + bob + armSwing, 2);
+      g.fillCircle(cx + 6, cy + 5 + bob - armSwing, 2);
     }
 
     // ── Neck ──────────────────────────────────────────────────────────
@@ -2958,7 +2377,7 @@ export class GameManager {
       const pulse = 0.93 + Math.sin(t2 / 1400) * 0.07;
       const R = 5 * TS * pulse; // 5-tile radius
       for (const cf of campfires) {
-        if ((cf.fuel ?? 0) <= 0) continue;
+        if ((cf.fuel ?? 0) <= 0 || !this.isInViewport(cf.x * TS, cf.y * TS, 6 * TS)) continue;
         const cx = cf.x * TS + TS / 2;
         const cy = cf.y * TS + TS / 2;
         wg.fillStyle(0xff6600, 0.055); wg.fillEllipse(cx, cy, R * 2,   R * 1.30);
@@ -3042,14 +2461,6 @@ export class GameManager {
           }
         }
 
-      } else {
-        // === NO FUEL: just glowing embers, no flames ===
-        const glow = 0.3 + Math.sin(t / 800 + cf.x) * 0.15;
-        fg.fillStyle(0xff2200, glow);
-        fg.fillCircle(wx - 2, wy - 4, 2.5);
-        fg.fillCircle(wx + 3, wy - 4, 2);
-        fg.fillStyle(0xff6600, glow * 0.6);
-        fg.fillCircle(wx,     wy - 5, 1.5);
       }
     }
   }
@@ -3207,8 +2618,26 @@ export class GameManager {
            py > v.y - margin && py < v.bottom + margin;
   }
 
+  private updateWorldVisibility() {
+    const world = useWorldStore.getState().world;
+    if (!this.scene || !world) return;
+    // Graphics replay their geometry even offscreen; include overhanging crowns and shadows.
+    const margin = 8 * TS;
+    for (const resource of world.resources) {
+      const treeMargin = resource.type === 'large_tree' || resource.type === 'banyan_tree' ? 11 * TS : margin;
+      this.resourceObjects.get(resource.id)?.setVisible(
+        this.isInViewport(resource.x * TS, resource.y * TS, treeMargin)
+      );
+    }
+    for (const meta of this.jungleCanopyMeta.values()) {
+      meta.g.setVisible(this.isInViewport(meta.tx * TS, meta.ty * TS, margin));
+    }
+  }
+
   private onUpdate(rawDelta: number) {
     if (!this.scene) return;
+    this.updateWorldVisibility();
+    this.updateConstructionArt();
 
     // Skip frames after tab return to let WebGL context stabilise
     if (this.skipFrames > 0) {
@@ -3218,6 +2647,18 @@ export class GameManager {
 
     // Cap delta — prevents catch-up burst after tab switch or system sleep
     const delta = Math.min(rawDelta, 100);
+    const buildJob = useCraftingStore.getState().job?.building;
+    if (buildJob) {
+      const carrying = buildJob.siteId && findSite(buildJob.siteId)?.phase === 'carry';
+      const movement = this.keys && ['A', 'D', 'W', 'S', 'LEFT', 'RIGHT', 'UP', 'DOWN'].some(k => this.keys![k].isDown);
+      const state = useGameStore.getState();
+      if ((!carrying && movement) || this.keyPressed.space || this.keyPressed.e || this.keyPressed.f || state.showSleepMenu || state.isAwakening || state.craftingOpen || state.gatherMenuOpen || state.placementMode) useCraftingStore.getState().cancel();
+    }
+    this.craftingDelta += delta;
+    if (this.craftingDelta >= (buildJob ? 500 : 100)) {
+      useCraftingStore.getState().update(this.craftingDelta);
+      this.craftingDelta = 0;
+    }
 
     // Placement preview — blocks movement while active
     const pm = useGameStore.getState().placementMode;
@@ -3249,8 +2690,14 @@ export class GameManager {
     const tick = this.gameLoop.isTickReady();
 
     if (!awakening) {
-      this.gatherResource();
-      this.interactStructure();
+      if (!useGameStore.getState().craftingOpen) {
+        this.gatherResource();
+        this.interactStructure();
+      } else {
+        this.keyPressed.space = false;
+        this.keyPressed.e = false;
+        this.keyPressed.f = false;
+      }
       if (tick) {
         this.onGameTick();
         this.updateFishing(delta);
@@ -4161,46 +3608,35 @@ export class GameManager {
 
   // Width in tiles for structures that occupy more than 1 tile
   private getStructureWidth(recipeId: string): number {
-    return recipeId === 'palm_shelter' ? 2 : 1;
+    return buildWidth(recipeId);
   }
 
   private isValidPlacement(recipeId: string, tx: number, ty: number): boolean {
+    return canPlaceBuilding(recipeId, tx, ty, useGameStore.getState().placementMode?.sourceId);
+  }
+
+  private updateConstructionArt() {
+    const g = this.constructionGraphics;
+    if (!g) return;
     const world = useWorldStore.getState().world;
-    if (!world) return false;
-    const w = this.getStructureWidth(recipeId);
-
-    // Interaction-zone clearance: campfire and Arbeitsplatz need 2 tiles buffer
-    // so their 1-tile action radius doesn't overlap with adjacent structures.
-    const INTERACTIVE = new Set(['campfire', 'granite_campfire', 'arbeitsplatz']);
-    const CLEARANCE = 2;
-    for (let dx = 0; dx < w; dx++) {
-      const x = tx + dx;
-      for (const s of world.structures) {
-        if (INTERACTIVE.has(s.type)) {
-          if (Math.abs(x - s.x) <= CLEARANCE && Math.abs(ty - s.y) <= CLEARANCE) return false;
-        }
-        // Also: if placing an interactive structure, enforce clearance from all others
-        if (INTERACTIVE.has(recipeId)) {
-          const sw = s.width ?? 1;
-          for (let sdx = 0; sdx < sw; sdx++) {
-            if (Math.abs(x - (s.x + sdx)) <= CLEARANCE && Math.abs(ty - s.y) <= CLEARANCE) return false;
-          }
-        }
-      }
+    const sites = world?.constructionSites ?? [];
+    const reservations = world?.buildReservations ?? [];
+    const visible = sites.filter(s => this.isInViewport(s.x * TS, s.y * TS, TS * 6));
+    const key = JSON.stringify([visible.map(s => [s.id, s.phase, Math.floor(s.completed / s.work * 20), s.supplied]), reservations,
+      sites.filter(s => s.cargo).map(s => [s.id, s.phase, s.cargoX, s.cargoY, this.isInViewport(s.cargoX! * TS, s.cargoY! * TS)])]);
+    if (key === this.constructionArtKey) return;
+    this.constructionArtKey = key;
+    g.clear(); g.setDepth(2); g.setVisible(true);
+    for (const r of reservations) {
+      g.lineStyle(1, 0x82aab8, 0.8); g.strokeRect(r.x * TS, r.y * TS, r.width * TS, TS);
     }
-
-    for (let dx = 0; dx < w; dx++) {
-      const x = tx + dx;
-      const y = ty;
-      if (x < 0 || y < 0 || x >= world.width || y >= world.height) return false;
-      const tile = world.tileMap[y]?.[x];
-      if (!tile?.walkable) return false;
-      if (world.structures.some(s => {
-        const sw = s.width ?? 1;
-        return s.y === y && x >= s.x && x < s.x + sw;
-      })) return false;
+    for (const site of visible) {
+      drawConstruction(g, site.x * TS, site.y * TS, site.width * TS, TS, site.phase === 'build' ? site.completed / site.work : 0, !site.supplied, site.target);
     }
-    return true;
+    for (const site of sites) if (site.cargo && site.phase !== 'build' && this.isInViewport(site.cargoX! * TS, site.cargoY! * TS)) {
+      g.fillStyle(0xa58a58); g.fillRoundedRect(site.cargoX! * TS + 5, site.cargoY! * TS + 10, 22, 16, 3);
+      g.lineStyle(2, 0x514934); g.lineBetween(site.cargoX! * TS + 16, site.cargoY! * TS + 10, site.cargoX! * TS + 16, site.cargoY! * TS + 26);
+    }
   }
 
   private updatePlacementPreview(recipeId: string) {
@@ -4217,6 +3653,11 @@ export class GameManager {
     const py = ty * TS;
     const valid = this.isValidPlacement(recipeId, tx, ty);
 
+    const upgrade = expansionTarget(recipeId);
+    if (upgrade) {
+      g.lineStyle(1, 0x82aab8, 0.9);
+      g.strokeRect(px, py, buildWidth(upgrade) * TS, TS);
+    }
     // Fill
     g.fillStyle(valid ? 0x44ff44 : 0xff4444, 0.25);
     g.fillRect(px, py, w * TS, TS);
@@ -4250,54 +3691,15 @@ export class GameManager {
   private confirmPlacement(recipeId: string, tx: number, ty: number) {
     if (!this.isValidPlacement(recipeId, tx, ty)) return;
 
-    const { player, removeResource } = usePlayerStore.getState();
-    const inv = player.inventory;
-
-    // BuildDefinition path (no recipe needed — materials consumed directly)
-    const buildDef = BUILD_DEFINITIONS.find(d => d.id === recipeId);
-    if (buildDef) {
-      // Check materials
-      for (const m of buildDef.requiredMaterials) {
-        const have = inv.items.find(i => i.resourceId === m.item)?.quantity ?? 0;
-        if (have < m.amount) return;
-      }
-      for (const m of buildDef.requiredMaterials) removeResource(m.item, m.amount);
-      useWorldStore.getState().placeStructure(recipeId, tx, ty);
-      if (buildDef.grantsKnowledge) {
-        for (const flag of buildDef.grantsKnowledge) {
-          usePlayerStore.getState().learnKnowledge(flag as KnowledgeFlag);
-        }
-      }
-      // Journal events for specific builds
-      if (recipeId === 'campfire') useJournalStore.getState().triggerJournalEvent('first_campfire');
-      if (recipeId === 'wooden_shelter') useJournalStore.getState().triggerJournalEvent('first_wood_shelter');
-      if (buildDef.grantsSkill) {
-        usePlayerStore.getState().gainSkillXp(buildDef.grantsSkill.skill as SkillId, buildDef.grantsSkill.xp);
-      }
-      useGameStore.getState().addScore(150);
+    const pm = useGameStore.getState().placementMode;
+    const reason = planConstruction(recipeId, tx, ty, pm?.sourceId, !!pm?.sourceId);
+    useCraftingStore.setState({ message: reason ?? 'Bauplan gesetzt. Direkt daneben Material uebernehmen und Bauen waehlen.' });
+    if (!reason) {
+      const site = useWorldStore.getState().world?.constructionSites?.at(-1);
+      useGameStore.setState({ constructionSelected: site?.id ?? null });
       useGameStore.getState().exitPlacementMode();
-      if (this.placementGraphics) this.placementGraphics.clear();
-      return;
+      this.placementGraphics?.clear();
     }
-
-    // Recipe path (legacy — Crafting-Modal structures like campfire etc.)
-    if (!craftingSystem.canCraft(recipeId, inv)) return;
-    const recipe = RECIPES.find(r => r.id === recipeId);
-    if (!recipe) return;
-    for (const input of recipe.inputs) removeResource(input.resourceId, input.quantity);
-
-    const CONSTRUCTION_DAYS: Record<string, number> = { wooden_shelter: 2, log_cabin: 4 };
-    const structureType = recipe.outputs[0]?.resourceId ?? recipeId;
-    const days = CONSTRUCTION_DAYS[recipeId];
-    if (days) {
-      useWorldStore.getState().placeConstructionSite(structureType, tx, ty, days);
-    } else {
-      useWorldStore.getState().placeStructure(structureType, tx, ty);
-    }
-
-    useGameStore.getState().addScore(200);
-    useGameStore.getState().exitPlacementMode();
-    if (this.placementGraphics) this.placementGraphics.clear();
   }
 
   private updateFatigueEffects(delta: number) {
@@ -4355,6 +3757,7 @@ export class GameManager {
   }
 
   private updatePlayerMovement(delta: number) {
+    if (useGameStore.getState().craftingOpen) { this.isMoving = false; return; }
     if (!this.keys) return;
     const { player, movePlayer, setDirection, updateStats } = usePlayerStore.getState();
     const worldState = useWorldStore.getState();
@@ -4369,13 +3772,15 @@ export class GameManager {
     if (this.stumbleFreezeMs > 0) {
       this.isMoving = false;
       this.walkFrame = 0;
-      this.walkTimer = 0;
+
       return;
     }
 
     // Speed maluses — stack multiplicatively
     const fStage = this.getFatigueStage(fatigue);
     let speedMult = 1.0;
+    const siteId = useCraftingStore.getState().job?.building?.siteId;
+    if (siteId && findSite(siteId)?.phase === 'carry') speedMult *= 0.65;
     if (hunger  > 80) speedMult *= 0.85;
     if (thirst  > 80) speedMult *= 0.85;
     if (fStage === 1) speedMult *= 0.95; // Müde
@@ -4404,7 +3809,7 @@ export class GameManager {
     this.isMoving = vx !== 0 || vy !== 0;
     if (!this.isMoving) {
       this.walkFrame = 0;
-      this.walkTimer = 0;
+
       return;
     }
 
@@ -4413,12 +3818,7 @@ export class GameManager {
       useGameStore.getState().closeGatherMenu();
     }
 
-    // Walk animation timer — 8 frames at 90ms = ~720ms per stride cycle
-    this.walkTimer += delta;
-    if (this.walkTimer >= 90) {
-      this.walkFrame = (this.walkFrame + 1) % 8;
-      this.walkTimer = 0;
-    }
+    const previousPx = this.playerPx, previousPy = this.playerPy;
 
     // Normalize diagonal
     if (vx !== 0 && vy !== 0) { vx *= 0.707; vy *= 0.707; }
@@ -4430,9 +3830,9 @@ export class GameManager {
     const edgeTileX = Math.floor((newPx + (vx > 0 ? TS - 1 : 0)) / TS);
     const curTileY = Math.floor((this.playerPy + TS / 2) / TS);
     const curTileXforY = Math.floor((this.playerPx + TS / 2) / TS);
-    const playerElev = worldState.getTile(curTileXforY, curTileY)?.elevation ?? 1;
+    const playerTile = worldState.getTile(curTileXforY, curTileY);
     const targetXTile = worldState.getTile(edgeTileX, curTileY);
-    if (targetXTile?.walkable && Math.abs((targetXTile.elevation ?? 1) - playerElev) <= 1) {
+    if (this.canMoveTo(playerTile, targetXTile)) {
       this.playerPx = Math.max(0, Math.min((WORLD_CONFIG.width - 1) * TS, newPx));
     }
 
@@ -4441,8 +3841,27 @@ export class GameManager {
     const newPy = this.playerPy + vy;
     const edgeTileY = Math.floor((newPy + (vy > 0 ? TS - 1 : 0)) / TS);
     const targetYTile = worldState.getTile(curTileX, edgeTileY);
-    if (targetYTile?.walkable && Math.abs((targetYTile.elevation ?? 1) - playerElev) <= 1) {
+    if (this.canMoveTo(playerTile, targetYTile)) {
       this.playerPy = Math.max(0, Math.min((WORLD_CONFIG.height - 1) * TS, newPy));
+    }
+
+    // Sub-tile collision — trees (trunk) + rocks — uses pre-built cache, O(local) not O(all)
+    const PLAYER_R = 6;
+    const playerCx = this.playerPx + TS / 2;
+    const playerCy = this.playerPy + TS / 2;
+    const CHECK_PX = (PLAYER_R + 13 + 4) * 2; // max interaction range in px
+    for (const b of this.solidBlockers) {
+      const dx = playerCx - b.cx;
+      if (Math.abs(dx) > CHECK_PX) continue;
+      const dy = playerCy - b.cy;
+      if (Math.abs(dy) > CHECK_PX) continue;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const minDist = PLAYER_R + b.r;
+      if (dist < minDist && dist > 0) {
+        const push = (minDist - dist) / dist;
+        this.playerPx += dx * push;
+        this.playerPy += dy * push;
+      }
     }
 
     // Update tile position in store when crossing tile boundary
@@ -4455,7 +3874,9 @@ export class GameManager {
     }
 
     // Footstep sounds — trigger every STEP_DISTANCE px
-    const distMoved = Math.sqrt(vx * vx + vy * vy);
+    const distMoved = Math.hypot(this.playerPx - previousPx, this.playerPy - previousPy);
+    this.isMoving = distMoved > 0.01;
+    this.walkFrame = this.isMoving ? (this.walkFrame + distMoved / 5) % 8 : 0;
     this.footstepAccum += distMoved;
     if (this.footstepAccum >= this.STEP_DISTANCE) {
       this.footstepAccum = 0;
@@ -4775,6 +4196,7 @@ export class GameManager {
     const nearby = worldState.world.resources.filter((r: any) => {
       if (Math.abs(r.x - x) > 1 || Math.abs(r.y - y) > 1) return false;
       if (r.quantity <= 0) return false;
+      if (r.type === 'grass_tuft') return false; // decoration only
       // Fern only appears when dew is available
       if (r.type === 'fern') return _isDewTime && !this.dewHarvestedFerns.has(`${r.x},${r.y}`);
       return true;
@@ -5040,6 +4462,7 @@ export class GameManager {
       }
 
       // Award gather skill XP
+      this.gatherPoseUntil = (this.scene?.time.now ?? 0) + 240;
       const gatherGrant = GATHER_SKILL_XP[giveType] ?? GATHER_SKILL_XP[resource.type];
       if (gatherGrant) {
         usePlayerStore.getState().gainSkillXp(gatherGrant.skill, gatherGrant.xp);
@@ -5120,23 +4543,6 @@ export class GameManager {
       const storageBox = structures.find(s => s.type === 'storage_box' && Math.abs(s.x - player.x) <= 1 && Math.abs(s.y - player.y) <= 1);
       if (storageBox) {
         useGameStore.getState().openStorageBox(storageBox.id);
-        return;
-      }
-
-      const site = structures.find(s => s.type === 'construction_site' && Math.abs(s.x - player.x) <= 1 && Math.abs(s.y - player.y) <= 1);
-      if (site) {
-        const currentDay = Math.floor(useGameStore.getState().elapsedTime / DAY_DURATION_MS);
-        const progressed = worldState.progressConstruction(site.id, currentDay);
-        if (!progressed) {
-          this.spawnFloatingText('Heute schon gearbeitet 🛠️', player.x, player.y, '#f97316');
-        } else {
-          const updated = useWorldStore.getState().world?.structures.find(s => s.id === site.id);
-          if (!updated || updated.type !== 'construction_site') {
-            this.spawnFloatingText('Fertig! 🏠', player.x, player.y, '#86efac');
-          } else {
-            this.spawnFloatingText(`Arbeit getan – noch ${updated.constructionDaysLeft} Tag(e) 🛠️`, player.x, player.y, '#fbbf24');
-          }
-        }
         return;
       }
 
@@ -5256,7 +4662,7 @@ export class GameManager {
     const tx = Math.floor(wx / TS);
     const ty = Math.floor(wy / TS);
 
-    const res = world.resources.find(r => r.x === tx && r.y === ty && r.quantity > 0) ?? null;
+    const res = world.resources.find(r => r.x === tx && r.y === ty && r.quantity > 0 && r.type !== 'grass_tuft') ?? null;
     useGameStore.getState().setHoveredResource(res);
   }
 
@@ -5309,10 +4715,14 @@ export class GameManager {
   }
 
   destroy() {
+    useCraftingStore.getState().cancel();
     document.removeEventListener('visibilitychange', this.onVisibilityChange);
     this.worldUnsubscribe?.();
+    this.gameUnsubscribe?.();
     this.gameLoop.reset();
     this.game?.destroy(true);
+    this.resourceObjects.clear();
+    this.resourceQuantities.clear();
     this.game = null;
     this.scene = null;
     this.playerGraphics = null;
@@ -5321,6 +4731,8 @@ export class GameManager {
     this.dayNightRect = null;
     this.lightGraphics = null;
     this.fireGraphics = null;
+    this.constructionGraphics = null;
+    this.constructionArtKey = "";
     this.warmthGraphics = null;
     this.jungleTreeObjects = [];
     this.lizards.forEach(a => a.g.destroy()); this.lizards = [];

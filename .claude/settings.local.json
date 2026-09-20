@@ -70,7 +70,9 @@
       "PowerShell($env:PATH = [System.Environment]::GetEnvironmentVariable\\(\"PATH\",\"Machine\"\\) + \";\" + [System.Environment]::GetEnvironmentVariable\\(\"PATH\",\"User\"\\); cd C:\\\\Users\\\\chris\\\\Projects\\\\survival-game; npx tauri build 2>&1 | Select-String -Pattern \"error|warning|Finished|bundle|msi|exe|Compiling\" | Select-Object -Last 30)",
       "PowerShell($env:PATH = [System.Environment]::GetEnvironmentVariable\\(\"PATH\",\"Machine\"\\) + \";\" + [System.Environment]::GetEnvironmentVariable\\(\"PATH\",\"User\"\\); cd C:\\\\Users\\\\chris\\\\Projects\\\\survival-game; npx tauri build 2>&1 | Select-String -Pattern \"error|Finished|bundle|\\\\.msi|\\\\.exe|Compiling survival\" | Select-Object -Last 20)",
       "PowerShell(winget install *)",
-      "PowerShell($env:PATH = [System.Environment]::GetEnvironmentVariable\\(\"PATH\",\"Machine\"\\) + \";\" + [System.Environment]::GetEnvironmentVariable\\(\"PATH\",\"User\"\\); cd C:\\\\Users\\\\chris\\\\Projects\\\\survival-game; npx tauri build 2>&1 | Select-String -Pattern \"error|Finished|\\\\.msi|\\\\.exe|Bundling\" | Select-Object -Last 15)"
+      "PowerShell($env:PATH = [System.Environment]::GetEnvironmentVariable\\(\"PATH\",\"Machine\"\\) + \";\" + [System.Environment]::GetEnvironmentVariable\\(\"PATH\",\"User\"\\); cd C:\\\\Users\\\\chris\\\\Projects\\\\survival-game; npx tauri build 2>&1 | Select-String -Pattern \"error|Finished|\\\\.msi|\\\\.exe|Bundling\" | Select-Object -Last 15)",
+      "Bash(xargs grep *)",
+      "Bash(grep -v \"private\\\\|//\")"
     ]
   }
 }

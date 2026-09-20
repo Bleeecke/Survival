@@ -1,12 +1,15 @@
+import { createId } from '../services/game/createId';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { useGameStore } from './gameStore';
 import type { Player, PlayerStats, Direction, Equipment, EquipSlot } from '../types';
-import { ITEM_WEIGHTS, MAX_CARRY_KG, calcWeight } from '../data/weights';
 import { DEFAULT_SKILLS, type SkillId } from '../types/skills';
-import { TOOL_MAX_DURABILITY } from '../data/toolDurability';
 import { PERISHABLE_IDS } from '../data/foodDecay';
 import { DEFAULT_KNOWLEDGE, MATERIAL_KNOWLEDGE_GRANTS, type KnowledgeFlag, KNOWLEDGE_INSIGHTS } from '../data/knowledge';
+import type { ItemCondition, EquippedItem } from '../types/player';
+import type { CraftingMaterial } from '../types/crafting';
+import type { StoredItem } from '../types/world';
+import { exchangeInventory, normalizeCondition } from '../services/game/inventory';
 import rawMaterialToasts from '../data/json/materialToasts.json';
 
 interface PlayerStore {
@@ -23,11 +26,12 @@ interface PlayerStore {
   movePlayer: (x: number, y: number) => void;
   setDirection: (direction: Direction) => void;
   updateStats: (partial: Partial<PlayerStats>) => void;
-  addToInventory: (resourceId: string, quantity: number) => boolean;
+  addToInventory: (resourceId: string, quantity: number, condition?: ItemCondition) => boolean;
+  exchangeItems: (inputs: CraftingMaterial[], outputs: StoredItem[]) => boolean;
   removeFromInventory: (slot: number, quantity: number) => void;
   removeResource: (resourceId: string, quantity: number) => void;
   getInventorySpace: () => number;
-  equip: (slot: EquipSlot, resourceId: string) => boolean;
+  equip: (slot: EquipSlot, resourceId: string, itemId?: string) => boolean;
   unequip: (slot: EquipSlot) => void;
   useBeltSlot: (index: 0 | 1 | 2) => string | null;
   gainSkillXp: (skillId: SkillId, xp: number) => void;
@@ -147,53 +151,32 @@ export const usePlayerStore = create<PlayerStore>()(
           },
         })),
 
-      addToInventory: (resourceId: string, quantity: number) => {
-        get().learnMaterial(resourceId);
-        const state = get();
-        const { items, maxSlots } = state.player.inventory;
+      exchangeItems: (inputs, outputs) => {
+        const inventory = exchangeInventory(get().player.inventory, inputs, outputs);
+        if (!inventory) return false;
+        set(s => ({ player: { ...s.player, inventory } }));
+        for (const output of outputs) get().learnMaterial(output.resourceId);
+        return true;
+      },
 
-        // Weight check
-        const addedWeight = (ITEM_WEIGHTS[resourceId] ?? 0.5) * quantity;
-        const currentWeight = calcWeight(items);
-        if (currentWeight + addedWeight > MAX_CARRY_KG) return false;
-
-        const gameElapsed = (() => {
-          try { return useGameStore.getState().elapsedTime; } catch { return 0; }
-        })();
-
-        const existing = items.find((item) => item.resourceId === resourceId);
-        if (existing) {
-          existing.quantity += quantity;
-          // Refresh addedAt when stacking perishables so new items don't inherit an old timestamp
-          if (PERISHABLE_IDS.has(resourceId) && existing.addedAt !== undefined) {
-            existing.addedAt = gameElapsed;
-          }
-          set((s) => ({ player: { ...s.player } }));
-          return true;
-        } else if (items.length < maxSlots) {
-          items.push({
-            id: `${resourceId}-${Date.now()}`,
-            resourceId,
-            quantity,
-            slot: items.length,
-            addedAt: PERISHABLE_IDS.has(resourceId) ? gameElapsed : undefined,
-          });
-          set((s) => ({ player: { ...s.player } }));
-          return true;
-        }
-        return false;
+      addToInventory: (resourceId, quantity, condition = {}) => {
+        if (quantity <= 0) return false;
+        return get().exchangeItems([], [{ resourceId, quantity, ...condition,
+          addedAt: condition.addedAt ?? (PERISHABLE_IDS.has(resourceId) ? useGameStore.getState().elapsedTime : undefined),
+        }]);
       },
 
       removeFromInventory: (slot: number, quantity: number) => {
         set((state) => {
-          const item = state.player.inventory.items[slot];
+          const items = state.player.inventory.items.map(i => ({ ...i }));
+          const item = items[slot];
           if (!item) return state;
 
           item.quantity -= quantity;
           if (item.quantity <= 0) {
-            state.player.inventory.items.splice(slot, 1);
+            items.splice(slot, 1);
           }
-          return { player: { ...state.player } };
+          return { player: { ...state.player, inventory: { ...state.player.inventory, items: items.map((i, slot) => ({ ...i, slot })) } } };
         });
       },
 
@@ -228,81 +211,32 @@ export const usePlayerStore = create<PlayerStore>()(
         return inventory.maxSlots - inventory.items.length;
       },
 
-      equip: (slot, resourceId) => {
+      equip: (slot, resourceId, itemId) => {
         const state = get();
-        const hasItem = state.player.inventory.items.some(i => i.resourceId === resourceId && i.quantity > 0);
-        if (!hasItem) return false;
-
-        set((s) => {
-          const base = s.player.equipment ?? { head: null, chest: null, legs: null, leftHand: null, rightHand: null, belt: [null, null, null] as Equipment['belt'] };
-          const eq = { ...base, belt: [...(base.belt ?? [null, null, null])] as Equipment['belt'] };
-
-          // Unequip whatever was previously in the slot (return to inventory)
-          const prevSlotItem = slot.startsWith('belt')
-            ? eq.belt[parseInt(slot.replace('belt', '')) as 0|1|2]
-            : eq[slot as keyof Omit<Equipment, 'belt'>];
-          if (prevSlotItem) {
-            // Return to inventory handled outside — just clear for now
-          }
-
-          // Set new slot (include initial durability for tools)
-          const initialDurability = TOOL_MAX_DURABILITY[resourceId];
-          const newItem = initialDurability !== undefined
-            ? { resourceId, durability: initialDurability }
-            : { resourceId };
-          if (slot.startsWith('belt')) {
-            const idx = parseInt(slot.replace('belt', '')) as 0|1|2;
-            eq.belt[idx] = newItem;
-          } else {
-            (eq as any)[slot] = newItem;
-          }
-
-          // Remove 1 from inventory
-          const items = s.player.inventory.items.map(i => ({ ...i }));
-          for (let i = items.length - 1; i >= 0; i--) {
-            if (items[i].resourceId === resourceId && items[i].quantity > 0) {
-              items[i].quantity -= 1;
-              if (items[i].quantity <= 0) items.splice(i, 1);
-              break;
-            }
-          }
-
-          // Return previous item to inventory if there was one
-          if (prevSlotItem) {
-            const existing = items.find(i => i.resourceId === prevSlotItem.resourceId);
-            if (existing) existing.quantity += 1;
-            else items.push({ id: `${prevSlotItem.resourceId}-${Date.now()}`, resourceId: prevSlotItem.resourceId, quantity: 1, slot: items.length });
-          }
-
-          return { player: { ...s.player, equipment: eq, inventory: { ...s.player.inventory, items } } };
-        });
+        const selected = state.player.inventory.items.find(i => i.resourceId === resourceId && i.quantity > 0 && (!itemId || i.id === itemId));
+        if (!selected) return false;
+        const eq = { ...state.player.equipment, belt: [...state.player.equipment.belt] as Equipment['belt'] };
+        const previous = slot.startsWith('belt') ? eq.belt[Number(slot.slice(4)) as 0|1|2] : eq[slot as keyof Omit<Equipment, 'belt'>];
+        const items = state.player.inventory.items.map(i => i.id === selected.id ? { ...i, quantity: i.quantity - 1 } : i).filter(i => i.quantity > 0);
+        const inventory = exchangeInventory({ ...state.player.inventory, items }, [], previous ? [{ resourceId: previous.resourceId, quantity: 1, ...normalizeCondition(previous.resourceId, previous) }] : []);
+        if (!inventory) return false;
+        const equipped = { resourceId, ...normalizeCondition(resourceId, selected) };
+        if (slot.startsWith('belt')) eq.belt[Number(slot.slice(4)) as 0|1|2] = equipped;
+        else eq[slot as keyof Omit<Equipment, 'belt'>] = equipped;
+        set({ player: { ...state.player, equipment: eq, inventory } });
         return true;
       },
 
       unequip: (slot) => {
-        set((s) => {
-          const base = s.player.equipment ?? { head: null, chest: null, legs: null, leftHand: null, rightHand: null, belt: [null, null, null] as Equipment['belt'] };
-          const eq = { ...base, belt: [...(base.belt ?? [null, null, null])] as Equipment['belt'] };
-          let item: { resourceId: string } | null = null;
-
-          if (slot.startsWith('belt')) {
-            const idx = parseInt(slot.replace('belt', '')) as 0|1|2;
-            item = eq.belt[idx];
-            eq.belt[idx] = null;
-          } else {
-            item = eq[slot as keyof Omit<Equipment, 'belt'>];
-            (eq as any)[slot] = null;
-          }
-
-          if (!item) return s;
-
-          const items = s.player.inventory.items.map(i => ({ ...i }));
-          const existing = items.find(i => i.resourceId === item!.resourceId);
-          if (existing) existing.quantity += 1;
-          else items.push({ id: `${item.resourceId}-${Date.now()}`, resourceId: item.resourceId, quantity: 1, slot: items.length });
-
-          return { player: { ...s.player, equipment: eq, inventory: { ...s.player.inventory, items } } };
-        });
+        const state = get();
+        const eq = { ...state.player.equipment, belt: [...state.player.equipment.belt] as Equipment['belt'] };
+        const item: EquippedItem | null = slot.startsWith('belt') ? eq.belt[Number(slot.slice(4)) as 0|1|2] : eq[slot as keyof Omit<Equipment, 'belt'>];
+        if (!item) return;
+        const inventory = exchangeInventory(state.player.inventory, [], [{ resourceId: item.resourceId, quantity: 1, ...normalizeCondition(item.resourceId, item) }]);
+        if (!inventory) return;
+        if (slot.startsWith('belt')) eq.belt[Number(slot.slice(4)) as 0|1|2] = null;
+        else eq[slot as keyof Omit<Equipment, 'belt'>] = null;
+        set({ player: { ...state.player, inventory, equipment: eq } });
       },
 
       // Returns resourceId of used item, or null
@@ -369,18 +303,32 @@ export const usePlayerStore = create<PlayerStore>()(
             break;
           }
 
+          const held = ['leftHand', 'rightHand'].some(slot => state.player.equipment[slot as 'leftHand' | 'rightHand']?.resourceId === resourceId);
+          let inventory = state.player.inventory;
+          if (!held) {
+            const tool = inventory.items.find(i => i.resourceId === resourceId && i.quantity > 0);
+            if (tool) {
+              const condition = normalizeCondition(resourceId, tool);
+              const remaining = (condition.durability ?? 0) - damage;
+              const items = inventory.items.map(i => i.id === tool.id ? { ...i, quantity: i.quantity - 1 } : i).filter(i => i.quantity > 0);
+              if (remaining > 0) items.push({ ...tool, ...condition, id: createId(), quantity: 1, durability: remaining });
+              else broke = true;
+              inventory = { ...inventory, items: items.map((i, slot) => ({ ...i, slot })) };
+            }
+          }
+
           if (broke) {
             import('../store/notificationStore').then(({ useNotificationStore }) => {
               useNotificationStore.getState().addNotification(`${brokenName} ist zerbrochen! ⚒️`, 'levelup');
             });
           }
 
-          return { player: { ...state.player, equipment: eq } };
+          return { player: { ...state.player, equipment: eq, inventory } };
         });
       },
 
       reset: () => {
-        set({ player: { ...defaultPlayer, equipment: { ...defaultEquipment, belt: [null, null, null] }, skills: { ...DEFAULT_SKILLS } }, knownMaterials: [], knowledge: { ...DEFAULT_KNOWLEDGE }, craftCounts: {} });
+        set({ player: { ...defaultPlayer, stats: { ...defaultPlayer.stats }, inventory: { items: [], maxSlots: 20 }, equipment: { ...defaultEquipment, belt: [null, null, null] }, skills: { ...DEFAULT_SKILLS } }, knownMaterials: [], knowledge: { ...DEFAULT_KNOWLEDGE }, craftCounts: {} });
         import('./journalStore').then(({ useJournalStore }) => useJournalStore.getState().reset());
       },
     }),

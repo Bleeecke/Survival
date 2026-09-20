@@ -39,8 +39,9 @@ interface GameStore {
   setTechbaumOpen: (open: boolean) => void;
 
   // Placement mode — active after clicking "Craft" for a structure
-  placementMode: { recipeId: string } | null;
-  enterPlacementMode: (recipeId: string) => void;
+  constructionSelected: string | null;
+  placementMode: { recipeId: string; sourceId?: string } | null;
+  enterPlacementMode: (recipeId: string, sourceId?: string) => void;
   exitPlacementMode: () => void;
 
   // Storage box modal
@@ -93,7 +94,7 @@ interface GameStore {
 
 export const useGameStore = create<GameStore>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       phase: 'menu',
       difficulty: 'normal',
       isPaused: false,
@@ -126,7 +127,10 @@ export const useGameStore = create<GameStore>()(
       awakeningBlur: 0,
       isNewGame: false,
       setAwakening: (v) => set({ isAwakening: v }),
-      setAwakeningBlur: (v) => set({ awakeningBlur: v }),
+      setAwakeningBlur: (v) => {
+        const blur = Math.round(v * 10) / 10;
+        if (get().awakeningBlur !== blur) set({ awakeningBlur: blur });
+      },
       setIsNewGame: (v) => set({ isNewGame: v }),
       craftingOpen: false,
       techbaumOpen: false,
@@ -149,7 +153,8 @@ export const useGameStore = create<GameStore>()(
         set({ pendingGatherId: id, pendingGatherAction: action }),
       setCraftingOpen: (open) => set({ craftingOpen: open }),
       placementMode: null,
-      enterPlacementMode: (recipeId) => set({ placementMode: { recipeId }, craftingOpen: false }),
+      constructionSelected: null,
+      enterPlacementMode: (recipeId, sourceId) => set({ placementMode: { recipeId, sourceId }, craftingOpen: false }),
       exitPlacementMode: () => set({ placementMode: null }),
       storageBoxId: null,
       openStorageBox: (id) => set({ storageBoxId: id, isPaused: false }),
@@ -160,11 +165,15 @@ export const useGameStore = create<GameStore>()(
       palmShelterModalId: null,
       openPalmShelterModal: (id) => set({ palmShelterModalId: id }),
       closePalmShelterModal: () => set({ palmShelterModalId: null }),
-      setHoveredResource: (res) =>
-        set(state => {
-          if (res?.id === state.hoveredResource?.id) return {};
-          return { hoveredResource: res, hoverSince: res ? Date.now() : null };
-        }),
+      setHoveredResource: (res) => {
+        const previous = get().hoveredResource;
+        // Avoid persist writes on every frame while the pointer stays still.
+        if (res === previous) return;
+        set({
+          hoveredResource: res,
+          hoverSince: res ? (res.id === previous?.id ? get().hoverSince : Date.now()) : null,
+        });
+      },
       reset: () =>
         set({
           phase: 'menu',
@@ -212,6 +221,7 @@ export const useGameStore = create<GameStore>()(
           state.palmShelterModalId = null;
           state.showSleepMenu = false;
           state.placementMode = null;
+          state.constructionSelected = null;
           state.pickupMenuOpen = false;
           state.nearbyDrops = [];
         }

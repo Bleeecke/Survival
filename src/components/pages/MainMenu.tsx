@@ -5,11 +5,16 @@ import { useWorldStore } from '../../store/worldStore';
 import { useTutorialStore } from '../../store/tutorialStore';
 import { WorldGenerator } from '../../services/phaser/WorldGenerator';
 import OptionsModal from './OptionsModal';
+import IslandSettingsPanel from './IslandSettingsPanel';
+import { resolveIslandSettings } from '../../data/islandConfig';
 import { CHANGELOG, CURRENT_VERSION, CURRENT_DATE } from '../../data/changelog';
 
 export default function MainMenu() {
   const [showOptions,   setShowOptions]   = useState(false);
   const [showChangelog, setShowChangelog] = useState(false);
+  const [islandSettings, setIslandSettings] = useState(() => resolveIslandSettings());
+  const [islandSeed, setIslandSeed] = useState('');
+  const [generationError, setGenerationError] = useState('');
 
   const setPhase        = useGameStore(s => s.setPhase);
   const resetGame       = useGameStore(s => s.reset);
@@ -21,13 +26,22 @@ export default function MainMenu() {
   const hasSave         = !!useWorldStore(s => s.world);
 
   const handleNewGame = () => {
+    let world;
+    try {
+      const text = islandSeed.trim();
+      if (text && !/^\d+$/.test(text)) throw new Error('Bitte einen nichtnegativen ganzzahligen Seed eingeben oder das Feld leer lassen.');
+      const seed = text ? Number(text) : Math.floor(Math.random() * 1_000_000);
+      world = new WorldGenerator().generate(seed, islandSettings);
+      setGenerationError('');
+    } catch (error) {
+      setGenerationError(error instanceof Error ? error.message : 'Die Insel konnte nicht erstellt werden.');
+      return;
+    }
     resetGame();
     resetPlayer();
     resetWorld();
     resetTutorial();
     initPlayer('Player');
-    const seed = Math.floor(Math.random() * 1_000_000);
-    const world = new WorldGenerator().generate(seed);
     initializeWorld(world);
     usePlayerStore.getState().movePlayer(world.spawnX, world.spawnY);
     const skipIntro = useGameStore.getState().devMode;
@@ -41,7 +55,7 @@ export default function MainMenu() {
   };
 
   return (
-    <div className="flex flex-col items-center justify-center w-full min-h-screen bg-gradient-to-b from-slate-900 to-slate-800">
+    <div className="flex flex-col items-center justify-center w-full min-h-screen py-8 bg-gradient-to-b from-slate-900 to-slate-800">
       <div className="text-center">
         <h1 className="text-6xl font-bold text-white mb-2">Survival</h1>
         <p className="text-xl text-slate-400 mb-1">Explore. Gather. Survive.</p>
@@ -82,6 +96,8 @@ export default function MainMenu() {
         )}
 
         <div className="flex flex-col items-center gap-4">
+          <IslandSettingsPanel settings={islandSettings} onChange={setIslandSettings} seed={islandSeed} onSeedChange={setIslandSeed} />
+          {generationError && <p role="alert" className="max-w-sm text-sm text-red-300">{generationError}</p>}
           <button
             onClick={handleNewGame}
             className="w-56 py-3 bg-green-700 hover:bg-green-600 text-white font-bold rounded-xl transition-colors text-lg"

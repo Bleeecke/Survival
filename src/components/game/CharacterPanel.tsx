@@ -69,7 +69,7 @@ function SlotBox({
   onUnequip,
 }: {
   label: string;
-  item: { resourceId: string; durability?: number } | null;
+  item: import("../../types/player").EquippedItem | null;
   slotKey: EquipSlot;
   keybind?: string;
   locked?: boolean;
@@ -101,7 +101,7 @@ function SlotBox({
         )}
         {/* Durability bar */}
         {item && item.durability !== undefined && (() => {
-          const max = TOOL_MAX_DURABILITY[item.resourceId] ?? 1;
+          const max = item.maxDurability ?? TOOL_MAX_DURABILITY[item.resourceId] ?? 1;
           const pct = Math.max(0, item.durability / max) * 100;
           const color = pct > 60 ? 'bg-green-500' : pct > 25 ? 'bg-yellow-500' : 'bg-red-500';
           return (

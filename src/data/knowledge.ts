@@ -24,6 +24,7 @@ export const KNOWLEDGE_FLAGS = {
   knows_construction:    'knows_construction',
   knows_medicine:        'knows_medicine',
   knows_metal:           'knows_metal',
+  knows_obsidian:        'knows_obsidian',
 } as const;
 
 export type KnowledgeFlag = typeof KNOWLEDGE_FLAGS[keyof typeof KNOWLEDGE_FLAGS];

@@ -1,3 +1,7 @@
+import { createId } from '../services/game/createId';
+import type { ItemCondition } from '../types/player';
+import { migrateConstruction, buildWidth } from '../services/game/constructionMigration';
+import type { StoredItem } from '../types/world';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { WorldState, DroppedItem } from '../types';
@@ -7,13 +11,11 @@ interface WorldStore {
 
   initializeWorld: (world: WorldState) => void;
   harvestResource: (resourceId: string, quantity: number) => void;
-  dropItem: (resourceId: string, quantity: number, playerTileX: number, playerTileY: number) => boolean;
+  dropItem: (resourceId: string, quantity: number, playerTileX: number, playerTileY: number, condition?: ItemCondition) => boolean;
   pickupDroppedItem: (id: string) => DroppedItem | null;
   placeStructure: (structureId: string, x: number, y: number) => void;
-  placeConstructionSite: (target: string, x: number, y: number, days: number) => void;
   updateStructure: (structureId: string, partial: Partial<import('../types').Structure>) => void;
-  progressConstruction: (structureId: string, currentDay: number) => boolean;
-  updateStructureStorage: (structureId: string, items: { resourceId: string; quantity: number }[]) => void;
+  updateStructureStorage: (structureId: string, items: StoredItem[]) => void;
   regenerateResources: () => void;
   getTile: (x: number, y: number) => any;
   reset: () => void;
@@ -29,7 +31,7 @@ export const useWorldStore = create<WorldStore>()(
     (set, get) => ({
       world: null,
 
-      initializeWorld: (world: WorldState) => set({ world: { ...world, droppedItems: world.droppedItems ?? [] } }),
+      initializeWorld: (world: WorldState) => set({ world: migrateConstruction({ ...world, droppedItems: world.droppedItems ?? [] }) }),
 
       harvestResource: (resourceId: string, quantity: number) => {
         set((state) => {
@@ -41,11 +43,11 @@ export const useWorldStore = create<WorldStore>()(
           resource.quantity = Math.max(0, resource.quantity - quantity);
           resource.lastHarvestedAt = Date.now();
 
-          return { world: { ...state.world } };
+          return { world: { ...state.world, resources: [...state.world.resources] } };
         });
       },
 
-      dropItem: (resourceId, quantity, playerTileX, playerTileY) => {
+      dropItem: (resourceId, quantity, playerTileX, playerTileY, condition = {}) => {
         let placed = false;
         set((state) => {
           if (!state.world) return state;
@@ -63,6 +65,7 @@ export const useWorldStore = create<WorldStore>()(
             placed = true;
             const newDrop: DroppedItem = {
               id: `drop-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+              ...condition,
               resourceId,
               quantity,
               x: tx,
@@ -92,9 +95,8 @@ export const useWorldStore = create<WorldStore>()(
         set((state) => {
           if (!state.world) return state;
 
-          const STRUCTURE_WIDTHS: Record<string, number> = { palm_shelter: 2 };
           state.world.structures.push({
-            id: `structure-${Date.now()}`,
+            id: `structure-${createId()}`,
             type: structureId,
             x,
             y,
@@ -102,51 +104,11 @@ export const useWorldStore = create<WorldStore>()(
             maxHealth: 100,
             ...(structureId === 'campfire' ? { fuel: 1 } : {}),
             ...(structureId === 'water_container' ? { fuel: 0 } : {}),
-            ...(STRUCTURE_WIDTHS[structureId] ? { width: STRUCTURE_WIDTHS[structureId] } : {}),
+            width: buildWidth(structureId),
           });
 
-          return { world: { ...state.world } };
+          return { world: { ...state.world, structures: [...state.world.structures] } };
         });
-      },
-
-      placeConstructionSite: (target, x, y, days) => {
-        set((state) => {
-          if (!state.world) return state;
-          state.world.structures.push({
-            id: `structure-${Date.now()}`,
-            type: 'construction_site',
-            x, y,
-            health: 100, maxHealth: 100,
-            constructionTarget: target,
-            constructionDaysLeft: days,
-            lastBuildDay: -1,
-          });
-          return { world: { ...state.world } };
-        });
-      },
-
-      progressConstruction: (structureId, currentDay) => {
-        let progressed = false;
-        set((state) => {
-          if (!state.world) return state;
-          const idx = state.world.structures.findIndex(s => s.id === structureId);
-          if (idx === -1) return state;
-          const s = state.world.structures[idx];
-          if (!s.constructionTarget || !s.constructionDaysLeft) return state;
-          if (s.lastBuildDay === currentDay) return state;
-
-          progressed = true;
-          const newDays = s.constructionDaysLeft - 1;
-          if (newDays <= 0) {
-            state.world.structures[idx] = {
-              id: s.id, type: s.constructionTarget, x: s.x, y: s.y, health: 100, maxHealth: 100,
-            };
-          } else {
-            state.world.structures[idx] = { ...s, constructionDaysLeft: newDays, lastBuildDay: currentDay };
-          }
-          return { world: { ...state.world } };
-        });
-        return progressed;
       },
 
       updateStructure: (structureId, partial) => {
@@ -155,7 +117,7 @@ export const useWorldStore = create<WorldStore>()(
           const idx = state.world.structures.findIndex(s => s.id === structureId);
           if (idx === -1) return state;
           state.world.structures[idx] = { ...state.world.structures[idx], ...partial };
-          return { world: { ...state.world } };
+          return { world: { ...state.world, structures: [...state.world.structures] } };
         });
       },
 
@@ -165,7 +127,7 @@ export const useWorldStore = create<WorldStore>()(
           const structure = state.world.structures.find(s => s.id === structureId);
           if (!structure) return state;
           structure.storage = items;
-          return { world: { ...state.world } };
+          return { world: { ...state.world, structures: [...state.world.structures] } };
         });
       },
 
@@ -190,7 +152,7 @@ export const useWorldStore = create<WorldStore>()(
             }
           }
 
-          return { world: { ...state.world } };
+          return { world: { ...state.world, resources: [...state.world.resources] } };
         });
       },
 
@@ -212,9 +174,12 @@ export const useWorldStore = create<WorldStore>()(
       partialize: (state) => ({
         world: state.world ? {
           seed: state.world.seed,
+          generation: state.world.generation,
           width: state.world.width,
           height: state.world.height,
           structures: state.world.structures,
+          constructionSites: state.world.constructionSites ?? [],
+          buildReservations: state.world.buildReservations ?? [],
           resources: state.world.resources,
           droppedItems: state.world.droppedItems ?? [],
           spawnX: state.world.spawnX,

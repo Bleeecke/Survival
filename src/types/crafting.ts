@@ -6,7 +6,7 @@ export interface CraftingMaterial {
   quantity: number;
 }
 
-export type RecipeCategory = 'tool' | 'shelter' | 'food' | 'weapon' | 'utility' | 'resource';
+export type RecipeCategory = 'tool' | 'shelter' | 'food' | 'weapon' | 'utility' | 'resource' | 'medicine';
 
 export interface Recipe {
   id: string;
@@ -30,10 +30,9 @@ export interface Recipe {
   requiredKnowledge?: KnowledgeFlag[];
   /** Knowledge flags granted when this recipe is crafted */
   grantsKnowledge?: KnowledgeFlag[];
-  /** Chance-based crafting: success probability depends on skill level.
-   *  chance = baseChance + (level - 1) * bonusPerLevel  (capped at 1.0)
-   *  On failure: inputs consumed, no output, no XP. */
-  skillBasedSuccess?: { skill: SkillId; baseChance: number; bonusPerLevel: number };
+  /** Uses the shared skill/quality outcome model (also enabled for durable tool outputs). */
+  qualityBased?: boolean;
+
 }
 
 export interface CraftRequest {
@@ -43,4 +42,13 @@ export interface CraftRequest {
   status: 'pending' | 'in-progress' | 'complete' | 'failed';
   timeElapsed?: number;
   startedAt?: number;
+}
+
+export interface CraftJob {
+  recipeId: string;
+  duration: number;
+  elapsed: number;
+  playerId: string;
+  building?: { x: number; y: number; seed: number; siteId?: string };
+  outcome?: import('./player').ItemQuality | 'failed';
 }
